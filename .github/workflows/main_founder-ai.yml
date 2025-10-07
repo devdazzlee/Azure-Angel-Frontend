@@ -50,6 +50,5 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: 'founder-ai'
-          slot-name: 'Production'
           package: .
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_6FE7EC361F7C4714B8979452D5EA18BC }}
