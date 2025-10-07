@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "npx serve dist -l 3000 -s",
+    "start": "node startup.js",
     "azure:build": "npm run build",
     "azure:start": "npm run start"
   },
