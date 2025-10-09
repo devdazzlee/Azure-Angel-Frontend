@@ -132,15 +132,20 @@ export default function ChatPage() {
     });
   }, [progress]);
 
-  // Check if current question is a verification message
+  // Check if current question is a verification message (FALLBACK - AI detection happens in handleNext)
   useEffect(() => {
+    // This is a fallback for cases where backend doesn't provide show_accept_modify
+    // The primary detection now happens via AI in the backend
     if (currentQuestion) {
       const isVerification = isVerificationMessage(currentQuestion);
-      setShowVerificationButtons(isVerification);
-      console.log("🔍 Verification Check:", { 
-        currentQuestion: currentQuestion.substring(0, 100) + "...", 
-        isVerification 
-      });
+      // Only set if we don't already have a value from backend AI detection
+      if (isVerification) {
+        setShowVerificationButtons(isVerification);
+        console.log("🔍 Frontend Fallback Detection - Verification Check:", { 
+          currentQuestion: currentQuestion.substring(0, 100) + "...", 
+          isVerification 
+        });
+      }
     }
   }, [currentQuestion]);
   const [planState, setPlanState] = useState({
@@ -190,9 +195,14 @@ export default function ChatPage() {
     roadmapContent: ""
   });
 
-  // Function to detect if the current message is a verification request
+  // AI-powered detection of whether Accept/Modify buttons should be shown
   const isVerificationMessage = (message: string): boolean => {
-    const verificationKeywords = [
+    if (!message || message.length < 100) return false;
+    
+    const lowerMessage = message.toLowerCase();
+    
+    // Quick check for explicit verification keywords (fast path)
+    const explicitVerificationKeywords = [
       "does this look accurate",
       "does this look correct",
       "is this accurate",
@@ -201,106 +211,83 @@ export default function ChatPage() {
       "here's what i've captured so far"
     ];
     
-    // Also check for Support, Draft, and Scrapping command responses
-    const commandResponseKeywords = [
-      "let's work through this together",
-      "here's a draft",
-      "here's a refined version",
-      "refined analysis",
-      "here's a draft for you"
-    ];
+    const hasExplicitVerification = explicitVerificationKeywords.some(keyword => lowerMessage.includes(keyword));
+    if (hasExplicitVerification) return true;
     
-    const lowerMessage = message.toLowerCase();
+    // AI-powered detection for substantial, actionable content
+    // Check if this is a substantive response that could be an answer (not just a question)
     
-    // Show verification buttons for both verification messages and command responses
-    const hasVerificationKeyword = verificationKeywords.some(keyword => lowerMessage.includes(keyword));
-    const hasCommandResponse = commandResponseKeywords.some(keyword => lowerMessage.includes(keyword));
+    // 1. Check if it's just asking a new question (should NOT show buttons)
+    const hasQuestionTag = message.match(/\[\[Q:[A-Z_]+\.\d{2}\]\]/);
+    const isJustAskingQuestion = hasQuestionTag && message.length < 1000;
+    if (isJustAskingQuestion) return false;
     
-    return hasVerificationKeyword || hasCommandResponse;
+    // 2. Check if it's a substantial, structured response (likely an answer/draft)
+    const isSubstantialResponse = (
+      message.length > 500 && // Substantial length
+      (
+        // Has multiple sections/structure
+        (lowerMessage.match(/\*\*/g) || []).length >= 4 ||
+        // Has numbered/bulleted lists
+        (lowerMessage.match(/\n\d+\./g) || []).length >= 3 ||
+        (lowerMessage.match(/\n-/g) || []).length >= 5 ||
+        (lowerMessage.match(/\n•/g) || []).length >= 5
+      ) &&
+      // Contains actionable/informative content keywords
+      (
+        lowerMessage.includes("consider") ||
+        lowerMessage.includes("focus on") ||
+        lowerMessage.includes("strategy") ||
+        lowerMessage.includes("recommendation") ||
+        lowerMessage.includes("insight") ||
+        lowerMessage.includes("action step") ||
+        lowerMessage.includes("implementation") ||
+        lowerMessage.includes("key points") ||
+        lowerMessage.includes("features") ||
+        lowerMessage.includes("benefits")
+      )
+    );
+    
+    if (isSubstantialResponse) return true;
+    
+    // 3. Check if it's a response to a user's modification request
+    // (when user says "give me unique", "explain better", "make it simpler", etc.)
+    const hasCustomRequestIndicators = (
+      (lowerMessage.includes("here's") || lowerMessage.includes("here is")) &&
+      (
+        lowerMessage.includes("unique") ||
+        lowerMessage.includes("simplified") ||
+        lowerMessage.includes("detailed") ||
+        lowerMessage.includes("enhanced") ||
+        lowerMessage.includes("refined") ||
+        lowerMessage.includes("improved")
+      ) &&
+      message.length > 400
+    );
+    
+    if (hasCustomRequestIndicators) return true;
+    
+    return false;
   };
 
-  // Function to extract guidance content from Support/Draft/Scrapping responses
+  // Function to extract the actionable content from AI responses (removes question tags and tips)
   const extractGuidanceContent = (message: string): string | null => {
-    if (!message) return null;
+    if (!message || message.length < 100) return null;
     
-    // Look for Support command response - updated to handle new format
-    if (message.toLowerCase().includes("let's work through this together")) {
-      // Extract content after "Let's work through this together with some deeper context:"
-      const startMarker = "Let's work through this together with some deeper context:";
-      const startIndex = message.indexOf(startMarker);
-      
-      if (startIndex !== -1) {
-        // Get everything after the marker, trimming extra whitespace
-        const guidanceContent = message.substring(startIndex + startMarker.length).trim();
-        // Remove any trailing verification prompts if present
-        const cleanedContent = guidanceContent.replace(/\n\nVerification:.*$/s, '').trim();
-        return cleanedContent;
-      }
-    }
+    let cleanedContent = message;
     
-    // Look for Draft command response - updated to handle new AI-generated format
-    if (message.toLowerCase().includes("here's a draft")) {
-      // Extract content after "Here's a draft for you:"
-      const startMarker = "Here's a draft for you:";
-      const startIndex = message.indexOf(startMarker);
-      
-      if (startIndex !== -1) {
-        // Get everything after the marker
-        const draftContent = message.substring(startIndex + startMarker.length).trim();
-        // Remove any trailing verification prompts if present
-        const cleanedContent = draftContent.replace(/\n\nVerification:.*$/s, '').trim();
-        return cleanedContent;
-      }
-      
-      // Fallback: Look for alternative draft markers
-      if (message.toLowerCase().includes("based on your")) {
-        const lines = message.split('\n');
-        let contentStartIndex = -1;
-        
-        for (let i = 0; i < lines.length; i++) {
-          if (lines[i].toLowerCase().includes("based on your")) {
-            contentStartIndex = i;
-            break;
-          }
-        }
-        
-        if (contentStartIndex !== -1) {
-          const guidanceContent = lines.slice(contentStartIndex).join('\n').trim();
-          return guidanceContent.replace(/\n\nVerification:.*$/s, '').trim();
-        }
-      }
-    }
+    // Remove question tags like [[Q:BUSINESS_PLAN.06]]
+    cleanedContent = cleanedContent.replace(/\[\[Q:[A-Z_]+\.\d{2}\]\]/g, '').trim();
     
-    // Look for Scrapping command response - updated to handle new AI-generated format
-    if (message.toLowerCase().includes("here's a refined version") || message.toLowerCase().includes("refined analysis")) {
-      // Extract content after "Here's a refined version of your thoughts:"
-      const startMarker = "Here's a refined version of your thoughts:";
-      const startIndex = message.indexOf(startMarker);
-      
-      if (startIndex !== -1) {
-        const scrapContent = message.substring(startIndex + startMarker.length).trim();
-        // Remove any trailing verification prompts if present
-        const cleanedContent = scrapContent.replace(/\n\nVerification:.*$/s, '').trim();
-        return cleanedContent;
-      }
-      
-      // Fallback: Look for "refined analysis" or "refined version"
-      if (message.toLowerCase().includes("refined")) {
-        const lines = message.split('\n');
-        let contentStartIndex = -1;
-        
-        for (let i = 0; i < lines.length; i++) {
-          if (lines[i].toLowerCase().includes("refined") || lines[i].toLowerCase().includes("**business context")) {
-            contentStartIndex = i;
-            break;
-          }
-        }
-        
-        if (contentStartIndex !== -1) {
-          const guidanceContent = lines.slice(contentStartIndex).join('\n').trim();
-          return guidanceContent.replace(/\n\nVerification:.*$/s, '').trim();
-        }
-      }
+    // Remove trailing tips and verification prompts
+    cleanedContent = cleanedContent.replace(/💡 \*\*Quick Tip\*\*:.*$/s, '').trim();
+    cleanedContent = cleanedContent.replace(/💡 \*\*Pro Tip\*\*:.*$/s, '').trim();
+    cleanedContent = cleanedContent.replace(/\n\nVerification:.*$/s, '').trim();
+    cleanedContent = cleanedContent.replace(/🎯 \*\*Areas Where You May Need Additional Support:\*\*.*$/s, '').trim();
+    
+    // If the cleaned content is substantial, return it
+    if (cleanedContent.length > 200) {
+      return cleanedContent;
     }
     
     return null;
@@ -327,12 +314,17 @@ export default function ChatPage() {
       // IMPORTANT: Send only "Accept" to the backend, not the full content
       // The backend will understand "Accept" as a command to move to the next question
       const {
-        result: { reply, progress, web_search_status, immediate_response },
+        result: { reply, progress, web_search_status, immediate_response, show_accept_modify },
       } = await fetchQuestion("Accept", sessionId!);
       const formatted = formatAngelMessage(reply);
       setCurrentQuestion(formatted);
       setProgress(progress);
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
+      
+      // Use AI-powered detection from backend for showing buttons
+      if (show_accept_modify !== undefined) {
+        setShowVerificationButtons(show_accept_modify);
+      }
       
       // Show immediate response if available
       if (immediate_response) {
@@ -368,12 +360,17 @@ export default function ChatPage() {
     
     try {
       const {
-        result: { reply, progress, web_search_status, immediate_response },
+        result: { reply, progress, web_search_status, immediate_response, show_accept_modify },
       } = await fetchQuestion("Draft More", sessionId!);
       const formatted = formatAngelMessage(reply);
       setCurrentQuestion(formatted);
       setProgress(progress);
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
+      
+      // Use AI-powered detection from backend for showing buttons
+      if (show_accept_modify !== undefined) {
+        setShowVerificationButtons(show_accept_modify);
+      }
       
       // Show immediate response if available
       if (immediate_response) {
@@ -1274,7 +1271,7 @@ export default function ChatPage() {
 
     try {
       const {
-        result: { reply, progress, web_search_status, immediate_response, transition_phase, business_plan_summary },
+        result: { reply, progress, web_search_status, immediate_response, transition_phase, business_plan_summary, show_accept_modify },
       } = await fetchQuestion(input, sessionId!);
       console.log("📥 Question API Response:", {
         input: input,
@@ -1284,6 +1281,7 @@ export default function ChatPage() {
         web_search_status: web_search_status,
         immediate_response: immediate_response,
         transition_phase: transition_phase,
+        show_accept_modify: show_accept_modify,
         business_plan_summary: business_plan_summary ? "Present" : "None"
       });
       
@@ -1324,6 +1322,12 @@ export default function ChatPage() {
       setCurrentQuestionNumber(nextQuestionNumber);
       setProgress(progress);
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
+      
+      // Use AI-powered detection from backend for showing buttons (if available)
+      if (show_accept_modify !== undefined) {
+        console.log("🤖 AI Detection says show buttons:", show_accept_modify);
+        setShowVerificationButtons(show_accept_modify);
+      }
       
       // Show immediate response if available
       if (immediate_response) {
