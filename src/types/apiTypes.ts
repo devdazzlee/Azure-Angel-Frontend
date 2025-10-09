@@ -53,6 +53,7 @@ export interface AngelResponse {
         immediate_response?: string;
         transition_phase?: string;
         business_plan_summary?: string;
+        show_accept_modify?: boolean;
     };
 }
 
