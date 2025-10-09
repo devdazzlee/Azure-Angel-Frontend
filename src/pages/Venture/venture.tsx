@@ -39,6 +39,11 @@ interface ProgressState {
   total: number;
   percent: number;
   combined?: boolean;  // Flag for combined progress
+  overall_progress?: {  // Combined progress for KYC + Business Plan (65 total)
+    answered: number;
+    total: number;
+    percent: number;
+  };
   phase_breakdown?: {
     kyc_completed: number;
     kyc_total: number;
@@ -122,6 +127,7 @@ export default function ChatPage() {
       answered: progress.answered,
       total: progress.total,
       percent: progress.percent,
+      overall_progress: progress.overall_progress,
       timestamp: new Date().toISOString()
     });
   }, [progress]);
@@ -195,67 +201,105 @@ export default function ChatPage() {
       "here's what i've captured so far"
     ];
     
+    // Also check for Support, Draft, and Scrapping command responses
+    const commandResponseKeywords = [
+      "let's work through this together",
+      "here's a draft",
+      "here's a refined version",
+      "refined analysis",
+      "here's a draft for you"
+    ];
+    
     const lowerMessage = message.toLowerCase();
-    return verificationKeywords.some(keyword => lowerMessage.includes(keyword));
+    
+    // Show verification buttons for both verification messages and command responses
+    const hasVerificationKeyword = verificationKeywords.some(keyword => lowerMessage.includes(keyword));
+    const hasCommandResponse = commandResponseKeywords.some(keyword => lowerMessage.includes(keyword));
+    
+    return hasVerificationKeyword || hasCommandResponse;
   };
 
   // Function to extract guidance content from Support/Draft/Scrapping responses
   const extractGuidanceContent = (message: string): string | null => {
     if (!message) return null;
     
-    // Look for Support command response
+    // Look for Support command response - updated to handle new format
     if (message.toLowerCase().includes("let's work through this together")) {
-      // Extract content between "Let's work through this together with some deeper context:" and "Verification:"
+      // Extract content after "Let's work through this together with some deeper context:"
       const startMarker = "Let's work through this together with some deeper context:";
-      const endMarker = "Verification:";
-      
       const startIndex = message.indexOf(startMarker);
-      const endIndex = message.indexOf(endMarker);
       
-      if (startIndex !== -1 && endIndex !== -1) {
-        const guidanceContent = message.substring(startIndex + startMarker.length, endIndex).trim();
-        return guidanceContent;
+      if (startIndex !== -1) {
+        // Get everything after the marker, trimming extra whitespace
+        const guidanceContent = message.substring(startIndex + startMarker.length).trim();
+        // Remove any trailing verification prompts if present
+        const cleanedContent = guidanceContent.replace(/\n\nVerification:.*$/s, '').trim();
+        return cleanedContent;
       }
     }
     
-    // Look for Draft command response (updated to handle new format)
+    // Look for Draft command response - updated to handle new AI-generated format
     if (message.toLowerCase().includes("here's a draft")) {
-      // Extract content between the draft content and "Verification:"
-      const endMarker = "Verification:";
-      const endIndex = message.indexOf(endMarker);
+      // Extract content after "Here's a draft for you:"
+      const startMarker = "Here's a draft for you:";
+      const startIndex = message.indexOf(startMarker);
       
-      if (endIndex !== -1) {
-        // Find the start of the actual draft content (after any intro text)
-        const lines = message.substring(0, endIndex).split('\n');
-        let contentStartIndex = 0;
+      if (startIndex !== -1) {
+        // Get everything after the marker
+        const draftContent = message.substring(startIndex + startMarker.length).trim();
+        // Remove any trailing verification prompts if present
+        const cleanedContent = draftContent.replace(/\n\nVerification:.*$/s, '').trim();
+        return cleanedContent;
+      }
+      
+      // Fallback: Look for alternative draft markers
+      if (message.toLowerCase().includes("based on your")) {
+        const lines = message.split('\n');
+        let contentStartIndex = -1;
         
-        // Find the line that starts with "Based on your business"
         for (let i = 0; i < lines.length; i++) {
-          if (lines[i].toLowerCase().includes("based on your business")) {
-            contentStartIndex = message.indexOf(lines[i]);
+          if (lines[i].toLowerCase().includes("based on your")) {
+            contentStartIndex = i;
             break;
           }
         }
         
         if (contentStartIndex !== -1) {
-          const guidanceContent = message.substring(contentStartIndex, endIndex).trim();
-          return guidanceContent;
+          const guidanceContent = lines.slice(contentStartIndex).join('\n').trim();
+          return guidanceContent.replace(/\n\nVerification:.*$/s, '').trim();
         }
       }
     }
     
-    // Look for Scrapping command response
-    if (message.toLowerCase().includes("here's a refined version of your thoughts")) {
-      // Extract content between "Here's a refined version of your thoughts:" and "Verification:"
+    // Look for Scrapping command response - updated to handle new AI-generated format
+    if (message.toLowerCase().includes("here's a refined version") || message.toLowerCase().includes("refined analysis")) {
+      // Extract content after "Here's a refined version of your thoughts:"
       const startMarker = "Here's a refined version of your thoughts:";
-      const endMarker = "Verification:";
-      
       const startIndex = message.indexOf(startMarker);
-      const endIndex = message.indexOf(endMarker);
       
-      if (startIndex !== -1 && endIndex !== -1) {
-        const guidanceContent = message.substring(startIndex + startMarker.length, endIndex).trim();
-        return guidanceContent;
+      if (startIndex !== -1) {
+        const scrapContent = message.substring(startIndex + startMarker.length).trim();
+        // Remove any trailing verification prompts if present
+        const cleanedContent = scrapContent.replace(/\n\nVerification:.*$/s, '').trim();
+        return cleanedContent;
+      }
+      
+      // Fallback: Look for "refined analysis" or "refined version"
+      if (message.toLowerCase().includes("refined")) {
+        const lines = message.split('\n');
+        let contentStartIndex = -1;
+        
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].toLowerCase().includes("refined") || lines[i].toLowerCase().includes("**business context")) {
+            contentStartIndex = i;
+            break;
+          }
+        }
+        
+        if (contentStartIndex !== -1) {
+          const guidanceContent = lines.slice(contentStartIndex).join('\n').trim();
+          return guidanceContent.replace(/\n\nVerification:.*$/s, '').trim();
+        }
       }
     }
     
@@ -280,9 +324,11 @@ export default function ChatPage() {
         ]);
       }
       
+      // IMPORTANT: Send only "Accept" to the backend, not the full content
+      // The backend will understand "Accept" as a command to move to the next question
       const {
         result: { reply, progress, web_search_status, immediate_response },
-      } = await fetchQuestion(guidanceContent || "Accept", sessionId!);
+      } = await fetchQuestion("Accept", sessionId!);
       const formatted = formatAngelMessage(reply);
       setCurrentQuestion(formatted);
       setProgress(progress);
@@ -1518,7 +1564,8 @@ export default function ChatPage() {
   const currentStep = progress.phase_answered || progress.answered || 1;
   // Use phase-specific totals instead of combined totals for step display
   const total = QUESTION_COUNTS[progress.phase as keyof typeof QUESTION_COUNTS];
-  const percent = progress.percent || 1;
+  // For progress circle, use overall progress (combined KYC+BP) when available
+  const percent = progress.overall_progress?.percent || progress.percent || 1;
 
   // Console logging for calculated display values
   console.log("📊 Display Values Calculated:", {

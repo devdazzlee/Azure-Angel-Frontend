@@ -19,6 +19,11 @@ interface QuestionNavigatorProps {
     total: number;
     percent: number;
     combined?: boolean;
+    overall_progress?: {
+      answered: number;
+      total: number;
+      percent: number;
+    };
     phase_breakdown?: {
       kyc_completed: number;
       kyc_total: number;
@@ -52,6 +57,15 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
   onEditPlan,
   onUploadPlan
 }) => {
+  // Debug logging to see what progress data we receive
+  console.log("🔍 QuestionNavigator Progress Data:", {
+    phase: currentProgress.phase,
+    answered: currentProgress.answered,
+    total: currentProgress.total,
+    percent: currentProgress.percent,
+    overall_progress: currentProgress.overall_progress
+  });
+  
   // Group questions by phase
   const questionsByPhase = questions.reduce((acc, question) => {
     if (!acc[question.phase]) {
@@ -66,7 +80,7 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
       {/* Business Plan Progress Widget - Only show during BUSINESS_PLAN phase */}
       {currentPhase === 'BUSINESS_PLAN' && (
         <BusinessPlanProgressWidget
-          currentQuestionNumber={currentProgress.answered + 1}
+          currentQuestionNumber={currentProgress.answered}
           totalQuestions={currentProgress.total}
           className="shadow-lg"
         />
@@ -87,11 +101,11 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
             </div>
             <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg shadow-sm border border-gray-200">
               <span className="text-lg font-bold text-gray-900">
-                {currentProgress.answered}
+                {currentProgress.overall_progress?.answered || currentProgress.answered}
               </span>
               <span className="text-sm text-gray-400 font-medium">/</span>
               <span className="text-lg font-bold text-gray-700">
-                {currentProgress.total}
+                {currentProgress.overall_progress?.total || currentProgress.total}
               </span>
             </div>
           </div>
@@ -101,7 +115,7 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
             <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden shadow-inner border border-gray-200">
               <div
                 className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-teal-500 rounded-full transition-all duration-1000 ease-out relative overflow-hidden"
-                style={{ width: `${currentProgress.percent}%` }}
+                style={{ width: `${currentProgress.overall_progress?.percent || currentProgress.percent}%` }}
               >
                 {/* Shimmer Effect */}
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-40 animate-shimmer"></div>
@@ -111,23 +125,39 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
             {/* Progress Percentage */}
             <div className="mt-2 text-center">
               <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 bg-clip-text text-transparent animate-gradient">
-                {Math.round(currentProgress.percent)}%
+                {Math.round(currentProgress.overall_progress?.percent || currentProgress.percent)}%
               </span>
               <div className="text-xs text-gray-500 mt-0.5 font-medium uppercase tracking-wide">
                 Complete
               </div>
             </div>
             
-            {/* Compact Progress Milestones */}
-            <div className="mt-3 flex justify-between">
-              <div className="flex items-center gap-1.5 bg-blue-50 px-2 py-1 rounded-lg border border-blue-200">
-                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-                <span className="text-xs font-medium text-blue-700 uppercase tracking-wide">KYC</span>
-              </div>
-              <div className="flex items-center gap-1.5 bg-purple-50 px-2 py-1 rounded-lg border border-purple-200">
-                <div className="w-1.5 h-1.5 bg-purple-500 rounded-full"></div>
-                <span className="text-xs font-medium text-purple-700 uppercase tracking-wide">BP</span>
-              </div>
+            {/* Compact Progress Milestones - Show only current phase */}
+            <div className="mt-3 flex justify-center">
+              {currentPhase === 'KYC' && (
+                <div className="flex items-center gap-1.5 bg-blue-50 px-2 py-1 rounded-lg border border-blue-200">
+                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                  <span className="text-xs font-medium text-blue-700 uppercase tracking-wide">KYC</span>
+                </div>
+              )}
+              {currentPhase === 'BUSINESS_PLAN' && (
+                <div className="flex items-center gap-1.5 bg-purple-50 px-2 py-1 rounded-lg border border-purple-200">
+                  <div className="w-1.5 h-1.5 bg-purple-500 rounded-full"></div>
+                  <span className="text-xs font-medium text-purple-700 uppercase tracking-wide">BP</span>
+                </div>
+              )}
+              {currentPhase === 'ROADMAP' && (
+                <div className="flex items-center gap-1.5 bg-teal-50 px-2 py-1 rounded-lg border border-teal-200">
+                  <div className="w-1.5 h-1.5 bg-teal-500 rounded-full"></div>
+                  <span className="text-xs font-medium text-teal-700 uppercase tracking-wide">ROADMAP</span>
+                </div>
+              )}
+              {currentPhase === 'IMPLEMENTATION' && (
+                <div className="flex items-center gap-1.5 bg-green-50 px-2 py-1 rounded-lg border border-green-200">
+                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+                  <span className="text-xs font-medium text-green-700 uppercase tracking-wide">IMPL</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

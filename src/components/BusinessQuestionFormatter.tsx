@@ -6,6 +6,26 @@ interface BusinessQuestionFormatterProps {
 
 const BusinessQuestionFormatter: React.FC<BusinessQuestionFormatterProps> = ({ text }) => {
   
+  // Extract and format "Question X" badge (simple like KYC)
+  const extractQuestionNumber = (inputText: string): { text: string, questionBadge: string | null } => {
+    // Look for "Question X" pattern (with or without "of Y")
+    const questionMatch = inputText.match(/Question\s+(\d+)(?:\s+of\s+\d+)?/i);
+    
+    if (questionMatch) {
+      const [fullMatch, questionNum] = questionMatch;
+      // Remove the question number text from the main text
+      const cleanedText = inputText.replace(fullMatch, '').trim();
+      return {
+        text: cleanedText,
+        questionBadge: `<div className="mb-2>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Question ${questionNum}</span>
+        </div>`
+      };
+    }
+    
+    return { text: inputText, questionBadge: null };
+  };
+  
   // Smart approach - only add spacing when needed
   const formatBusinessQuestions = (inputText: string): string => {
     if (!inputText || typeof inputText !== 'string') {
@@ -138,11 +158,19 @@ const BusinessQuestionFormatter: React.FC<BusinessQuestionFormatterProps> = ({ t
 
   // Convert text to HTML with proper line breaks
   const formatText = (inputText: string): string => {
-    // First apply business question formatting
-    let formattedText = formatBusinessQuestions(inputText);
+    // First extract question number badge
+    const { text: cleanedText, questionBadge } = extractQuestionNumber(inputText);
+    
+    // Apply business question formatting to cleaned text
+    let formattedText = formatBusinessQuestions(cleanedText);
     
     // Convert remaining line breaks to HTML breaks
     formattedText = formattedText.replace(/\n/g, '<br/>');
+    
+    // Add question badge at the top if it exists
+    if (questionBadge) {
+      formattedText = questionBadge + formattedText;
+    }
     
     return formattedText;
   };

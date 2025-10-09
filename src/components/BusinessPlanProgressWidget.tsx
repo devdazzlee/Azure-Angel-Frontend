@@ -132,7 +132,10 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
     if (activeSection) {
       setIsAnimating(true);
       
-      // Calculate section progress (questions completed within current section)
+      // Calculate section progress
+      // currentQuestionNumber represents the question we're ON (not completed)
+      // For section progress bar: if on question 1 of 4, we're 0% through (haven't completed it yet)
+      // For display: if on question 1, show "Question 1 of 4"
       const questionsInSection = activeSection.endQuestion - activeSection.startQuestion + 1;
       const questionsCompletedInSection = Math.max(0, currentQuestionNumber - activeSection.startQuestion);
       const progress = (questionsCompletedInSection / questionsInSection) * 100;
@@ -140,8 +143,8 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
       setCurrentSection(activeSection);
       setSectionProgress(Math.min(100, Math.max(0, progress)));
       
-      // Calculate overall progress
-      const overallProgress = Math.min(100, Math.max(0, (currentQuestionNumber / totalQuestions) * 100));
+      // Calculate overall progress - percentage based on current question
+      const overallProgress = Math.min(100, Math.max(0, ((currentQuestionNumber - 1) / totalQuestions) * 100));
       setOverallProgress(overallProgress);
 
       // Reset animation after transition
@@ -214,8 +217,19 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
         </div>
         <div className="w-full bg-gray-200 rounded-full h-2">
           <div 
-            className={`h-2 rounded-full transition-all duration-500 ease-out ${currentSection.color.replace('text-', 'bg-')}`}
-            style={{ width: `${sectionProgress}%` }}
+            className="h-2 rounded-full transition-all duration-500 ease-out"
+            style={{ 
+              width: `${sectionProgress}%`,
+              backgroundColor: currentSection.color === 'text-blue-600' ? '#2563eb' :
+                              currentSection.color === 'text-purple-600' ? '#9333ea' :
+                              currentSection.color === 'text-green-600' ? '#16a34a' :
+                              currentSection.color === 'text-orange-600' ? '#ea580c' :
+                              currentSection.color === 'text-emerald-600' ? '#059669' :
+                              currentSection.color === 'text-pink-600' ? '#db2777' :
+                              currentSection.color === 'text-red-600' ? '#dc2626' :
+                              currentSection.color === 'text-indigo-600' ? '#4f46e5' :
+                              currentSection.color === 'text-gray-600' ? '#4b5563' : '#2563eb'
+            }}
           />
         </div>
       </div>
