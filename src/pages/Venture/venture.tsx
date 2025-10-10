@@ -132,22 +132,17 @@ export default function ChatPage() {
     });
   }, [progress]);
 
-  // Check if current question is a verification message (FALLBACK - AI detection happens in handleNext)
-  useEffect(() => {
-    // This is a fallback for cases where backend doesn't provide show_accept_modify
-    // The primary detection now happens via AI in the backend
-    if (currentQuestion) {
-      const isVerification = isVerificationMessage(currentQuestion);
-      // Only set if we don't already have a value from backend AI detection
-      if (isVerification) {
-        setShowVerificationButtons(isVerification);
-        console.log("🔍 Frontend Fallback Detection - Verification Check:", { 
-          currentQuestion: currentQuestion.substring(0, 100) + "...", 
-          isVerification 
-        });
-      }
-    }
-  }, [currentQuestion]);
+  // DEPRECATED: Frontend fallback detection is now disabled
+  // Backend now provides reliable show_accept_modify detection
+  // This useEffect has been disabled to prevent overriding backend decisions
+  // useEffect(() => {
+  //   if (currentQuestion) {
+  //     const isVerification = isVerificationMessage(currentQuestion);
+  //     if (isVerification) {
+  //       setShowVerificationButtons(isVerification);
+  //     }
+  //   }
+  // }, [currentQuestion]);
   const [planState, setPlanState] = useState({
     showModal: false,
     loading: false,
@@ -314,17 +309,17 @@ export default function ChatPage() {
       // IMPORTANT: Send only "Accept" to the backend, not the full content
       // The backend will understand "Accept" as a command to move to the next question
       const {
-        result: { reply, progress, web_search_status, immediate_response, show_accept_modify },
+        result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number },
       } = await fetchQuestion("Accept", sessionId!);
       const formatted = formatAngelMessage(reply);
+      const questionNumber = question_number || extractQuestionNumber(reply);
       setCurrentQuestion(formatted);
+      setCurrentQuestionNumber(questionNumber);
       setProgress(progress);
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
       
-      // Use AI-powered detection from backend for showing buttons
-      if (show_accept_modify !== undefined) {
-        setShowVerificationButtons(show_accept_modify);
-      }
+      // Use backend detection for showing buttons (always respect backend decision)
+      setShowVerificationButtons(show_accept_modify || false);
       
       // Show immediate response if available
       if (immediate_response) {
@@ -360,17 +355,17 @@ export default function ChatPage() {
     
     try {
       const {
-        result: { reply, progress, web_search_status, immediate_response, show_accept_modify },
+        result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number },
       } = await fetchQuestion("Draft More", sessionId!);
       const formatted = formatAngelMessage(reply);
+      const questionNumber = question_number || extractQuestionNumber(reply);
       setCurrentQuestion(formatted);
+      setCurrentQuestionNumber(questionNumber);
       setProgress(progress);
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
       
-      // Use AI-powered detection from backend for showing buttons
-      if (show_accept_modify !== undefined) {
-        setShowVerificationButtons(show_accept_modify);
-      }
+      // Use backend detection for showing buttons (always respect backend decision)
+      setShowVerificationButtons(show_accept_modify || false);
       
       // Show immediate response if available
       if (immediate_response) {
@@ -453,11 +448,13 @@ export default function ChatPage() {
       
       // Fetch the first business plan question
       const {
-        result: { reply, progress, web_search_status, immediate_response },
+        result: { reply, progress, web_search_status, immediate_response, question_number },
       } = await fetchQuestion("", sessionId!);
       
       const formatted = formatAngelMessage(reply);
+      const questionNumber = question_number || extractQuestionNumber(reply);
       setCurrentQuestion(formatted);
+      setCurrentQuestionNumber(questionNumber);
       setProgress(progress);
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
       
@@ -1224,17 +1221,19 @@ export default function ChatPage() {
       setLoading(true);
       try {
         const {
-          result: { reply, progress, web_search_status, immediate_response },
+          result: { reply, progress, web_search_status, immediate_response, question_number },
         } = await fetchQuestion("", sessionId!);
         console.log("📥 Initial Question API Response:", {
           reply: reply.substring(0, 100) + "...",
           progress: progress,
           sessionId: sessionId,
           web_search_status: web_search_status,
-          immediate_response: immediate_response
+          immediate_response: immediate_response,
+          question_number: question_number
         });
         const formatted = formatAngelMessage(reply);
-        const questionNumber = extractQuestionNumber(reply); // Don't force question number for introductions
+        // Use question_number from backend if available, otherwise try to extract from reply
+        const questionNumber = question_number || extractQuestionNumber(reply);
         setCurrentQuestion(formatted);
         setCurrentQuestionNumber(questionNumber);
         setProgress(progress);
@@ -1271,7 +1270,7 @@ export default function ChatPage() {
 
     try {
       const {
-        result: { reply, progress, web_search_status, immediate_response, transition_phase, business_plan_summary, show_accept_modify },
+        result: { reply, progress, web_search_status, immediate_response, transition_phase, business_plan_summary, show_accept_modify, question_number },
       } = await fetchQuestion(input, sessionId!);
       console.log("📥 Question API Response:", {
         input: input,
@@ -1282,7 +1281,8 @@ export default function ChatPage() {
         immediate_response: immediate_response,
         transition_phase: transition_phase,
         show_accept_modify: show_accept_modify,
-        business_plan_summary: business_plan_summary ? "Present" : "None"
+        business_plan_summary: business_plan_summary ? "Present" : "None",
+        question_number: question_number
       });
       
       // Handle transition phases
@@ -1317,7 +1317,8 @@ export default function ChatPage() {
       }
       
       const formatted = formatAngelMessage(reply);
-      const nextQuestionNumber = extractQuestionNumber(reply); // Don't force question number for non-questions
+      // Use question_number from backend if available, otherwise try to extract from reply
+      const nextQuestionNumber = question_number || extractQuestionNumber(reply);
       setCurrentQuestion(formatted);
       setCurrentQuestionNumber(nextQuestionNumber);
       setProgress(progress);
@@ -1950,7 +1951,7 @@ export default function ChatPage() {
                       <div className="font-semibold text-gray-800 mb-1 text-sm">
                         Angel
                       </div>
-                      {progress.phase === "KYC" && pair.questionNumber && (
+                      {(progress.phase === "KYC" || progress.phase === "BUSINESS_PLAN") && pair.questionNumber && (
                         <div className="mb-2">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                             Question {pair.questionNumber}
@@ -1998,7 +1999,7 @@ export default function ChatPage() {
                     <div className="font-semibold text-gray-800 mb-1 text-sm">
                       Angel
                     </div>
-                    {!loading && progress.phase === "KYC" && currentQuestionNumber && (
+                    {!loading && (progress.phase === "KYC" || progress.phase === "BUSINESS_PLAN") && currentQuestionNumber && (
                       <div className="mb-2">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                           Question {currentQuestionNumber}

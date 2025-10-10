@@ -6,24 +6,19 @@ interface BusinessQuestionFormatterProps {
 
 const BusinessQuestionFormatter: React.FC<BusinessQuestionFormatterProps> = ({ text }) => {
   
-  // Extract and format "Question X" badge (simple like KYC)
-  const extractQuestionNumber = (inputText: string): { text: string, questionBadge: string | null } => {
+  // Remove "Question X" text from the message (since it's displayed in the badge above)
+  const removeQuestionNumber = (inputText: string): string => {
     // Look for "Question X" pattern (with or without "of Y")
     const questionMatch = inputText.match(/Question\s+(\d+)(?:\s+of\s+\d+)?/i);
     
     if (questionMatch) {
-      const [fullMatch, questionNum] = questionMatch;
+      const [fullMatch] = questionMatch;
       // Remove the question number text from the main text
       const cleanedText = inputText.replace(fullMatch, '').trim();
-      return {
-        text: cleanedText,
-        questionBadge: `<div className="mb-2>
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Question ${questionNum}</span>
-        </div>`
-      };
+      return cleanedText;
     }
     
-    return { text: inputText, questionBadge: null };
+    return inputText;
   };
   
   // Smart approach - only add spacing when needed
@@ -158,19 +153,14 @@ const BusinessQuestionFormatter: React.FC<BusinessQuestionFormatterProps> = ({ t
 
   // Convert text to HTML with proper line breaks
   const formatText = (inputText: string): string => {
-    // First extract question number badge
-    const { text: cleanedText, questionBadge } = extractQuestionNumber(inputText);
+    // First remove "Question X" text (it's displayed in the badge by parent component)
+    let cleanedText = removeQuestionNumber(inputText);
     
     // Apply business question formatting to cleaned text
     let formattedText = formatBusinessQuestions(cleanedText);
     
     // Convert remaining line breaks to HTML breaks
     formattedText = formattedText.replace(/\n/g, '<br/>');
-    
-    // Add question badge at the top if it exists
-    if (questionBadge) {
-      formattedText = questionBadge + formattedText;
-    }
     
     return formattedText;
   };

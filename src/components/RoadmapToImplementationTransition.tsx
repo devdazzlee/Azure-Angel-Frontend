@@ -376,7 +376,7 @@ const RoadmapToImplementationTransition: React.FC<RoadmapToImplementationTransit
         </div>
 
         {/* Business Context Summary */}
-        {businessContext && (
+        {/* {businessContext && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
             <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -432,7 +432,7 @@ const RoadmapToImplementationTransition: React.FC<RoadmapToImplementationTransit
               </div>
             </div>
           </div>
-        )}
+        )} */}
 
         {/* Action Buttons */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
@@ -448,12 +448,12 @@ const RoadmapToImplementationTransition: React.FC<RoadmapToImplementationTransit
                   "The way to get started is to quit talking and begin doing." - Walt Disney
                 </p>
               </div>
-              {businessContext && (
+              {/* {businessContext && (
                 <p className="text-sm text-gray-600">
                   This implementation process is tailored specifically to your "<strong>{businessContext.business_name}</strong>" business in the <strong>{businessContext.industry}</strong> industry, 
                   located in <strong>{businessContext.location}</strong>. Every recommendation is designed to help you build the business of your dreams.
                 </p>
-              )}
+              )} */}
             </div>
           </div>
           

@@ -54,6 +54,7 @@ export interface AngelResponse {
         transition_phase?: string;
         business_plan_summary?: string;
         show_accept_modify?: boolean;
+        question_number?: number;
     };
 }
 
