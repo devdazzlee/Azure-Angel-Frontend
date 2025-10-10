@@ -78,32 +78,84 @@ export default function ChatPage() {
       business_type: "Startup"
     };
 
-    // Extract business name from conversation history
+    // PRIORITY 1: Check for domain-like business names in ALL answers (highest confidence)
     history.forEach(pair => {
-      const question = pair.question.toLowerCase();
-      const _answer = pair.answer.toLowerCase();
+      const answer = pair.answer.trim();
+      const answerLower = answer.toLowerCase();
       
-      // Look for business name questions
-      if (question.includes('business name') || question.includes('company name') || question.includes('venture name')) {
-        businessInfo.business_name = pair.answer || "Your Business";
+      // Skip command responses
+      if (['support', 'draft', 'scrapping', 'scraping', 'accept', 'modify'].includes(answerLower) || answer.length > 500) {
+        return;
       }
       
-      // Look for industry questions
-      if (question.includes('industry') || question.includes('sector') || question.includes('field')) {
-        businessInfo.industry = pair.answer || "General Business";
-      }
-      
-      // Look for location questions
-      if (question.includes('location') || question.includes('city') || question.includes('country') || question.includes('where')) {
-        businessInfo.location = pair.answer || "United States";
-      }
-      
-      // Look for business type questions
-      if (question.includes('business type') || question.includes('company type') || question.includes('structure')) {
-        businessInfo.business_type = pair.answer || "Startup";
+      // Look for domain names ANYWHERE in history
+      if ((answer.includes('.com') || answer.includes('.net') || answer.includes('.org') || answer.includes('.co')) &&
+          answer.length < 100) {
+        businessInfo.business_name = answer.trim();
+        console.log(`📊 HIGH PRIORITY: Found domain business name: ${businessInfo.business_name}`);
       }
     });
 
+    // PRIORITY 2: Extract other fields from conversation
+    history.forEach((pair, index) => {
+      const question = pair.question.toLowerCase();
+      const answer = pair.answer;
+      const answerLower = answer.toLowerCase().trim();
+      
+      // Skip command responses
+      if (['support', 'draft', 'scrapping', 'scraping', 'accept', 'modify'].includes(answerLower) || answer.length > 500) {
+        return;
+      }
+      
+      // Extract location from KYC.10 or Business Plan location questions
+      if ((question.includes('where are you located') || question.includes('what city') || 
+           question.includes('where will your business be located')) &&
+          answerLower !== 'yes' && answerLower !== 'no' && answer.length > 2 && answer.length < 100) {
+        // Extract city name (first part before comma)
+        const cityName = answer.split(',')[0].trim();
+        businessInfo.location = cityName.charAt(0).toUpperCase() + cityName.slice(1).toLowerCase();
+        console.log(`📊 Extracted location: ${businessInfo.location}`);
+      }
+      
+      // Extract business structure from KYC (LLC, Corporation, etc.)
+      if (question.includes('legal business structure') || 
+          (question.includes('register') && question.includes('business'))) {
+        const structureTypes = ['llc', 'corporation', 'partnership', 'sole proprietorship', 'private limited', 'limited company'];
+        if (structureTypes.some(type => answerLower.includes(type))) {
+          // Extract just the structure type
+          for (const type of structureTypes) {
+            if (answerLower.includes(type)) {
+              businessInfo.business_type = type.toUpperCase();
+              console.log(`📊 Extracted business type: ${businessInfo.business_type}`);
+              break;
+            }
+          }
+        }
+      }
+      
+      // Extract industry from multiple sources
+      if (!businessInfo.industry || businessInfo.industry === 'General Business') {
+        // Method 1: Look for industry keywords in any answer (most reliable)
+        const industryKeywords = {
+          'Beverage': ['beverage', 'drink', 'juice', 'soft drink', 'refreshing', 'coke', 'cola', 'soda'],
+          'Food': ['food', 'restaurant', 'cafe', 'culinary', 'catering', 'bakery'],
+          'Technology': ['technology', 'software', 'app', 'tech', 'ai', 'development', 'digital platform', 'online platform'],
+          'Retail': ['retail', 'store', 'shop', 'ecommerce', 'e-commerce', 'marketplace', 'online marketplace'],
+          'Healthcare': ['health', 'medical', 'clinic', 'wellness', 'pharmacy'],
+          'Education': ['education', 'learning', 'training', 'course', 'teaching'],
+        };
+        
+        for (const [industry, keywords] of Object.entries(industryKeywords)) {
+          if (keywords.some(keyword => answerLower.includes(keyword))) {
+            businessInfo.industry = industry;
+            console.log(`📊 Extracted industry from keyword match: ${businessInfo.industry}`);
+            break;
+          }
+        }
+      }
+    });
+
+    console.log('📊 Final extracted business info:', businessInfo);
     return businessInfo;
   };
 
@@ -119,6 +171,17 @@ export default function ChatPage() {
     total: 19,
     percent: 0,
   });
+  
+  // Track question numbers per phase to prevent skips
+  const [phaseQuestionTracker, setPhaseQuestionTracker] = useState<{
+    currentPhase: string;
+    questionCount: number;
+    lastQuestionNumber: number | null;
+  }>({
+    currentPhase: "KYC",
+    questionCount: 0,
+    lastQuestionNumber: null,
+  });
 
   // Console logging for progress debugging
   useEffect(() => {
@@ -131,6 +194,19 @@ export default function ChatPage() {
       timestamp: new Date().toISOString()
     });
   }, [progress]);
+
+  // Reset question tracker when phase changes
+  useEffect(() => {
+    if (phaseQuestionTracker.currentPhase !== progress.phase) {
+      console.log("🔄 Phase transition detected - resetting question tracker");
+      setPhaseQuestionTracker({
+        currentPhase: progress.phase,
+        questionCount: 0,
+        lastQuestionNumber: null,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progress.phase]);
 
   // DEPRECATED: Frontend fallback detection is now disabled
   // Backend now provides reliable show_accept_modify detection
@@ -312,9 +388,10 @@ export default function ChatPage() {
         result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number },
       } = await fetchQuestion("Accept", sessionId!);
       const formatted = formatAngelMessage(reply);
-      const questionNumber = question_number || extractQuestionNumber(reply);
+      const questionNumber = calculateQuestionNumber(question_number, progress.phase, reply);
       setCurrentQuestion(formatted);
       setCurrentQuestionNumber(questionNumber);
+      updateQuestionTracker(progress.phase, questionNumber);
       setProgress(progress);
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
       
@@ -358,9 +435,10 @@ export default function ChatPage() {
         result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number },
       } = await fetchQuestion("Draft More", sessionId!);
       const formatted = formatAngelMessage(reply);
-      const questionNumber = question_number || extractQuestionNumber(reply);
+      const questionNumber = calculateQuestionNumber(question_number, progress.phase, reply);
       setCurrentQuestion(formatted);
       setCurrentQuestionNumber(questionNumber);
+      updateQuestionTracker(progress.phase, questionNumber);
       setProgress(progress);
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
       
@@ -452,9 +530,10 @@ export default function ChatPage() {
       } = await fetchQuestion("", sessionId!);
       
       const formatted = formatAngelMessage(reply);
-      const questionNumber = question_number || extractQuestionNumber(reply);
+      const questionNumber = calculateQuestionNumber(question_number, progress.phase, reply);
       setCurrentQuestion(formatted);
       setCurrentQuestionNumber(questionNumber);
+      updateQuestionTracker(progress.phase, questionNumber);
       setProgress(progress);
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
       
@@ -614,7 +693,274 @@ export default function ChatPage() {
       // Add more specific question patterns as needed
     }
     
+    // If no tag found but this is a BUSINESS_PLAN question, try to determine the number from context
+    if (progress.phase === "BUSINESS_PLAN" && text.includes("?")) {
+      // Check for specific Business Plan questions and assign numbers
+      if (text.toLowerCase().includes("what is your business name")) {
+        return 1; // This is BP.01
+      }
+      if (text.toLowerCase().includes("what is your business tagline or mission statement")) {
+        return 2; // This is BP.02
+      }
+      if (text.toLowerCase().includes("what problem does your business solve")) {
+        return 3; // This is BP.03
+      }
+      if (text.toLowerCase().includes("what makes your business unique")) {
+        return 4; // This is BP.04
+      }
+      if (text.toLowerCase().includes("describe your core product or service")) {
+        return 5; // This is BP.05
+      }
+      if (text.toLowerCase().includes("what are the key features and benefits")) {
+        return 6; // This is BP.06
+      }
+      if (text.toLowerCase().includes("what is your product development timeline")) {
+        return 7; // This is BP.07
+      }
+      if (text.toLowerCase().includes("who is your target market")) {
+        return 8; // This is BP.08
+      }
+      if (text.toLowerCase().includes("what is the size of your target market")) {
+        return 9; // This is BP.09
+      }
+      if (text.toLowerCase().includes("who are your main competitors")) {
+        return 10; // This is BP.10
+      }
+      if (text.toLowerCase().includes("how is your target market currently solving this problem")) {
+        return 11; // This is BP.11
+      }
+      if (text.toLowerCase().includes("where will your business be located")) {
+        return 12; // This is BP.12
+      }
+      if (text.toLowerCase().includes("what are your space and facility requirements")) {
+        return 13; // This is BP.13
+      }
+      if (text.toLowerCase().includes("what are your short-term operational needs")) {
+        return 14; // This is BP.14
+      }
+      if (text.toLowerCase().includes("what suppliers or vendors will you need")) {
+        return 15; // This is BP.15
+      }
+      if (text.toLowerCase().includes("what are your staffing needs")) {
+        return 16; // This is BP.16
+      }
+      if (text.toLowerCase().includes("how will you price your product")) {
+        return 17; // This is BP.17
+      }
+      if (text.toLowerCase().includes("what are your projected sales for the first year")) {
+        return 18; // This is BP.18
+      }
+      if (text.toLowerCase().includes("what are your estimated startup costs")) {
+        return 19; // This is BP.19
+      }
+      if (text.toLowerCase().includes("what are your estimated monthly operating expenses")) {
+        return 20; // This is BP.20
+      }
+      if (text.toLowerCase().includes("when do you expect to break even")) {
+        return 21; // This is BP.21
+      }
+      if (text.toLowerCase().includes("how much funding do you need to get started")) {
+        return 22; // This is BP.22
+      }
+      if (text.toLowerCase().includes("what are your financial projections for years 1-3")) {
+        return 23; // This is BP.23
+      }
+      if (text.toLowerCase().includes("how will you track and manage your finances")) {
+        return 24; // This is BP.24
+      }
+      if (text.toLowerCase().includes("how will you reach your target customers")) {
+        return 25; // This is BP.25
+      }
+      if (text.toLowerCase().includes("what is your sales process")) {
+        return 26; // This is BP.26
+      }
+      if (text.toLowerCase().includes("what is your customer acquisition cost")) {
+        return 27; // This is BP.27
+      }
+      if (text.toLowerCase().includes("what is your customer lifetime value")) {
+        return 28; // This is BP.28
+      }
+      if (text.toLowerCase().includes("how will you build brand awareness")) {
+        return 29; // This is BP.29
+      }
+      if (text.toLowerCase().includes("what partnerships or collaborations could help")) {
+        return 30; // This is BP.30
+      }
+      if (text.toLowerCase().includes("what business structure will you use")) {
+        return 31; // This is BP.31
+      }
+      if (text.toLowerCase().includes("what licenses and permits do you need")) {
+        return 32; // This is BP.32
+      }
+      if (text.toLowerCase().includes("what insurance coverage do you need")) {
+        return 33; // This is BP.33
+      }
+      if (text.toLowerCase().includes("how will you protect your intellectual property")) {
+        return 34; // This is BP.34
+      }
+      if (text.toLowerCase().includes("what contracts and agreements will you need")) {
+        return 35; // This is BP.35
+      }
+      if (text.toLowerCase().includes("how will you handle taxes and compliance")) {
+        return 36; // This is BP.36
+      }
+      if (text.toLowerCase().includes("what data privacy and security measures")) {
+        return 37; // This is BP.37
+      }
+      if (text.toLowerCase().includes("what are the key milestones you hope to achieve")) {
+        return 38; // This is BP.38
+      }
+      if (text.toLowerCase().includes("what additional products or services could you offer")) {
+        return 39; // This is BP.39
+      }
+      if (text.toLowerCase().includes("how will you expand to new markets")) {
+        return 40; // This is BP.40
+      }
+      if (text.toLowerCase().includes("what partnerships or strategic alliances could accelerate")) {
+        return 41; // This is BP.41
+      }
+      if (text.toLowerCase().includes("what are the biggest risks and challenges")) {
+        return 42; // This is BP.42
+      }
+      if (text.toLowerCase().includes("what contingency plans do you have")) {
+        return 43; // This is BP.43
+      }
+      if (text.toLowerCase().includes("what is your biggest concern or fear about launching")) {
+        return 44; // This is BP.44
+      }
+      if (text.toLowerCase().includes("what additional considerations or final thoughts")) {
+        return 45; // This is BP.45
+      }
+      // Add fallback for Business Plan questions that might not have tags
+      if (progress.phase === "BUSINESS_PLAN" && text.includes("?") && !text.toLowerCase().includes('congratulations')) {
+        // Try to determine question number from context or history
+        const historyLength = history.length;
+        if (historyLength >= 0 && historyLength < 45) {
+          return historyLength + 1; // Business Plan starts from question 1
+        }
+      }
+    }
+    
     return null;
+  };
+
+  // 🎯 ROBUST QUESTION NUMBER CALCULATOR
+  // This function provides a reliable fallback for question numbering
+  const calculateQuestionNumber = (
+    backendQuestionNumber: number | null | undefined,
+    currentPhase: string,
+    replyText: string
+  ): number | null => {
+    console.log("🔢 Calculating Question Number:", {
+      backendNumber: backendQuestionNumber,
+      phase: currentPhase,
+      historyLength: history.length,
+      trackerState: phaseQuestionTracker
+    });
+
+    // 1. PRIORITY: Use backend question_number if available and valid
+    if (backendQuestionNumber !== null && backendQuestionNumber !== undefined && backendQuestionNumber > 0) {
+      console.log("✅ Using backend question number:", backendQuestionNumber);
+      return backendQuestionNumber;
+    }
+
+    // 2. Check if this is an introduction message (no question number)
+    const isIntroduction = replyText.toLowerCase().includes('welcome to founderport') || 
+                          replyText.toLowerCase().includes('congratulations on taking your first step') ||
+                          replyText.toLowerCase().includes('phase 1 - know your customer') ||
+                          replyText.toLowerCase().includes('phase 2 - business planning') ||
+                          replyText.toLowerCase().includes('phase 3 - roadmap') ||
+                          replyText.toLowerCase().includes('phase 4: implementation') ||
+                          replyText.toLowerCase().includes('are you ready to begin your journey');
+    
+    if (isIntroduction) {
+      console.log("📢 Introduction message detected - no question number");
+      return null;
+    }
+
+    // 3. FALLBACK: Calculate based on phase and history
+    // Count questions from history that belong to the current phase
+    const phaseQuestions = history.filter(pair => {
+      // If we have a question number stored, check if it's reasonable for the phase
+      if (pair.questionNumber) {
+        return true; // Include all answered questions
+      }
+      return true;
+    });
+
+    // Calculate next question number based on phase
+    let calculatedNumber: number;
+    
+    if (currentPhase === "KYC") {
+      // For KYC, questions start from 1
+      calculatedNumber = phaseQuestions.length + 1;
+    } else if (currentPhase === "BUSINESS_PLAN") {
+      // For Business Plan, questions also start from 1 (it's a new phase)
+      // More reliable: use phase_answered from progress if available
+      if (progress.phase_answered !== undefined) {
+        calculatedNumber = progress.phase_answered + 1;
+      } else {
+        // Fallback: calculate based on total history
+        // If we have more than 19 questions total, subtract KYC questions
+        if (history.length >= 19) {
+          calculatedNumber = history.length - 19 + 1;
+        } else {
+          calculatedNumber = history.length + 1;
+        }
+      }
+    } else {
+      // For other phases, use history length + 1
+      calculatedNumber = phaseQuestions.length + 1;
+    }
+
+    // 4. VALIDATION: Ensure we don't skip numbers
+    if (phaseQuestionTracker.currentPhase === currentPhase && 
+        phaseQuestionTracker.lastQuestionNumber !== null) {
+      // Ensure we're either on the same question or incrementing by 1
+      const expectedNext = phaseQuestionTracker.lastQuestionNumber + 1;
+      if (calculatedNumber > expectedNext) {
+        console.warn("⚠️ Question number skip detected! Using expected:", expectedNext);
+        calculatedNumber = expectedNext;
+      }
+    }
+
+    // 5. Try pattern matching as last resort (for specific questions)
+    const patternNumber = extractQuestionNumber(replyText);
+    if (patternNumber !== null) {
+      console.log("🔍 Pattern match found:", patternNumber);
+      // Use pattern number if it's reasonable (not a huge jump)
+      if (Math.abs(patternNumber - calculatedNumber) <= 2) {
+        calculatedNumber = patternNumber;
+      }
+    }
+
+    console.log("✅ Calculated question number:", calculatedNumber);
+    return calculatedNumber;
+  };
+
+  // 🔄 UPDATE PHASE TRACKER
+  // Call this whenever we set a new question number
+  const updateQuestionTracker = (phase: string, questionNumber: number | null) => {
+    if (questionNumber !== null) {
+      setPhaseQuestionTracker(prev => {
+        // Reset counter if phase changed
+        if (prev.currentPhase !== phase) {
+          console.log("🔄 Phase changed from", prev.currentPhase, "to", phase, "- resetting tracker");
+          return {
+            currentPhase: phase,
+            questionCount: 1,
+            lastQuestionNumber: questionNumber,
+          };
+        }
+        
+        // Update counter for same phase
+        return {
+          ...prev,
+          questionCount: prev.questionCount + 1,
+          lastQuestionNumber: questionNumber,
+        };
+      });
+    }
   };
 
   // Dedicated function to clean up Angel introduction text
@@ -1232,10 +1578,11 @@ export default function ChatPage() {
           question_number: question_number
         });
         const formatted = formatAngelMessage(reply);
-        // Use question_number from backend if available, otherwise try to extract from reply
-        const questionNumber = question_number || extractQuestionNumber(reply);
+        // Use question_number from backend if available, otherwise calculate reliably
+        const questionNumber = calculateQuestionNumber(question_number, progress.phase, reply);
         setCurrentQuestion(formatted);
         setCurrentQuestionNumber(questionNumber);
+        updateQuestionTracker(progress.phase, questionNumber);
         setProgress(progress);
         setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
         
@@ -1317,10 +1664,11 @@ export default function ChatPage() {
       }
       
       const formatted = formatAngelMessage(reply);
-      // Use question_number from backend if available, otherwise try to extract from reply
-      const nextQuestionNumber = question_number || extractQuestionNumber(reply);
+      // Use question_number from backend if available, otherwise calculate reliably
+      const nextQuestionNumber = calculateQuestionNumber(question_number, progress.phase, reply);
       setCurrentQuestion(formatted);
       setCurrentQuestionNumber(nextQuestionNumber);
+      updateQuestionTracker(progress.phase, nextQuestionNumber);
       setProgress(progress);
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
       
@@ -2105,6 +2453,7 @@ export default function ChatPage() {
               disabled={loading}
               loading={loading}
               currentQuestion={currentQuestion}
+              currentPhase={progress.phase}
             />
 
             {/* Quick Actions Row */}

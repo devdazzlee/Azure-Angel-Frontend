@@ -10,6 +10,7 @@ interface SmartInputProps {
   disabled?: boolean;
   loading?: boolean;
   currentQuestion?: string;
+  currentPhase?: string;
 }
 
 const SmartInput: React.FC<SmartInputProps> = ({
@@ -19,7 +20,8 @@ const SmartInput: React.FC<SmartInputProps> = ({
   placeholder = "Type your response...",
   disabled = false,
   loading = false,
-  currentQuestion = ""
+  currentQuestion = "",
+  currentPhase = "KYC"
 }) => {
   const [showRatingForm, setShowRatingForm] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -31,21 +33,52 @@ const SmartInput: React.FC<SmartInputProps> = ({
   useEffect(() => {
     const question = currentQuestion.toLowerCase();
     
+    console.log('🔍 SmartInput: Analyzing question for options detection');
+    
+    // Check if this is a completion/transition message - disable dropdowns
+    const isCompletionMessage = question.includes('congratulations') && 
+                                 (question.includes('completed') || question.includes('profile')) &&
+                                 (question.includes('business planning phase') || question.includes('entrepreneurial profile'));
+    
+    if (isCompletionMessage) {
+      console.log('🎉 Completion message detected - disabling dropdowns (modal should show)');
+      setShowRatingForm(false);
+      setShowDropdown(false);
+      setDropdownType(null);
+      return;
+    }
+    
+    // IMPORTANT: Disable dropdowns for Business Plan phase - all questions should be open-ended
+    if (currentPhase === 'BUSINESS_PLAN') {
+      console.log('📝 Business Plan phase - using text input only (no dropdowns)');
+      setShowRatingForm(false);
+      setShowDropdown(false);
+      setDropdownType(null);
+      return;
+    }
+    
     // Check for skill rating question - make it more specific
     const isSkillRatingQuestion = question.includes('how comfortable are you with these business skills');
     
     if (isSkillRatingQuestion) {
+      console.log('✅ Detected: Skill rating question');
       setShowRatingForm(true);
       setShowDropdown(false);
       return;
     }
 
-    // Check for Yes/No questions
-    const isYesNoQuestion = question.includes('yes') && question.includes('no') && 
-                           (question.includes('have you') || question.includes('do you') || 
-                            question.includes('are you') || question.includes('would you'));
+    // Check for Yes/No questions (more flexible patterns)
+    const isYesNoQuestion = (
+      (question.includes('yes') && question.includes('no')) ||
+      (question.includes('yes /') || question.includes('/ no'))
+    ) && (
+      question.includes('have you') || question.includes('do you') || 
+      question.includes('are you') || question.includes('would you') ||
+      question.includes('will you') || question.includes('did you')
+    );
     
     if (isYesNoQuestion) {
+      console.log('✅ Detected: Yes/No question');
       setShowDropdown(true);
       setDropdownType('yesno');
       setDropdownOptions(['Yes', 'No']);
@@ -56,21 +89,26 @@ const SmartInput: React.FC<SmartInputProps> = ({
     // Check for multiple choice questions based on specific patterns
     const multipleChoiceQuestions = {
       'what is your preferred communication style': ['Conversational', 'Structured'],
+      'have you started a business before': ['Yes', 'No'],
       'what\'s your current work situation': ['Full-time employed', 'Part-time', 'Student', 'Unemployed', 'Self-employed/freelancer', 'Other'],
+      'do you already have a business idea in mind': ['Yes', 'No'],
+      'have you shared your business idea with anyone yet': ['Yes', 'No'],
       'what kind of business are you trying to build': ['Side hustle', 'Small business', 'Scalable startup', 'Nonprofit/social venture', 'Other'],
       'do you have any initial funding available': ['None', 'Personal savings', 'Friends/family', 'External funding (loan, investor)', 'Other'],
       'are you planning to seek outside funding in the future': ['Yes', 'No', 'Unsure'],
       'would you like angel to:': ['Be more hands-on (do more tasks for you)', 'Be more of a mentor (guide but let you take the lead)', 'Alternate based on the task'],
+      'would you like angel to provide detailed financial planning': ['Yes', 'No'],
       'do you want to connect with service providers': ['Yes', 'No', 'Later'],
       'what type of business structure are you considering': ['LLC', 'Sole proprietorship', 'Corporation', 'Partnership', 'Unsure'],
       'how do you plan to generate revenue': ['Direct sales', 'Subscriptions', 'Advertising', 'Licensing', 'Services', 'Other/Multiple'],
-      'will your business be primarily:': ['Online only', 'Physical location only', 'Both online and physical', 'Unsure'],
+      'will your business be primarily': ['Online only', 'Physical location only', 'Both online and physical', 'Unsure'],
       'would you like me to be proactive in suggesting next steps and improvements throughout our process': ['Yes, please be proactive', 'Only when I ask', 'Let me decide each time']
     };
 
     // Check if current question matches any multiple choice pattern
     for (const [pattern, options] of Object.entries(multipleChoiceQuestions)) {
       if (question.includes(pattern)) {
+        console.log('✅ Detected: Known multiple choice question -', pattern);
         setShowDropdown(true);
         setDropdownType('multiple');
         setDropdownOptions(options);
@@ -79,12 +117,22 @@ const SmartInput: React.FC<SmartInputProps> = ({
       }
     }
 
-    // Check for other multiple choice patterns with bullet points
-    const hasMultipleOptions = question.includes('•') || question.includes('full-time') || question.includes('part-time');
-    if (hasMultipleOptions && !isYesNoQuestion) {
+    // IMPROVED: Check for bullet points, numbered lists, or option separators
+    const hasOptions = currentQuestion.includes('•') || 
+                      currentQuestion.includes('○') ||
+                      currentQuestion.includes('- ') ||
+                      currentQuestion.match(/\n\d+\.\s/) || // Numbered lists
+                      currentQuestion.includes('full-time') || 
+                      currentQuestion.includes('part-time') ||
+                      currentQuestion.includes('Yes /') ||
+                      currentQuestion.includes('/ No');
+    
+    if (hasOptions && !isYesNoQuestion) {
+      console.log('📋 Attempting to extract options from question text...');
       // Extract options from the question text
       const options = extractOptionsFromQuestion(currentQuestion);
-      if (options.length > 2) {
+      if (options.length >= 2) {
+        console.log('✅ Detected: Multiple choice from extracted options -', options);
         setShowDropdown(true);
         setDropdownType('multiple');
         setDropdownOptions(options);
@@ -94,24 +142,47 @@ const SmartInput: React.FC<SmartInputProps> = ({
     }
 
     // Default to text input
+    console.log('📝 Default: Using text input (no options detected)');
     setShowRatingForm(false);
     setShowDropdown(false);
     setDropdownType(null);
-  }, [currentQuestion]);
+  }, [currentQuestion, currentPhase]);
 
-  // Extract options from question text
+  // Extract options from question text - IMPROVED to handle more formats
   const extractOptionsFromQuestion = (question: string): string[] => {
     const lines = question.split('\n');
     const options: string[] = [];
     
     for (const line of lines) {
       const trimmed = line.trim();
-      if (trimmed.startsWith('•') || trimmed.startsWith('-')) {
-        const option = trimmed.substring(1).trim();
-        if (option && !option.includes('?')) {
+      
+      // Handle bullet points: •, -, ○, *
+      if (trimmed.match(/^[•\-○*]\s+/)) {
+        const option = trimmed.replace(/^[•\-○*]\s+/, '').trim();
+        if (option && !option.includes('?') && option.length > 1) {
           options.push(option);
         }
       }
+      // Handle numbered lists: 1. 2. 3. etc.
+      else if (trimmed.match(/^\d+\.\s+/)) {
+        const option = trimmed.replace(/^\d+\.\s+/, '').trim();
+        if (option && !option.includes('?') && option.length > 1) {
+          options.push(option);
+        }
+      }
+      // Handle "Yes / No" or "Yes/No" format
+      else if (trimmed.match(/^(Yes|No)\s*\/?\s*(No|Yes)?$/i)) {
+        if (!options.includes('Yes') && !options.includes('No')) {
+          options.push('Yes', 'No');
+        }
+      }
+    }
+    
+    // Debug logging
+    if (options.length > 0) {
+      console.log('✅ Extracted options from question:', options);
+    } else {
+      console.log('⚠️ No options found in question text');
     }
     
     return options;

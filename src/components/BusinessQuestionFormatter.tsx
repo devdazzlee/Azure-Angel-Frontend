@@ -20,6 +20,44 @@ const BusinessQuestionFormatter: React.FC<BusinessQuestionFormatterProps> = ({ t
     
     return inputText;
   };
+
+  // IMPROVED: Remove embedded options from question text (they're shown in dropdown)
+  const removeEmbeddedOptions = (inputText: string): string => {
+    let cleaned = inputText;
+
+    // Pattern 1: Remove bullet point lists after questions
+    // Example: "Will your business be primarily:\n\n• Online\n• Brick-and-mortar\n• A mix of both"
+    cleaned = cleaned.replace(/\?\s*\n+(?:•|○|-|\*)\s*[^\n]+(?:\n(?:•|○|-|\*)\s*[^\n]+)*$/gm, '?');
+    
+    // Pattern 2: Remove "Yes / No" or "Yes/No" at end of questions
+    cleaned = cleaned.replace(/\?\s*\n+Yes\s*\/?\s*No\s*$/gmi, '?');
+    
+    // Pattern 3: Remove standalone option lists (no question mark before)
+    // Example: "\n\n• Online\n• Physical\n• Both"
+    cleaned = cleaned.replace(/\n+(?:•|○|-|\*)\s+[^\n]+(?:\n(?:•|○|-|\*)\s+[^\n]+)+\s*$/gm, '');
+    
+    // Pattern 4: Remove numbered lists at end
+    // Example: "\n\n1. Option one\n2. Option two"
+    cleaned = cleaned.replace(/\n+\d+\.\s+[^\n]+(?:\n\d+\.\s+[^\n]+)*\s*$/gm, '');
+
+    // Pattern 5: Handle inline options in special format
+    // Example: "Online\nBrick-and-mortar\nA mix of both"
+    const lines = cleaned.split('\n');
+    const lastFewLines = lines.slice(-5); // Check last 5 lines
+    const hasOptionsList = lastFewLines.filter(line => {
+      const trimmed = line.trim();
+      return trimmed.length > 2 && trimmed.length < 50 && 
+             !trimmed.endsWith('?') && !trimmed.endsWith('.') &&
+             !trimmed.includes('Choose');
+    });
+
+    // If we find 2+ short lines at the end that look like options, remove them
+    if (hasOptionsList.length >= 2 && lines[lines.length - hasOptionsList.length - 1]?.includes('?')) {
+      cleaned = lines.slice(0, -hasOptionsList.length).join('\n');
+    }
+
+    return cleaned.trim();
+  };
   
   // Smart approach - only add spacing when needed
   const formatBusinessQuestions = (inputText: string): string => {
@@ -155,6 +193,9 @@ const BusinessQuestionFormatter: React.FC<BusinessQuestionFormatterProps> = ({ t
   const formatText = (inputText: string): string => {
     // First remove "Question X" text (it's displayed in the badge by parent component)
     let cleanedText = removeQuestionNumber(inputText);
+    
+    // NOTE: We don't remove options here because SmartInput needs to see them for detection
+    // Backend should already be stripping options for dropdown questions
     
     // Apply business question formatting to cleaned text
     let formattedText = formatBusinessQuestions(cleanedText);
