@@ -864,7 +864,7 @@ export default function ChatPage() {
       return backendQuestionNumber;
     }
 
-    // 2. Check if this is an introduction message (no question number)
+    // 2. Check if this is an introduction or completion message (no question number)
     const isIntroduction = replyText.toLowerCase().includes('welcome to founderport') || 
                           replyText.toLowerCase().includes('congratulations on taking your first step') ||
                           replyText.toLowerCase().includes('phase 1 - know your customer') ||
@@ -873,8 +873,17 @@ export default function ChatPage() {
                           replyText.toLowerCase().includes('phase 4: implementation') ||
                           replyText.toLowerCase().includes('are you ready to begin your journey');
     
-    if (isIntroduction) {
-      console.log("📢 Introduction message detected - no question number");
+    // Check if this is a phase completion/transition message
+    const isCompletionTransition = (
+      (replyText.toLowerCase().includes('congratulations') && 
+       replyText.toLowerCase().includes('completed') &&
+       replyText.toLowerCase().includes('entrepreneurial profile')) ||
+      replyText.toLowerCase().includes("ready to dive into your business planning") ||
+      (replyText.toLowerCase().includes('moving into') && replyText.toLowerCase().includes('business planning phase'))
+    );
+    
+    if (isIntroduction || isCompletionTransition) {
+      console.log("📢 Introduction/Completion message detected - no question number");
       return null;
     }
 

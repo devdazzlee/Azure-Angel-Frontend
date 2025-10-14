@@ -36,9 +36,19 @@ const SmartInput: React.FC<SmartInputProps> = ({
     console.log('🔍 SmartInput: Analyzing question for options detection');
     
     // Check if this is a completion/transition message - disable dropdowns
-    const isCompletionMessage = question.includes('congratulations') && 
-                                 (question.includes('completed') || question.includes('profile')) &&
-                                 (question.includes('business planning phase') || question.includes('entrepreneurial profile'));
+    const isCompletionMessage = (
+      question.includes('congratulations') && 
+      (question.includes('completed') || question.includes('profile') || question.includes('complete')) &&
+      (question.includes('business planning phase') || 
+       question.includes('entrepreneurial profile') ||
+       question.includes('business planning') ||
+       question.includes('business plan'))
+    ) || (
+      // Also check for the specific transition phrases
+      question.includes('moving into the exciting business planning phase') ||
+      question.includes("ready to dive into your business planning") ||
+      (question.includes("here's what i've learned about you") && question.includes('congratulations'))
+    );
     
     if (isCompletionMessage) {
       console.log('🎉 Completion message detected - disabling dropdowns (modal should show)');
