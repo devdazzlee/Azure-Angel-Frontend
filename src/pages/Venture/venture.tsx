@@ -17,11 +17,13 @@ import RoadmapModal from "../../components/RoadmapModal";
 import QuestionNavigator from "../../components/QuestionNavigator";
 import SmartInput from "../../components/SmartInput";
 import AcceptModifyButtons from "../../components/AcceptModifyButtons";
+import YesNoButtons from "../../components/YesNoButtons";
 import WebSearchIndicator from "../../components/WebSearchIndicator";
 import PlanToRoadmapTransition from "../../components/PlanToRoadmapTransition";
 import ModifyModal from "../../components/ModifyModal";
 import RoadmapDisplay from "../../components/RoadmapDisplay";
 import RoadmapToImplementationTransition from "../../components/RoadmapToImplementationTransition";
+import UploadPlanModal from "../../components/UploadPlanModal";
 import Implementation from "../Implementation";
 import RoadmapEditModal from "../../components/RoadmapEditModal";
 import BusinessQuestionFormatter from "../../components/BusinessQuestionFormatter";
@@ -284,6 +286,7 @@ export default function ChatPage() {
     plan: "",
   });
   const [showVerificationButtons, setShowVerificationButtons] = useState(false);
+  const [showYesNoButtons, setShowYesNoButtons] = useState(false);
   const [webSearchStatus, setWebSearchStatus] = useState<{
     is_searching: boolean;
     query?: string;
@@ -322,6 +325,11 @@ export default function ChatPage() {
   }>({
     isOpen: false,
     roadmapContent: ""
+  });
+  const [uploadPlanModal, setUploadPlanModal] = useState<{
+    isOpen: boolean;
+  }>({
+    isOpen: false
   });
 
   // AI-powered detection of whether Accept/Modify buttons should be shown
@@ -482,6 +490,54 @@ export default function ChatPage() {
       isOpen: true,
       currentText: contentToModify
     });
+  };
+
+  const handleYes = async () => {
+    setShowYesNoButtons(false);
+    setLoading(true);
+    
+    try {
+      const {
+        result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number },
+      } = await fetchQuestion("Yes", sessionId!);
+      const formatted = formatAngelMessage(reply);
+      const questionNumber = calculateQuestionNumber(question_number, progress.phase, reply);
+      setCurrentQuestion(formatted);
+      setCurrentQuestionNumber(questionNumber);
+      updateQuestionTracker(progress.phase, questionNumber);
+      setProgress(progress);
+      setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
+      setShowVerificationButtons(show_accept_modify || false);
+    } catch (error) {
+      console.error("Failed to handle Yes:", error);
+      toast.error("Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleNo = async () => {
+    setShowYesNoButtons(false);
+    setLoading(true);
+    
+    try {
+      const {
+        result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number },
+      } = await fetchQuestion("No", sessionId!);
+      const formatted = formatAngelMessage(reply);
+      const questionNumber = calculateQuestionNumber(question_number, progress.phase, reply);
+      setCurrentQuestion(formatted);
+      setCurrentQuestionNumber(questionNumber);
+      updateQuestionTracker(progress.phase, questionNumber);
+      setProgress(progress);
+      setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
+      setShowVerificationButtons(show_accept_modify || false);
+    } catch (error) {
+      console.error("Failed to handle No:", error);
+      toast.error("Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Handle Draft More button click
@@ -1596,11 +1652,22 @@ export default function ChatPage() {
   // Scroll behavior: top for first message (introduction), bottom for subsequent messages
   useEffect(() => {
     if (chatContainerRef.current) {
-      // If this is the first interaction (empty history and welcome message), scroll to top
-      // Otherwise scroll to bottom for normal conversation flow
-      if (history.length === 0 && currentQuestion.toLowerCase().includes('welcome to founderport')) {
+      // If this is the first interaction (introduction/welcome message), scroll to TOP
+      // Check for multiple indicators of the introduction message
+      const isIntroMessage = (
+        (history.length === 0 || history.length === 1) && 
+        (currentQuestion.toLowerCase().includes('welcome to founderport') ||
+         currentQuestion.toLowerCase().includes("angel's mission is simple") ||
+         currentQuestion.toLowerCase().includes('phase 1 - know your customer') ||
+         currentQuestion.toLowerCase().includes('are you ready to begin your journey'))
+      );
+      
+      if (isIntroMessage) {
+        // Scroll to TOP for introduction message
         chatContainerRef.current.scrollTop = 0;
+        console.log('📜 Scrolled to TOP for introduction message');
       } else {
+        // Scroll to BOTTOM for normal conversation flow
         chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
       }
     }
@@ -1956,6 +2023,16 @@ export default function ChatPage() {
       toast.error("Something went wrong.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUploadPlanSuccess = (businessInfo: any) => {
+    toast.success("Business plan uploaded and processed successfully!");
+    
+    // If we have business info, we could potentially pre-fill some fields
+    if (businessInfo && Object.keys(businessInfo).length > 0) {
+      console.log("Extracted business info:", businessInfo);
+      // The backend should have already applied this to the session
     }
   };
 
@@ -2509,6 +2586,17 @@ export default function ChatPage() {
                 />
               </div>
             )}
+
+            {/* Yes/No Buttons for Section Verification */}
+            {showYesNoButtons && !loading && (
+              <div className="mb-4">
+                <YesNoButtons
+                  onYes={handleYes}
+                  onNo={handleNo}
+                  disabled={loading}
+                />
+              </div>
+            )}
             
             <SmartInput
               value={currentInput}
@@ -2529,7 +2617,7 @@ export default function ChatPage() {
                   <p className="text-gray-400 text-xs">Choose a tool to help with your response</p>
                 </div>
                 
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                   {/* Support Button */}
                   <button
                     onClick={() => handleNext("Support")}
@@ -2547,6 +2635,26 @@ export default function ChatPage() {
                 </div>
                     <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                   </button>
+
+                  {/* Upload Plan Button - Only show in Business Planning phase */}
+                  {progress.phase === "BUSINESS_PLAN" && (
+                    <button
+                      onClick={() => setUploadPlanModal({ isOpen: true })}
+                      disabled={loading}
+                      className="group relative bg-gradient-to-br from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100 border border-purple-200 hover:border-purple-300 rounded-xl p-4 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    >
+                      <div className="flex flex-col items-center space-y-2">
+                        <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center text-white text-lg group-hover:scale-110 transition-transform duration-300">
+                          📄
+                        </div>
+                        <div className="text-center">
+                          <div className="text-sm font-semibold text-purple-800 group-hover:text-purple-900">Upload Plan</div>
+                          <div className="text-xs text-purple-600 group-hover:text-purple-700">Use existing plan</div>
+                        </div>
+                      </div>
+                      <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    </button>
+                  )}
 
                   {/* Draft Button */}
                 <button
@@ -2568,7 +2676,7 @@ export default function ChatPage() {
 
                   {/* Scrapping Button */}
                   <button
-                    onClick={() => handleNext("Scrapping")}
+                    onClick={() => handleNext(currentInput.trim() ? `Scrapping: ${currentInput}` : "Scrapping")}
                     disabled={loading}
                     className="group relative bg-gradient-to-br from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 border border-orange-200 hover:border-orange-300 rounded-xl p-4 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                   >
@@ -2578,7 +2686,7 @@ export default function ChatPage() {
                       </div>
                       <div className="text-center">
                         <div className="text-sm font-semibold text-orange-800 group-hover:text-orange-900">Scrapping</div>
-                        <div className="text-xs text-orange-600 group-hover:text-orange-700">Polish ideas</div>
+                        <div className="text-xs text-orange-600 group-hover:text-orange-700">Polish existing text</div>
                       </div>
                     </div>
                     <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-amber-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
@@ -2798,6 +2906,14 @@ export default function ChatPage() {
         sessionId={sessionId!}
         onSave={handleSaveEditedRoadmap}
         loading={loading}
+      />
+
+      {/* Upload Plan Modal */}
+      <UploadPlanModal
+        isOpen={uploadPlanModal.isOpen}
+        onClose={() => setUploadPlanModal({ isOpen: false })}
+        onUploadSuccess={handleUploadPlanSuccess}
+        sessionId={sessionId}
       />
     </div>
   );

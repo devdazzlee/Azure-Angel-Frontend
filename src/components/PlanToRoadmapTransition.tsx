@@ -159,11 +159,11 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
           </div>
         </div>
 
-        {/* Business Plan Recap */}
+        {/* Business Plan Summary Overview */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              📋 Comprehensive Business Plan Recap
+              📋 Business Plan Summary Overview
             </h2>
             <button
               onClick={handleExportPlan}
@@ -177,10 +177,25 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
                 </>
               ) : (
                 <>
-                  📄 Export Plan
+                  📄 Export Summary
                 </>
               )}
             </button>
+          </div>
+          
+          {/* Clarification Note */}
+          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 rounded-r-lg">
+            <div className="flex items-start gap-3">
+              <span className="text-blue-600 text-xl">ℹ️</span>
+              <div>
+                <p className="text-sm font-semibold text-blue-900 mb-1">Note About Your Business Plan</p>
+                <p className="text-sm text-blue-800">
+                  This is a <strong>high-level summary</strong> of your comprehensive Business Plan. Your complete{' '}
+                  <strong>Business Plan Artifact</strong> (the full, detailed document similar to the example provided on 10/10) 
+                  will be generated and available for download once you proceed to the Roadmap phase.
+                </p>
+              </div>
+            </div>
           </div>
           
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 max-h-96 overflow-y-auto">
@@ -294,38 +309,76 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
           </h2>
           <div className="bg-gradient-to-r from-teal-50 to-blue-50 border border-teal-200 rounded-xl p-6">
             <p className="text-gray-700 mb-4">
-              Based on your detailed business plan, I will now generate a comprehensive, actionable launch roadmap that translates your plan into explicit, chronological tasks. This roadmap will be:
+              Based on your detailed business plan, I will now generate a comprehensive, actionable launch roadmap that translates your plan into explicit, chronological tasks. This roadmap will include:
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              <div className="bg-white/50 rounded-lg p-4 border border-teal-200">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-teal-600">🔍</span>
-                  <h3 className="font-semibold text-gray-900 text-sm">Research-Backed</h3>
+            
+            {/* Five Phases Overview */}
+            <div className="bg-white/70 rounded-lg p-4 mb-4 border border-teal-100">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-blue-600 font-bold">1.</span>
+                  <span className="text-gray-800"><strong>Legal Formation</strong> - Business structure, licensing, permits</span>
                 </div>
-                <p className="text-xs text-gray-600">Based on authoritative sources and industry best practices</p>
-              </div>
-              <div className="bg-white/50 rounded-lg p-4 border border-teal-200">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-teal-600">📍</span>
-                  <h3 className="font-semibold text-gray-900 text-sm">Location-Specific</h3>
+                <div className="flex items-center gap-2">
+                  <span className="text-green-600 font-bold">2.</span>
+                  <span className="text-gray-800"><strong>Financial Planning</strong> - Funding strategies, budgeting, accounting setup</span>
                 </div>
-                <p className="text-xs text-gray-600">Tailored to your geographic location and regulations</p>
-              </div>
-              <div className="bg-white/50 rounded-lg p-4 border border-teal-200">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-teal-600">🎯</span>
-                  <h3 className="font-semibold text-gray-900 text-sm">Industry-Focused</h3>
+                <div className="flex items-center gap-2">
+                  <span className="text-purple-600 font-bold">3.</span>
+                  <span className="text-gray-800"><strong>Product & Operations</strong> - Supply chain, equipment, operational processes</span>
                 </div>
-                <p className="text-xs text-gray-600">Customized for your specific industry and business type</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-orange-600 font-bold">4.</span>
+                  <span className="text-gray-800"><strong>Marketing & Sales</strong> - Brand positioning, customer acquisition, sales processes</span>
+                </div>
+                <div className="flex items-center gap-2 md:col-span-2">
+                  <span className="text-teal-600 font-bold">5.</span>
+                  <span className="text-gray-800"><strong>Full Launch & Scaling</strong> - Go-to-market strategy, growth planning</span>
+                </div>
               </div>
             </div>
+            
+            {/* Research Sources Highlight */}
+            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-lg p-4 mb-4">
+              <h4 className="font-bold text-indigo-900 mb-3 flex items-center gap-2">
+                <span className="text-xl">🔬</span>
+                Research-Backed Recommendations
+              </h4>
+              <p className="text-sm text-indigo-800 mb-3">
+                The roadmap will be tailored specifically to your business, industry, and location, with research drawn from:
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="bg-white/70 rounded-lg p-3 border border-indigo-200">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-indigo-600">🏛️</span>
+                    <h5 className="font-semibold text-gray-900 text-sm">Government Sources</h5>
+                  </div>
+                  <p className="text-xs text-gray-600">SBA, IRS, SEC, state agencies, regulatory bodies</p>
+                </div>
+                <div className="bg-white/70 rounded-lg p-3 border border-indigo-200">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-indigo-600">🎓</span>
+                    <h5 className="font-semibold text-gray-900 text-sm">Academic Research</h5>
+                  </div>
+                  <p className="text-xs text-gray-600">Universities, Google Scholar, JSTOR, research institutions</p>
+                </div>
+                <div className="bg-white/70 rounded-lg p-3 border border-indigo-200">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-indigo-600">📰</span>
+                    <h5 className="font-semibold text-gray-900 text-sm">Industry Reports</h5>
+                  </div>
+                  <p className="text-xs text-gray-600">Bloomberg, WSJ, Forbes, Harvard Business Review</p>
+                </div>
+              </div>
+            </div>
+            
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h4 className="font-semibold text-blue-900 mb-2">📋 Roadmap Features Include:</h4>
+              <h4 className="font-semibold text-blue-900 mb-2">📋 Your Roadmap Will Include:</h4>
               <ul className="text-blue-800 text-sm space-y-1">
-                <li>• <strong>Actionable Tasks:</strong> Specific, executable steps with clear timelines</li>
+                <li>• <strong>Actionable Steps:</strong> Specific tasks with clear timelines in table format</li>
+                <li>• <strong>Research Citations:</strong> Source references for each step (Government, Academic, Industry)</li>
                 <li>• <strong>Decision Points:</strong> Multiple options presented for informed choices</li>
                 <li>• <strong>Service Providers:</strong> Local and credible providers for each task</li>
-                <li>• <strong>Resource Links:</strong> Government sites, industry reports, and authoritative sources</li>
                 <li>• <strong>Progress Tracking:</strong> Clear milestones and completion indicators</li>
               </ul>
             </div>
@@ -335,7 +388,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
         {/* Decision Buttons */}
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">
-            🚀 Ready to Move Forward?
+            Ready to Move Forward?
           </h2>
           <p className="text-gray-600 mb-8">
             Please review your business plan summary above. If everything looks accurate and complete, you can:
@@ -349,9 +402,9 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
             >
               <div className="flex items-center justify-center gap-3">
                 <span className="text-xl">✅</span>
-                <span>Approve Plan</span>
+                <span>Continue</span>
               </div>
-              <div className="text-sm opacity-90 mt-1">Proceed to roadmap generation</div>
+              <div className="text-sm opacity-90 mt-1">Proceed to roadmap generation with full Business Plan Artifact</div>
               <div className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             </button>
 
@@ -362,9 +415,9 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
             >
               <div className="flex items-center justify-center gap-3">
                 <span className="text-xl">🔄</span>
-                <span>Revisit Plan</span>
+                <span>Modify</span>
               </div>
-              <div className="text-sm opacity-90 mt-1">Modify aspects that need adjustment</div>
+              <div className="text-sm opacity-90 mt-1">Adjust any aspects that need refinement</div>
               <div className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             </button>
           </div>

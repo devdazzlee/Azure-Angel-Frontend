@@ -30,6 +30,155 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
   const [editingSection, setEditingSection] = useState<EditSection | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Helper function to render markdown tables as HTML tables
+  const renderMarkdownTable = (content: string): React.ReactNode => {
+    // Split content by lines
+    const lines = content.split('\n');
+    const elements: React.ReactNode[] = [];
+    let inTable = false;
+    let tableLines: string[] = [];
+    let nonTableContent: string[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      
+      // Check if line is a table row (starts with |)
+      if (line.trim().startsWith('|')) {
+        if (!inTable) {
+          // Push accumulated non-table content
+          if (nonTableContent.length > 0) {
+            const formattedText = formatNonTableContent(nonTableContent.join('\n'));
+            elements.push(
+              <div key={`text-${i}`} className="mb-4" dangerouslySetInnerHTML={{ __html: formattedText }} />
+            );
+            nonTableContent = [];
+          }
+          inTable = true;
+        }
+        tableLines.push(line);
+      } else {
+        if (inTable) {
+          // Render the accumulated table
+          elements.push(renderTable(tableLines, `table-${i}`));
+          tableLines = [];
+          inTable = false;
+        }
+        nonTableContent.push(line);
+      }
+    }
+
+    // Handle remaining content
+    if (inTable && tableLines.length > 0) {
+      elements.push(renderTable(tableLines, `table-final`));
+    }
+    if (nonTableContent.length > 0) {
+      const formattedText = formatNonTableContent(nonTableContent.join('\n'));
+      elements.push(
+        <div key="text-final" dangerouslySetInnerHTML={{ __html: formattedText }} />
+      );
+    }
+
+    return <>{elements}</>;
+  };
+
+  // Format non-table content (bold, italics, lists, etc.)
+  const formatNonTableContent = (text: string): string => {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-gray-900">$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em class="italic text-gray-700">$1</em>')
+      .replace(/^# (.*$)/gim, '<h1 class="text-3xl font-bold text-gray-900 mb-4 mt-6 border-b-2 border-blue-500 pb-2">$1</h1>')
+      .replace(/^## (.*$)/gim, '<h2 class="text-2xl font-bold text-gray-800 mb-3 mt-5 border-l-4 border-indigo-500 pl-3">$1</h2>')
+      .replace(/^### (.*$)/gim, '<h3 class="text-xl font-semibold text-gray-700 mb-2 mt-4">$1</h3>')
+      .replace(/^---$/gim, '<hr class="my-6 border-gray-300"/>')
+      .replace(/^• (.*$)/gim, '<li class="ml-4">$1</li>')
+      .replace(/^- (.*$)/gim, '<li class="ml-4">$1</li>')
+      .replace(/\n\n/g, '<br/><br/>')
+      .replace(/\n/g, '<br/>');
+  };
+
+  // Render a markdown table as an HTML table
+  const renderTable = (lines: string[], key: string): React.ReactNode => {
+    if (lines.length < 2) return null;
+
+    // Parse header
+    const headerCells = lines[0]
+      .split('|')
+      .filter(cell => cell.trim())
+      .map(cell => cell.trim());
+
+    // Skip separator line (lines[1])
+    // Parse data rows
+    const dataRows = lines.slice(2)
+      .filter(line => line.trim())
+      .map(line => 
+        line.split('|')
+          .filter(cell => cell.trim())
+          .map(cell => cell.trim())
+      );
+
+    // Check if this is a research source table (has "Research Source" or "Key Findings" column)
+    const isResearchTable = headerCells.some(h => 
+      h.toLowerCase().includes('research source') || 
+      h.toLowerCase().includes('key findings') ||
+      h.toLowerCase().includes('specific sources')
+    );
+
+    return (
+      <div key={key} className="overflow-x-auto mb-6 shadow-md rounded-lg">
+        <table className="min-w-full border-collapse bg-white rounded-lg overflow-hidden">
+          <thead className={isResearchTable 
+            ? "bg-gradient-to-r from-indigo-100 to-purple-100" 
+            : "bg-gradient-to-r from-blue-50 to-indigo-50"
+          }>
+            <tr>
+              {headerCells.map((header, idx) => (
+                <th
+                  key={idx}
+                  className={`px-4 py-3 text-left text-xs sm:text-sm font-bold border-b-2 ${
+                    isResearchTable ? 'text-indigo-900 border-indigo-300' : 'text-gray-900 border-indigo-200'
+                  }`}
+                >
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {dataRows.map((row, rowIdx) => (
+              <tr
+                key={rowIdx}
+                className={`${rowIdx % 2 === 0 ? 'bg-gray-50' : 'bg-white'} hover:bg-blue-50 transition-colors border-b border-gray-100`}
+              >
+                {row.map((cell, cellIdx) => {
+                  // Check if this cell is in the "Research Source" column
+                  const isResearchCell = headerCells[cellIdx]?.toLowerCase().includes('research source');
+                  
+                  return (
+                    <td
+                      key={cellIdx}
+                      className={`px-4 py-3 text-xs sm:text-sm border-b border-gray-200 ${
+                        isResearchCell ? 'bg-indigo-50/50' : ''
+                      }`}
+                      dangerouslySetInnerHTML={{
+                        __html: cell
+                          .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-gray-900">$1</strong>')
+                          .replace(/\*Government\*/g, '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">🏛️ Government</span>')
+                          .replace(/\*Academic\*/g, '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">🎓 Academic</span>')
+                          .replace(/\*Industry\*/g, '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">📰 Industry</span>')
+                          .replace(/<br>/g, '<br/>')
+                          .replace(/\n/g, '<br/>')
+                      }}
+                    />
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   // Parse roadmap content into editable sections
   const parseRoadmapSections = (content: string): EditSection[] => {
     const sections: EditSection[] = [];
@@ -212,6 +361,70 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+      <style>{`
+        .roadmap-content h1 {
+          font-size: 2rem;
+          font-weight: 700;
+          color: #1f2937;
+          margin-bottom: 1rem;
+          border-bottom: 3px solid #3b82f6;
+          padding-bottom: 0.5rem;
+        }
+        .roadmap-content h2 {
+          font-size: 1.5rem;
+          font-weight: 700;
+          color: #374151;
+          margin-top: 2rem;
+          margin-bottom: 1rem;
+          border-left: 4px solid #6366f1;
+          padding-left: 1rem;
+        }
+        .roadmap-content h3 {
+          font-size: 1.25rem;
+          font-weight: 600;
+          color: #4b5563;
+          margin-top: 1.5rem;
+          margin-bottom: 0.75rem;
+        }
+        .roadmap-content table {
+          margin: 1.5rem 0;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .roadmap-content ul {
+          margin: 0.5rem 0;
+          padding-left: 1.5rem;
+        }
+        .roadmap-content li {
+          margin: 0.25rem 0;
+          color: #4b5563;
+        }
+        .roadmap-content hr {
+          margin: 2rem 0;
+          border-color: #e5e7eb;
+        }
+        .research-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.25rem;
+          padding: 0.25rem 0.5rem;
+          border-radius: 0.375rem;
+          font-size: 0.75rem;
+          font-weight: 600;
+          margin: 0.125rem;
+        }
+        .research-gov {
+          background-color: #dbeafe;
+          color: #1e40af;
+        }
+        .research-academic {
+          background-color: #f3e8ff;
+          color: #6b21a8;
+        }
+        .research-industry {
+          background-color: #fed7aa;
+          color: #92400e;
+        }
+      `}</style>
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-4 py-6">
@@ -269,31 +482,44 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
       {/* Content */}
       <div className="max-w-6xl mx-auto px-4 py-4 sm:py-8">
         {/* Research Foundation Banner */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-lg p-4 sm:p-6 mb-6 sm:mb-8 text-white">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-lg p-4 sm:p-6 mb-6 sm:mb-8 text-white shadow-xl">
           <div className="flex flex-col sm:flex-row items-center gap-4 mb-4">
-            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+            <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+              <span className="text-2xl">🔬</span>
             </div>
-            <div className="text-center sm:text-left">
-              <h2 className="text-xl sm:text-2xl font-bold">Research-Backed Launch Roadmap</h2>
-              <p className="text-blue-100 text-sm sm:text-base">Built on authoritative sources and industry best practices</p>
+            <div className="text-center sm:text-left flex-1">
+              <h2 className="text-xl sm:text-2xl font-bold mb-1">Launch Roadmap</h2>
+              <p className="text-blue-100 text-sm sm:text-base font-medium">Built on Government Sources, Academic Research & Industry Reports</p>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="text-blue-200">🏛️</span>
-              <span>Government Sources (SBA, SEC, IRS)</span>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xl">🏛️</span>
+                <span className="font-semibold text-sm">Government Sources</span>
+              </div>
+              <p className="text-blue-100 text-xs">SBA, IRS, SEC, state agencies, regulatory bodies</p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-blue-200">🎓</span>
-              <span>Academic Research (Scholar, JSTOR)</span>
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xl">🎓</span>
+                <span className="font-semibold text-sm">Academic Research</span>
+              </div>
+              <p className="text-blue-100 text-xs">Universities, Google Scholar, JSTOR, peer-reviewed journals</p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-blue-200">📰</span>
-              <span>Industry Reports (Forbes, HBR, Bloomberg)</span>
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xl">📰</span>
+                <span className="font-semibold text-sm">Industry Reports</span>
+              </div>
+              <p className="text-blue-100 text-xs">Bloomberg, WSJ, Forbes, Harvard Business Review</p>
             </div>
+          </div>
+          <div className="mt-4 bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
+            <p className="text-blue-50 text-xs sm:text-sm">
+              <strong>Verification Promise:</strong> Every recommendation has been validated against current best practices and cited with specific sources 
+              to ensure you have authoritative, verified guidance for your business launch.
+            </p>
           </div>
         </div>
 
@@ -332,11 +558,40 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
 
         {/* Roadmap Content */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="p-8">
-            <div className="prose prose-lg max-w-none">
-              <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
-                {roadmapContent}
+          {/* Table Format Info Banner */}
+          <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border-b-2 border-amber-200 px-6 py-4">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">📊</span>
+              <div className="flex-1">
+                <h3 className="font-bold text-amber-900 mb-2">Table-Based Roadmap Format</h3>
+                <p className="text-sm text-amber-800 mb-2">
+                  Your roadmap is organized in easy-to-scan tables showing:
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-amber-700">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold">→</span>
+                    <span><strong>Step Name:</strong> What you need to do</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold">→</span>
+                    <span><strong>Step Description:</strong> Detailed guidance</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold">→</span>
+                    <span><strong>Timeline:</strong> How long it takes</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold">→</span>
+                    <span><strong>Research Source:</strong> Government, Academic, or Industry citations</span>
+                  </div>
+                </div>
               </div>
+            </div>
+          </div>
+          
+          <div className="p-8">
+            <div className="prose prose-lg max-w-none roadmap-content">
+              {renderMarkdownTable(roadmapContent)}
             </div>
           </div>
 
