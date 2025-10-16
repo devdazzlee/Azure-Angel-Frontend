@@ -133,23 +133,81 @@ export default function ChatPage() {
         }
       }
       
-      // Extract industry from multiple sources
+      // 🔥 PRIORITY 1: Extract industry/business type from multiple sources (HIGHEST WEIGHT)
+      // This is CRITICAL - check EVERY answer for industry indicators
       if (!businessInfo.industry || businessInfo.industry === 'General Business') {
-        // Method 1: Look for industry keywords in any answer (most reliable)
+        // EXPANDED industry keywords including service trades, retail, and all major sectors
         const industryKeywords = {
-          'Beverage': ['beverage', 'drink', 'juice', 'soft drink', 'refreshing', 'coke', 'cola', 'soda'],
-          'Food': ['food', 'restaurant', 'cafe', 'culinary', 'catering', 'bakery'],
-          'Technology': ['technology', 'software', 'app', 'tech', 'ai', 'development', 'digital platform', 'online platform'],
-          'Retail': ['retail', 'store', 'shop', 'ecommerce', 'e-commerce', 'marketplace', 'online marketplace'],
-          'Healthcare': ['health', 'medical', 'clinic', 'wellness', 'pharmacy'],
-          'Education': ['education', 'learning', 'training', 'course', 'teaching'],
+          // Service Trades (NEW - CRITICAL for plumbing, HVAC, etc.)
+          'Plumbing Services': ['plumbing', 'plumber', 'plumbers', 'pipe', 'pipes', 'drain', 'drains', 'water heater', 'faucet', 'toilet', 'sewer', 'leak repair'],
+          'HVAC Services': ['hvac', 'heating', 'cooling', 'air conditioning', 'furnace', 'ac repair', 'ventilation'],
+          'Electrical Services': ['electrical', 'electrician', 'wiring', 'circuit', 'lighting installation'],
+          'Construction': ['construction', 'contractor', 'building', 'renovation', 'remodeling', 'carpentry'],
+          'Auto Repair': ['auto repair', 'mechanic', 'car repair', 'automotive service', 'brake', 'engine repair'],
+          'Landscaping': ['landscaping', 'lawn care', 'gardening', 'yard maintenance', 'tree service'],
+          'Cleaning Services': ['cleaning', 'janitorial', 'maid service', 'house cleaning', 'commercial cleaning'],
+          
+          // Food & Beverage
+          'Beverage': ['beverage', 'drink', 'juice', 'soft drink', 'refreshing', 'coke', 'cola', 'soda', 'tea', 'coffee'],
+          'Food & Restaurant': ['food', 'restaurant', 'cafe', 'culinary', 'catering', 'bakery', 'dining', 'food service'],
+          
+          // Technology
+          'Technology & Software': ['technology', 'software', 'app', 'tech', 'ai', 'development', 'digital platform', 'online platform', 'saas', 'web app', 'mobile app'],
+          
+          // Retail & E-commerce
+          'Retail': ['retail', 'store', 'shop', 'boutique', 'merchandise', 'storefront'],
+          'E-commerce': ['ecommerce', 'e-commerce', 'marketplace', 'online marketplace', 'online store', 'online shop', 'dropshipping'],
+          
+          // Healthcare
+          'Healthcare': ['health', 'medical', 'clinic', 'wellness', 'pharmacy', 'healthcare', 'dental', 'therapy'],
+          
+          // Education & Training
+          'Education': ['education', 'learning', 'training', 'course', 'teaching', 'tutoring', 'school', 'academy'],
+          
+          // Professional Services
+          'Consulting': ['consulting', 'consultant', 'advisory', 'business consulting', 'management consulting'],
+          'Legal Services': ['legal', 'law firm', 'attorney', 'lawyer', 'legal services'],
+          'Accounting': ['accounting', 'bookkeeping', 'cpa', 'tax services', 'financial services'],
+          'Marketing': ['marketing', 'advertising', 'digital marketing', 'social media marketing', 'seo', 'marketing agency'],
+          
+          // Real Estate
+          'Real Estate': ['real estate', 'property', 'realtor', 'real estate agent', 'property management'],
+          
+          // Transportation
+          'Transportation': ['transportation', 'logistics', 'delivery', 'shipping', 'freight', 'courier'],
+          
+          // Entertainment & Media
+          'Entertainment': ['entertainment', 'event', 'events', 'party planning', 'wedding planning'],
+          'Media': ['media', 'production', 'video production', 'photography', 'content creation'],
+          
+          // Manufacturing
+          'Manufacturing': ['manufacturing', 'production', 'factory', 'assembly', 'fabrication'],
+          
+          // Hospitality
+          'Hospitality': ['hospitality', 'hotel', 'lodging', 'accommodation', 'bed and breakfast', 'inn'],
+          
+          // Fitness & Wellness
+          'Fitness': ['fitness', 'gym', 'personal training', 'yoga', 'wellness center', 'sports'],
+          
+          // Pet Services
+          'Pet Services': ['pet', 'pets', 'grooming', 'veterinary', 'pet care', 'dog walking'],
         };
         
+        // Check ALL answers for industry keywords (not just one)
         for (const [industry, keywords] of Object.entries(industryKeywords)) {
           if (keywords.some(keyword => answerLower.includes(keyword))) {
             businessInfo.industry = industry;
-            console.log(`📊 Extracted industry from keyword match: ${businessInfo.industry}`);
+            console.log(`📊 🔥 HIGH PRIORITY: Extracted industry from keyword match: ${businessInfo.industry}`);
             break;
+          }
+        }
+        
+        // Also check the QUESTION text for explicit industry mentions
+        if (question.includes('what industry') || question.includes('what type of business') || question.includes('business idea')) {
+          // This answer is likely the industry/business type - capture it directly if not matched above
+          if (businessInfo.industry === 'General Business' && answer.length < 100) {
+            businessInfo.industry = answer.trim();
+            console.log(`📊 🔥 DIRECT ANSWER: Captured industry from direct question: ${businessInfo.industry}`);
           }
         }
       }
@@ -664,23 +722,11 @@ export default function ChatPage() {
       if (text.toLowerCase().includes("are you planning to seek outside funding in the future")) {
         return 13; // This is KYC.13
       }
-      if (text.toLowerCase().includes("would you like angel to:")) {
+      if (text.toLowerCase().includes("how do you plan to generate revenue")) {
         return 14; // This is KYC.14
       }
-      if (text.toLowerCase().includes("do you want to connect with service providers")) {
-        return 15; // This is KYC.15
-      }
-      if (text.toLowerCase().includes("what type of business structure are you considering")) {
-        return 16; // This is KYC.16
-      }
-      if (text.toLowerCase().includes("how do you plan to generate revenue")) {
-        return 17; // This is KYC.17
-      }
       if (text.toLowerCase().includes("will your business be primarily:")) {
-        return 18; // This is KYC.18
-      }
-      if (text.toLowerCase().includes("would you like me to be proactive in suggesting next steps and improvements throughout our process")) {
-        return 19; // This is KYC.19 (was KYC.20)
+        return 15; // This is KYC.15
       }
       // Add fallback for questions that might not have tags
       if (progress.phase === "KYC" && text.includes("?") && !text.toLowerCase().includes('welcome to founderport')) {
@@ -1217,13 +1263,8 @@ export default function ChatPage() {
       /(What industry does your business fall into \(or closely resemble\)\?)/gi,
       /(Do you have any initial funding available\?)/gi,
       /(Are you planning to seek outside funding in the future\?)/gi,
-      /(Would you like Angel to:)/gi,
-      /(Do you want to connect with service providers\?)/gi,
-      /(Do you want to connect with service providers \(lawyers, designers, accountants, etc\.\) during this process\?)/gi,
-      /(What type of business structure are you considering\?)/gi,
       /(How do you plan to generate revenue\?)/gi,
       /(Will your business be primarily:)/gi,
-      /(Would you like me to be proactive in suggesting next steps and improvements throughout our process\?)/gi,
       /(Have you shared your business idea with anyone yet \(friends, potential customers, advisors\)\?)/gi,
       /(Have you shared any of your previous ideas or concepts with others \(friends, potential customers, advisors\)\?)/gi,
       
@@ -1363,13 +1404,8 @@ export default function ChatPage() {
       'what kind of business are you trying to build',
       'do you have any initial funding available',
       'are you planning to seek outside funding in the future',
-      'would you like angel to:',
-      'do you want to connect with service providers',
-      'what type of business structure are you considering',
       'how do you plan to generate revenue',
-      'will your business be primarily:',
-      'how comfortable are you with your business information being kept completely private',
-      'would you like me to be proactive in suggesting next steps and improvements throughout our process'
+      'will your business be primarily:'
     ];
     
     return multipleChoiceQuestions.some(question => 
@@ -1402,11 +1438,8 @@ export default function ChatPage() {
     if (lowerText.includes('do you want to connect with service providers')) {
       return ['Yes', 'No', 'Later'];
     }
-    if (lowerText.includes('what type of business structure are you considering')) {
-      return ['LLC', 'Sole proprietorship', 'Corporation', 'Partnership', 'Unsure'];
-    }
     if (lowerText.includes('how do you plan to generate revenue')) {
-      return ['Direct sales', 'Subscriptions', 'Advertising', 'Licensing', 'Services', 'Other/Multiple'];
+      return ['Product sales', 'Service fees', 'Subscription/membership', 'Advertising revenue', 'Commission/fees', 'Licensing', 'Consulting', 'Other'];
     }
     if (lowerText.includes('will your business be primarily:')) {
       return ['Online only', 'Physical location only', 'Both online and physical', 'Unsure'];
@@ -1560,11 +1593,16 @@ export default function ChatPage() {
     }
   }, [loading]);
 
-  // Scroll to bottom when new messages are added
+  // Scroll behavior: top for first message (introduction), bottom for subsequent messages
   useEffect(() => {
     if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop =
-        chatContainerRef.current.scrollHeight;
+      // If this is the first interaction (empty history and welcome message), scroll to top
+      // Otherwise scroll to bottom for normal conversation flow
+      if (history.length === 0 && currentQuestion.toLowerCase().includes('welcome to founderport')) {
+        chatContainerRef.current.scrollTop = 0;
+      } else {
+        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+      }
     }
   }, [history, currentQuestion]);
 
@@ -2005,6 +2043,7 @@ export default function ChatPage() {
 
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                {/* Continue Button */}
                 <button
                   onClick={handleStartBusinessPlanning}
                   disabled={loading}
@@ -2012,12 +2051,29 @@ export default function ChatPage() {
                 >
                   <div className="flex items-center justify-center gap-3">
                     <span className="text-xl">🚀</span>
-                    <span>Start Business Planning</span>
+                    <span>Continue to Business Planning</span>
                     {loading && (
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white ml-2"></div>
                     )}
                   </div>
                   <div className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                </button>
+
+                {/* Modify Button */}
+                <button
+                  onClick={() => {
+                    setShowKycTransition(false);
+                    // Allow user to review and modify their KYC responses
+                    toast.info('Review your responses below. You can continue answering or modify any previous answers.');
+                  }}
+                  disabled={loading}
+                  className="group relative bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 text-gray-700 px-8 py-4 rounded-xl text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border-2 border-gray-300"
+                >
+                  <div className="flex items-center justify-center gap-3">
+                    <span className="text-xl">✏️</span>
+                    <span>Modify My Responses</span>
+                  </div>
+                  <div className="absolute inset-0 bg-gray-400/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 </button>
               </div>
 

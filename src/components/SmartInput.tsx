@@ -109,8 +109,7 @@ const SmartInput: React.FC<SmartInputProps> = ({
       'would you like angel to:': ['Be more hands-on (do more tasks for you)', 'Be more of a mentor (guide but let you take the lead)', 'Alternate based on the task'],
       'would you like angel to provide detailed financial planning': ['Yes', 'No'],
       'do you want to connect with service providers': ['Yes', 'No', 'Later'],
-      'what type of business structure are you considering': ['LLC', 'Sole proprietorship', 'Corporation', 'Partnership', 'Unsure'],
-      'how do you plan to generate revenue': ['Direct sales', 'Subscriptions', 'Advertising', 'Licensing', 'Services', 'Other/Multiple'],
+      'how do you plan to generate revenue': ['Product sales', 'Service fees', 'Subscription/membership', 'Advertising revenue', 'Commission/fees', 'Licensing', 'Consulting', 'Other'],
       'will your business be primarily': ['Online only', 'Physical location only', 'Both online and physical', 'Unsure'],
       'would you like me to be proactive in suggesting next steps and improvements throughout our process': ['Yes, please be proactive', 'Only when I ask', 'Let me decide each time']
     };
