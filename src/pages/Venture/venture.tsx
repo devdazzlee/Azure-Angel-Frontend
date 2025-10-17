@@ -652,6 +652,17 @@ export default function ChatPage() {
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
       
       toast.success("Welcome to the Business Planning phase!");
+      
+      // Smooth scroll to bottom after phase transition - increased delay to override other scroll effects
+      setTimeout(() => {
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTo({
+            top: chatContainerRef.current.scrollHeight,
+            behavior: 'smooth'
+          });
+          console.log('📜 Smooth scrolled to bottom after business planning phase start (handleStartBusinessPlanning)');
+        }
+      }, 500); // Increased delay to ensure this happens last
     } catch (error) {
       console.error("Error starting business planning:", error);
       toast.error("Failed to start business planning");
@@ -1649,29 +1660,109 @@ export default function ChatPage() {
     }
   }, [loading]);
 
-  // Scroll behavior: top for first message (introduction), bottom for subsequent messages
+  // Enhanced scroll behavior with smooth animations
   useEffect(() => {
     if (chatContainerRef.current) {
-      // If this is the first interaction (introduction/welcome message), scroll to TOP
-      // Check for multiple indicators of the introduction message
-      const isIntroMessage = (
-        (history.length === 0 || history.length === 1) && 
-        (currentQuestion.toLowerCase().includes('welcome to founderport') ||
-         currentQuestion.toLowerCase().includes("angel's mission is simple") ||
-         currentQuestion.toLowerCase().includes('phase 1 - know your customer') ||
-         currentQuestion.toLowerCase().includes('are you ready to begin your journey'))
+      // Detect different types of messages for appropriate scroll behavior
+      const questionLower = currentQuestion.toLowerCase();
+      
+      // Very specific check - ONLY the absolute first intro message (KYC phase start)
+      const isVeryFirstIntro = (
+        history.length === 0 && 
+        progress.phase === 'KYC' &&
+        progress.answered === 0 &&
+        questionLower.includes('welcome to founderport') &&
+        questionLower.includes("angel's mission is simple")
       );
       
-      if (isIntroMessage) {
-        // Scroll to TOP for introduction message
-        chatContainerRef.current.scrollTop = 0;
-        console.log('📜 Scrolled to TOP for introduction message');
+      // Detect any phase transition or intro messages
+      const isPhaseTransition = (
+        questionLower.includes('phase 2 - business planning') ||
+        questionLower.includes('phase 3 - roadmap') ||
+        questionLower.includes('phase 4: implementation') ||
+        questionLower.includes('moving into') ||
+        questionLower.includes('ready to dive into your business planning') ||
+        questionLower.includes('business planning phase')
+      );
+      
+      // Business Plan phase started - always scroll to bottom
+      const isBusinessPlanPhase = progress.phase === 'BUSINESS_PLAN';
+      
+      if (isVeryFirstIntro) {
+        // Smooth scroll to TOP ONLY for the absolute first welcome message
+        chatContainerRef.current.scrollTo({
+          top: 0,
+          behavior: 'smooth'
+        });
+        console.log('📜 Smooth scrolled to TOP for very first introduction message');
+      } else if (isPhaseTransition || isBusinessPlanPhase) {
+        // For phase transitions and business plan questions, ALWAYS scroll to bottom
+        setTimeout(() => {
+          if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTo({
+              top: chatContainerRef.current.scrollHeight,
+              behavior: 'smooth'
+            });
+            console.log('📜 Smooth scrolled to BOTTOM for phase transition/business plan');
+          }
+        }, 150); // Increased delay to ensure content is fully rendered
       } else {
-        // Scroll to BOTTOM for normal conversation flow
-        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        // Normal conversation flow - scroll to bottom with smooth animation
+        setTimeout(() => {
+          if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTo({
+              top: chatContainerRef.current.scrollHeight,
+              behavior: 'smooth'
+            });
+            console.log('📜 Smooth scrolled to BOTTOM for conversation flow');
+          }
+        }, 50);
       }
     }
-  }, [history, currentQuestion]);
+  }, [history, currentQuestion, progress.phase, progress.answered]);
+
+  // Handle phase transitions with smooth scrolling
+  useEffect(() => {
+    if (progress.phase && chatContainerRef.current) {
+      // Detect phase changes and ensure smooth scroll to bottom
+      const currentPhase = progress.phase;
+      
+      if (currentPhase === "BUSINESS_PLAN" && progress.answered === 0) {
+        // New business planning phase - scroll to bottom with animation
+        setTimeout(() => {
+          if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTo({
+              top: chatContainerRef.current.scrollHeight,
+              behavior: 'smooth'
+            });
+            console.log('📜 Smooth scrolled to bottom for new business planning phase (useEffect)');
+          }
+        }, 600); // Increased delay to ensure this happens after other effects
+      } else if (currentPhase === "ROADMAP" && progress.answered === 0) {
+        // New roadmap phase - scroll to bottom with animation
+        setTimeout(() => {
+          if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTo({
+              top: chatContainerRef.current.scrollHeight,
+              behavior: 'smooth'
+            });
+            console.log('📜 Smooth scrolled to bottom for new roadmap phase (useEffect)');
+          }
+        }, 600); // Increased delay to ensure this happens after other effects
+      } else if (currentPhase === "IMPLEMENTATION" && progress.answered === 0) {
+        // New implementation phase - scroll to bottom with animation
+        setTimeout(() => {
+          if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTo({
+              top: chatContainerRef.current.scrollHeight,
+              behavior: 'smooth'
+            });
+            console.log('📜 Smooth scrolled to bottom for new implementation phase (useEffect)');
+          }
+        }, 600); // Increased delay to ensure this happens after other effects
+      }
+    }
+  }, [progress.phase, progress.answered]);
 
   useEffect(() => {
     if (!sessionId || hasFetched.current) return;
@@ -2139,7 +2230,7 @@ export default function ChatPage() {
                 {/* Modify Button */}
                 <button
                   onClick={() => {
-                    setShowKycTransition(false);
+                    setKycToBusinessTransition(null);
                     // Allow user to review and modify their KYC responses
                     toast.info('Review your responses below. You can continue answering or modify any previous answers.');
                   }}
@@ -2198,11 +2289,11 @@ export default function ChatPage() {
 
     return (
       <RoadmapToImplementationTransition
-        roadmapContent={roadmapToImplementationTransition.roadmapContent}
-        onStartImplementation={handleActualStartImplementation}
-        loading={loading}
-        sessionId={sessionId!}
-        businessContext={businessContext}
+        isOpen={true}
+        onBeginImplementation={handleActualStartImplementation}
+        businessName={businessContext.business_name}
+        industry={businessContext.industry}
+        location={businessContext.location}
       />
     );
   }
@@ -2419,7 +2510,7 @@ export default function ChatPage() {
         {/* Scrollable Chat Area */}
         <div
           ref={chatContainerRef}
-          className="flex-1 overflow-y-auto px-3 pb-4 lg:pb-4"
+          className="flex-1 overflow-y-auto px-3 pb-4 lg:pb-4 chat-container"
           style={{ 
             maxHeight: "calc(100vh - 320px)",
             minHeight: "calc(100vh - 320px)"
@@ -2609,7 +2700,7 @@ export default function ChatPage() {
               currentPhase={progress.phase}
             />
 
-            {/* Quick Actions Row */}
+            {/* Quick Actions Row - NEVER show during KYC phase */}
             {progress.phase !== "KYC" && (
               <div className="mt-4">
                 <div className="text-center mb-3">
@@ -2636,7 +2727,7 @@ export default function ChatPage() {
                     <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                   </button>
 
-                  {/* Upload Plan Button - Only show in Business Planning phase */}
+                  {/* Upload Plan Button - Only show in Business Planning phase, NEVER in KYC */}
                   {progress.phase === "BUSINESS_PLAN" && (
                     <button
                       onClick={() => setUploadPlanModal({ isOpen: true })}

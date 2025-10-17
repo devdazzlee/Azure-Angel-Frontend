@@ -34,6 +34,8 @@ const SmartInput: React.FC<SmartInputProps> = ({
     const question = currentQuestion.toLowerCase();
     
     console.log('🔍 SmartInput: Analyzing question for options detection');
+    console.log('📝 Current question text:', currentQuestion);
+    console.log('🔍 Current phase:', currentPhase);
     
     // Check if this is a completion/transition message - disable dropdowns
     const isCompletionMessage = (
@@ -111,7 +113,18 @@ const SmartInput: React.FC<SmartInputProps> = ({
       'do you want to connect with service providers': ['Yes', 'No', 'Later'],
       'how do you plan to generate revenue': ['Product sales', 'Service fees', 'Subscription/membership', 'Advertising revenue', 'Commission/fees', 'Licensing', 'Consulting', 'Other'],
       'will your business be primarily': ['Online only', 'Physical location only', 'Both online and physical', 'Unsure'],
-      'would you like me to be proactive in suggesting next steps and improvements throughout our process': ['Yes, please be proactive', 'Only when I ask', 'Let me decide each time']
+      'would you like me to be proactive in suggesting next steps and improvements throughout our process': ['Yes, please be proactive', 'Only when I ask', 'Let me decide each time'],
+      // KYC Questions 15-19
+      'what\'s your biggest concern about starting a business': ['Finding customers', 'Managing finances', 'Competition', 'Legal requirements', 'Time management', 'Not sure'],
+      'biggest concern about starting': ['Finding customers', 'Managing finances', 'Competition', 'Legal requirements', 'Time management', 'Not sure'],
+      'how do you prefer to learn new business skills': ['Reading articles/books', 'Watching videos/tutorials', 'Hands-on practice', 'Working with mentors', 'Taking courses', 'Other'],
+      'prefer to learn new business skills': ['Reading articles/books', 'Watching videos/tutorials', 'Hands-on practice', 'Working with mentors', 'Taking courses', 'Other'],
+      'what motivates you most about entrepreneurship': ['Financial independence', 'Creative freedom', 'Making an impact', 'Solving problems', 'Building something lasting', 'Other'],
+      'motivates you most about entrepreneurship': ['Financial independence', 'Creative freedom', 'Making an impact', 'Solving problems', 'Building something lasting', 'Other'],
+      'how would you describe your risk tolerance': ['Very conservative (prefer safe, proven approaches)', 'Moderate (willing to take calculated risks)', 'High (comfortable with uncertainty and big bets)', 'It depends on the situation'],
+      'describe your risk tolerance': ['Very conservative (prefer safe, proven approaches)', 'Moderate (willing to take calculated risks)', 'High (comfortable with uncertainty and big bets)', 'It depends on the situation'],
+      'what\'s your timeline for launching your business': ['Within 3 months', '3-6 months', '6-12 months', '1-2 years', 'No specific timeline'],
+      'timeline for launching your business': ['Within 3 months', '3-6 months', '6-12 months', '1-2 years', 'No specific timeline']
     };
 
     // Check if current question matches any multiple choice pattern
@@ -162,27 +175,32 @@ const SmartInput: React.FC<SmartInputProps> = ({
     const lines = question.split('\n');
     const options: string[] = [];
     
+    console.log('🔍 Extracting options from question text:', question);
+    
     for (const line of lines) {
       const trimmed = line.trim();
       
       // Handle bullet points: •, -, ○, *
       if (trimmed.match(/^[•\-○*]\s+/)) {
         const option = trimmed.replace(/^[•\-○*]\s+/, '').trim();
-        if (option && !option.includes('?') && option.length > 1) {
+        if (option && !option.includes('?') && option.length > 1 && option.length < 100) {
           options.push(option);
+          console.log('📋 Found bullet point option:', option);
         }
       }
       // Handle numbered lists: 1. 2. 3. etc.
       else if (trimmed.match(/^\d+\.\s+/)) {
         const option = trimmed.replace(/^\d+\.\s+/, '').trim();
-        if (option && !option.includes('?') && option.length > 1) {
+        if (option && !option.includes('?') && option.length > 1 && option.length < 100) {
           options.push(option);
+          console.log('📋 Found numbered option:', option);
         }
       }
       // Handle "Yes / No" or "Yes/No" format
       else if (trimmed.match(/^(Yes|No)\s*\/?\s*(No|Yes)?$/i)) {
         if (!options.includes('Yes') && !options.includes('No')) {
           options.push('Yes', 'No');
+          console.log('📋 Found Yes/No options');
         }
       }
     }

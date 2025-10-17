@@ -98,7 +98,7 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
       title: 'Legal & Compliance',
       icon: <Scale className="w-4 h-4" />,
       startQuestion: 32,
-      endQuestion: 38,
+      endQuestion: 37,
       color: 'text-red-600',
       bgColor: 'bg-red-50'
     },
@@ -106,8 +106,8 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
       id: 'growth-scaling',
       title: 'Growth & Scaling',
       icon: <TrendingUp className="w-4 h-4" />,
-      startQuestion: 39,
-      endQuestion: 42,
+      startQuestion: 38,
+      endQuestion: 41,
       color: 'text-indigo-600',
       bgColor: 'bg-indigo-50'
     },
@@ -115,8 +115,8 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
       id: 'risk-management',
       title: 'Risk Management',
       icon: <Shield className="w-4 h-4" />,
-      startQuestion: 43,
-      endQuestion: 46,
+      startQuestion: 42,
+      endQuestion: 45,
       color: 'text-gray-600',
       bgColor: 'bg-gray-50'
     }

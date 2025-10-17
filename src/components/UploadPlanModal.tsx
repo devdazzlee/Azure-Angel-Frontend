@@ -19,6 +19,11 @@ interface UploadedPlan {
   created_at: string;
 }
 
+interface UploadResponse {
+  success: boolean;
+  business_info?: any;
+}
+
 const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
   isOpen,
   onClose,
@@ -27,9 +32,6 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
 }) => {
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [uploadedPlans, setUploadedPlans] = useState<UploadedPlan[]>([]);
-  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
-  const [showExistingPlans, setShowExistingPlans] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDrag = (e: React.DragEvent) => {
@@ -82,75 +84,27 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await httpClient.post('/upload-plan', formData, {
+      const response = await httpClient.post<UploadResponse>('/upload-plan', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
 
       if (response.data.success) {
-        // Load existing plans to show the new one
-        await loadUploadedPlans();
+        toast.success('Business plan uploaded and processed successfully!');
         
-        // Apply to session if sessionId is provided
-        if (sessionId) {
-          await applyPlanToSession(response.data.data.file_id);
+        // Extract business info from response (backend returns it directly)
+        if (response.data.business_info) {
+          onUploadSuccess(response.data.business_info);
         }
         
-        onUploadSuccess(response.data.data.business_info);
         onClose();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload error:', error);
-      alert('Failed to upload business plan. Please try again.');
+      toast.error(error.response?.data?.detail || 'Failed to upload business plan. Please try again.');
     } finally {
       setUploading(false);
-    }
-  };
-
-  const loadUploadedPlans = async () => {
-    try {
-      const response = await httpClient.get('/uploaded-plans');
-      if (response.data.success) {
-        setUploadedPlans(response.data.data);
-      }
-    } catch (error) {
-      console.error('Error loading uploaded plans:', error);
-    }
-  };
-
-  const applyPlanToSession = async (fileId: string) => {
-    if (!sessionId) return;
-
-    try {
-      const response = await httpClient.post(`/uploaded-plans/${fileId}/use`, {
-        session_id: sessionId
-      });
-      
-      if (response.data.success) {
-        console.log('Plan applied to session successfully');
-      }
-    } catch (error) {
-      console.error('Error applying plan to session:', error);
-    }
-  };
-
-  const handleUseExistingPlan = async () => {
-    if (!selectedPlan || !sessionId) return;
-
-    try {
-      await applyPlanToSession(selectedPlan);
-      
-      // Get business info for the selected plan
-      const plan = uploadedPlans.find(p => p.file_id === selectedPlan);
-      if (plan) {
-        onUploadSuccess(plan.business_info);
-      }
-      
-      onClose();
-    } catch (error) {
-      console.error('Error using existing plan:', error);
-      alert('Failed to apply plan to session.');
     }
   };
 
@@ -188,36 +142,8 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
 
         {/* Content */}
         <div className="p-6">
-          {/* Tabs */}
-          <div className="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-lg">
-            <button
-              onClick={() => setShowExistingPlans(false)}
-              className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
-                !showExistingPlans
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              Upload New Plan
-            </button>
-            <button
-              onClick={() => {
-                setShowExistingPlans(true);
-                loadUploadedPlans();
-              }}
-              className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
-                showExistingPlans
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              Use Existing Plan
-            </button>
-          </div>
-
-          {/* Upload New Plan */}
-          {!showExistingPlans && (
-            <div className="space-y-6">
+          {/* Upload Area */}
+          <div className="space-y-6">
               {/* Upload Area */}
               <div
                 className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
@@ -282,94 +208,10 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
                   <li>• We'll extract key business information from your plan</li>
                   <li>• The information will be used to pre-fill your business planning questions</li>
                   <li>• You can still modify and customize everything during the planning process</li>
-                  <li>• Your plan will be securely stored and can be reused for future sessions</li>
+                  <li>• Your document will be processed instantly (not stored permanently)</li>
                 </ul>
               </div>
             </div>
-          )}
-
-          {/* Use Existing Plan */}
-          {showExistingPlans && (
-            <div className="space-y-6">
-              {uploadedPlans.length > 0 ? (
-                <div className="space-y-4">
-                  <h3 className="font-medium text-gray-900">Select a previously uploaded plan:</h3>
-                  
-                  <div className="space-y-3">
-                    {uploadedPlans.map((plan) => (
-                      <div
-                        key={plan.file_id}
-                        className={`border rounded-lg p-4 cursor-pointer transition-colors ${
-                          selectedPlan === plan.file_id
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                        onClick={() => setSelectedPlan(plan.file_id)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                            </div>
-                            
-                            <div>
-                              <p className="font-medium text-gray-900">{plan.file_name}</p>
-                              <p className="text-sm text-gray-500">
-                                {formatFileSize(plan.file_size)} • {formatDate(plan.created_at)}
-                              </p>
-                              {plan.business_info?.business_name && (
-                                <p className="text-sm text-blue-600">
-                                  {plan.business_info.business_name}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                          
-                          <div className={`w-5 h-5 rounded-full border-2 ${
-                            selectedPlan === plan.file_id
-                              ? 'border-blue-500 bg-blue-500'
-                              : 'border-gray-300'
-                          }`}>
-                            {selectedPlan === plan.file_id && (
-                              <div className="w-full h-full rounded-full bg-white scale-50"></div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <button
-                    onClick={handleUseExistingPlan}
-                    disabled={!selectedPlan}
-                    className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Use Selected Plan
-                  </button>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                  <h3 className="font-medium text-gray-900 mb-2">No uploaded plans yet</h3>
-                  <p className="text-gray-500 mb-4">
-                    Upload your first business plan to get started.
-                  </p>
-                  <button
-                    onClick={() => setShowExistingPlans(false)}
-                    className="text-blue-600 hover:text-blue-700 font-medium"
-                  >
-                    Upload a plan now
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
     </div>
