@@ -27,9 +27,9 @@ const BackButton: React.FC<BackButtonProps> = ({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 20 }}
       transition={{ duration: 0.4, type: "spring", stiffness: 200 }}
-      className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 lg:left-6 lg:bottom-6 lg:translate-x-0"
+      className="fixed bottom-6 left-6 z-50 md:bottom-8 md:left-8"
     >
-      <div className="flex flex-col items-center lg:items-start gap-2">
+      <div className="flex flex-col items-start gap-2">
         {/* Main Back Button with Glass Morphism */}
         <motion.button
           whileHover={{ scale: disabled ? 1 : 1.05, y: -2 }}
@@ -38,12 +38,13 @@ const BackButton: React.FC<BackButtonProps> = ({
           disabled={disabled || loading}
           className={`
             group relative overflow-hidden
-            flex items-center gap-3 px-5 py-3
+            flex items-center gap-2 px-3 py-2 md:gap-3 md:px-5 md:py-3
             bg-white/95 backdrop-blur-xl
             border-2 border-gray-200/50
-            text-gray-800 font-semibold text-sm
-            rounded-2xl shadow-2xl
+            text-gray-800 font-semibold text-xs md:text-sm
+            rounded-xl md:rounded-2xl shadow-lg md:shadow-2xl
             transition-all duration-300
+            max-w-xs md:max-w-none
             ${disabled || loading 
               ? 'opacity-50 cursor-not-allowed' 
               : 'hover:shadow-teal-500/25 hover:border-teal-400/50 cursor-pointer'
@@ -62,14 +63,14 @@ const BackButton: React.FC<BackButtonProps> = ({
           
           {/* Progress ring background */}
           {!loading && currentQuestionNumber && (
-            <div className="absolute -left-1 -top-1 w-14 h-14">
-              <svg className="transform -rotate-90" width="56" height="56">
+            <div className="absolute -left-0.5 -top-0.5 md:-left-1 md:-top-1 w-10 h-10 md:w-14 md:h-14">
+              <svg className="transform -rotate-90 w-full h-full" viewBox="0 0 56 56">
                 <circle
                   cx="28"
                   cy="28"
                   r="24"
                   stroke="currentColor"
-                  strokeWidth="3"
+                  strokeWidth="2"
                   fill="none"
                   className="text-gray-200"
                 />
@@ -78,7 +79,7 @@ const BackButton: React.FC<BackButtonProps> = ({
                   cy="28"
                   r="24"
                   stroke="url(#gradient)"
-                  strokeWidth="3"
+                  strokeWidth="2"
                   fill="none"
                   strokeLinecap="round"
                   initial={{ strokeDashoffset: 150.8 }}
@@ -118,7 +119,7 @@ const BackButton: React.FC<BackButtonProps> = ({
               >
                 {/* Animated arrow with gradient */}
                 <motion.div
-                  className="relative w-8 h-8 flex items-center justify-center bg-gradient-to-br from-teal-500 to-blue-500 rounded-full shadow-lg"
+                  className="relative w-6 h-6 md:w-8 md:h-8 bg-gradient-to-br from-teal-500 to-blue-500 rounded-full shadow-lg flex items-center justify-center"
                   animate={{ 
                     x: [-4, 0, -4],
                     scale: [1, 1.05, 1]
@@ -130,19 +131,18 @@ const BackButton: React.FC<BackButtonProps> = ({
                     times: [0, 0.5, 1]
                   }}
                 >
-                  {/* Gradient arrow with multiple layers */}
-                  <div className="relative">
-                    {/* Background glow */}
-                    <motion.div
-                      className="absolute inset-0 bg-white/30 rounded-full blur-sm"
-                      animate={{ opacity: [0.3, 0.6, 0.3] }}
-                      transition={{ duration: 1.5, repeat: Infinity }}
-                    />
-                    
-                    {/* Main arrow */}
+                  {/* Background glow */}
+                  <motion.div
+                    className="absolute inset-0 bg-white/30 rounded-full blur-sm"
+                    animate={{ opacity: [0.3, 0.6, 0.3] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  />
+                  
+                  {/* Perfectly centered arrow */}
+                  <div className="flex items-center justify-center w-full h-full">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5 text-white drop-shadow-sm"
+                      className="h-3 w-3 md:h-4 md:w-4 text-white drop-shadow-sm"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -150,20 +150,19 @@ const BackButton: React.FC<BackButtonProps> = ({
                     >
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                     </svg>
-                    
-                    {/* Animated highlight */}
-                    <motion.div
-                      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent"
-                      animate={{ x: ["-100%", "100%"] }}
-                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                      style={{ clipPath: "polygon(0 0, 100% 0, 100% 100%, 0 100%)" }}
-                    />
                   </div>
+                  
+                  {/* Animated highlight */}
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent rounded-full"
+                    animate={{ x: ["-100%", "100%"] }}
+                    transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                  />
                 </motion.div>
                 
                 {/* Text content */}
                 <div className="flex flex-col items-start">
-                  <span className="text-sm font-bold text-gray-900 leading-tight">
+                  <span className="text-xs md:text-sm font-bold text-gray-900 leading-tight">
                     Previous Question
                   </span>
                   {previousQuestionNumber && (
@@ -171,12 +170,12 @@ const BackButton: React.FC<BackButtonProps> = ({
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.1 }}
-                      className="flex items-center gap-1.5 mt-0.5"
+                      className="flex items-center gap-1 md:gap-1.5 mt-0.5"
                     >
                       <span className="text-xs text-teal-600 font-semibold">
-                        Question {previousQuestionNumber}
+                        Q{previousQuestionNumber}
                       </span>
-                      <span className="text-xs text-gray-400">of {totalQuestions}</span>
+                      <span className="text-xs text-gray-400 hidden md:inline">of {totalQuestions}</span>
                     </motion.div>
                   )}
                 </div>
@@ -191,11 +190,12 @@ const BackButton: React.FC<BackButtonProps> = ({
             initial={{ opacity: 0, y: -5 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-teal-50 to-blue-50 border border-teal-100 rounded-full shadow-sm"
+            className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1 md:py-1.5 bg-gradient-to-r from-teal-50 to-blue-50 border border-teal-100 rounded-full shadow-sm"
           >
-            <div className="w-1.5 h-1.5 bg-teal-500 rounded-full animate-pulse" />
-            <span className="text-[11px] font-medium text-gray-700">
-              Currently: Question {currentQuestionNumber}
+            <div className="w-1 h-1 md:w-1.5 md:h-1.5 bg-teal-500 rounded-full animate-pulse" />
+            <span className="text-[10px] md:text-[11px] font-medium text-gray-700">
+              <span className="hidden md:inline">Currently: Question </span>
+              <span className="md:hidden">Q</span>{currentQuestionNumber}
             </span>
           </motion.div>
         )}
