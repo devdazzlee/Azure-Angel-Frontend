@@ -5,6 +5,7 @@ import Confetti from 'react-confetti';
 interface RoadmapToImplementationTransitionProps {
   isOpen: boolean;
   onBeginImplementation: () => void;
+  onClose?: () => void;
   businessName: string;
   industry: string;
   location: string;
@@ -13,6 +14,7 @@ interface RoadmapToImplementationTransitionProps {
 const RoadmapToImplementationTransition: React.FC<RoadmapToImplementationTransitionProps> = ({
   isOpen,
   onBeginImplementation,
+  onClose,
   businessName,
   industry,
   location
@@ -43,6 +45,15 @@ const RoadmapToImplementationTransition: React.FC<RoadmapToImplementationTransit
     setTimeout(() => {
       onBeginImplementation();
     }, 300);
+  };
+
+  const handleClose = () => {
+    if (onClose) {
+      setIsExiting(true);
+      setTimeout(() => {
+        onClose();
+      }, 300);
+    }
   };
 
   if (!isOpen) return null;
@@ -80,6 +91,26 @@ const RoadmapToImplementationTransition: React.FC<RoadmapToImplementationTransit
                 <div className="absolute inset-0 opacity-10">
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_rgba(255,255,255,0.1)_0%,_transparent_50%)]"></div>
                 </div>
+                
+                {/* Close Button */}
+                {onClose && (
+                  <button
+                    onClick={handleClose}
+                    className="absolute top-4 right-4 z-20 text-white hover:text-gray-200 transition-colors duration-200 p-2 hover:bg-white/10 rounded-full"
+                    aria-label="Close modal"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-8 w-8"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
                 
                 <div className="relative z-10 text-center">
                   <motion.div

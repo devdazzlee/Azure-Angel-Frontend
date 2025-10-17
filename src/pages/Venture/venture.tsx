@@ -690,13 +690,29 @@ export default function ChatPage() {
       
       if (data.success) {
         toast.success("Implementation phase activated!");
+        
+        // Clear all roadmap and transition states
         setRoadmapToImplementationTransition(null);
+        setRoadmapData(null);
+        setTransitionData(null);
+        
+        // Update progress to IMPLEMENTATION phase
         setProgress(data.result.progress);
         
         // Set the first implementation question
         const replyText = data.result.reply || '';
         const formatted = formatAngelMessage(replyText);
         setCurrentQuestion(formatted);
+        
+        // Add the implementation start message to conversation
+        setConversation((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: formatted,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
       } else {
         toast.error(data.message || "Failed to start implementation");
       }
@@ -2287,10 +2303,15 @@ export default function ChatPage() {
     // Create business context from session data
     const businessContext = extractBusinessInfo();
 
+    const handleCloseTransitionModal = () => {
+      setRoadmapToImplementationTransition(null);
+    };
+
     return (
       <RoadmapToImplementationTransition
         isOpen={true}
         onBeginImplementation={handleActualStartImplementation}
+        onClose={handleCloseTransitionModal}
         businessName={businessContext.business_name}
         industry={businessContext.industry}
         location={businessContext.location}
