@@ -705,12 +705,11 @@ export default function ChatPage() {
         setCurrentQuestion(formatted);
         
         // Add the implementation start message to conversation
-        setConversation((prev) => [
+        setHistory((prev) => [
           ...prev,
           {
-            role: "assistant",
-            content: formatted,
-            timestamp: new Date().toISOString(),
+            question: "Implementation Phase Started",
+            answer: formatted,
           },
         ]);
       } else {
@@ -2303,15 +2302,10 @@ export default function ChatPage() {
     // Create business context from session data
     const businessContext = extractBusinessInfo();
 
-    const handleCloseTransitionModal = () => {
-      setRoadmapToImplementationTransition(null);
-    };
-
     return (
       <RoadmapToImplementationTransition
         isOpen={true}
         onBeginImplementation={handleActualStartImplementation}
-        onClose={handleCloseTransitionModal}
         businessName={businessContext.business_name}
         industry={businessContext.industry}
         location={businessContext.location}

@@ -5,7 +5,6 @@ import Confetti from 'react-confetti';
 interface RoadmapToImplementationTransitionProps {
   isOpen: boolean;
   onBeginImplementation: () => void;
-  onClose?: () => void;
   businessName: string;
   industry: string;
   location: string;
@@ -14,7 +13,6 @@ interface RoadmapToImplementationTransitionProps {
 const RoadmapToImplementationTransition: React.FC<RoadmapToImplementationTransitionProps> = ({
   isOpen,
   onBeginImplementation,
-  onClose,
   businessName,
   industry,
   location
@@ -47,15 +45,6 @@ const RoadmapToImplementationTransition: React.FC<RoadmapToImplementationTransit
     }, 300);
   };
 
-  const handleClose = () => {
-    if (onClose) {
-      setIsExiting(true);
-      setTimeout(() => {
-        onClose();
-      }, 300);
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -84,33 +73,13 @@ const RoadmapToImplementationTransition: React.FC<RoadmapToImplementationTransit
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
               transition={{ type: "spring", duration: 0.5 }}
-              className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden"
+              className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col"
             >
               {/* Header with Badge */}
-              <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 p-8 text-white relative overflow-hidden">
+              <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 p-8 text-white relative overflow-hidden flex-shrink-0">
                 <div className="absolute inset-0 opacity-10">
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_rgba(255,255,255,0.1)_0%,_transparent_50%)]"></div>
                 </div>
-                
-                {/* Close Button */}
-                {onClose && (
-                  <button
-                    onClick={handleClose}
-                    className="absolute top-4 right-4 z-20 text-white hover:text-gray-200 transition-colors duration-200 p-2 hover:bg-white/10 rounded-full"
-                    aria-label="Close modal"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-8 w-8"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
                 
                 <div className="relative z-10 text-center">
                   <motion.div
@@ -132,7 +101,7 @@ const RoadmapToImplementationTransition: React.FC<RoadmapToImplementationTransit
               </div>
 
               {/* Scrollable Content */}
-              <div className="overflow-y-auto max-h-[calc(90vh-250px)] p-8">
+              <div className="overflow-y-auto flex-1 p-8">
                 {/* Opening Message */}
                 <div className="text-center mb-8">
                   <p className="text-2xl font-bold text-gray-900 mb-2">
@@ -343,8 +312,8 @@ const RoadmapToImplementationTransition: React.FC<RoadmapToImplementationTransit
                 </div>
               </div>
 
-              {/* Footer with Action Button */}
-              <div className="border-t border-gray-200 bg-gray-50 p-6">
+              {/* Footer with Action Button - Always Visible */}
+              <div className="border-t border-gray-200 bg-gray-50 p-6 flex-shrink-0 shadow-lg">
                 <div className="flex justify-center">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
