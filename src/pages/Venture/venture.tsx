@@ -3,6 +3,7 @@
 // ChatPage.tsx
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import {
   fetchBusinessPlan,
   fetchQuestion,
@@ -27,6 +28,7 @@ import UploadPlanModal from "../../components/UploadPlanModal";
 import Implementation from "../Implementation";
 import RoadmapEditModal from "../../components/RoadmapEditModal";
 import BusinessQuestionFormatter from "../../components/BusinessQuestionFormatter";
+import BackButton from "../../components/BackButton";
 
 interface ConversationPair {
   question: string;
@@ -224,6 +226,7 @@ export default function ChatPage() {
   const [currentQuestionNumber, setCurrentQuestionNumber] = useState<number | null>(null);
   const [currentInput, setCurrentInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [backButtonLoading, setBackButtonLoading] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [progress, setProgress] = useState<ProgressState>({
     phase: "KYC",
@@ -2062,6 +2065,106 @@ export default function ChatPage() {
     }
   };
 
+  // Handle going back to previous question
+  const handleGoBack = async () => {
+    if (history.length === 0 || backButtonLoading || loading) {
+      return;
+    }
+
+    try {
+      setBackButtonLoading(true);
+      
+      // Call backend API to go to previous question
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/go-back`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // PROFESSIONAL FLOW - Senior Developer Best Practices
+        
+        // 1. Extract the last Q&A pair BEFORE modifying state
+        const lastPair = history[history.length - 1];
+        const previousQuestionNumber = lastPair?.questionNumber || null;
+        
+        console.log("🔙 Go Back Flow:", {
+          currentHistoryLength: history.length,
+          lastPairQuestion: lastPair?.question?.substring(0, 50),
+          lastPairQuestionNumber: previousQuestionNumber,
+          removingFromHistory: true
+        });
+        
+        // 2. Update progress from backend (source of truth)
+        if (data.result.progress) {
+          setProgress(data.result.progress);
+          console.log("📊 Progress updated:", data.result.progress);
+        }
+
+        // 3. Remove the last Q&A pair from history
+        setHistory((prev) => {
+          const newHistory = prev.slice(0, -1);
+          console.log("📝 History updated:", {
+            oldLength: prev.length,
+            newLength: newHistory.length
+          });
+          return newHistory;
+        });
+
+        // 4. Set the previous question as current with its question number
+        if (lastPair) {
+          setCurrentQuestion(lastPair.question);
+          setCurrentQuestionNumber(previousQuestionNumber);
+          console.log("✅ Current question set:", {
+            questionNumber: previousQuestionNumber,
+            questionPreview: lastPair.question.substring(0, 50)
+          });
+        } else {
+          // Fallback: use backend response (shouldn't happen in normal flow)
+          const replyText = data.result.reply || '';
+          const formatted = formatAngelMessage(replyText);
+          setCurrentQuestion(formatted);
+          
+          // Extract question number from backend response
+          const match = formatted.match(/\[\[Q:([A-Z_]+)\.(\d+)\]\]/);
+          if (match) {
+            setCurrentQuestionNumber(parseInt(match[2]));
+          }
+          console.log("⚠️ Fallback: Using backend response");
+        }
+        
+        // 5. Clear input and reset UI state
+        setCurrentInput("");
+        
+        // 6. Scroll to current question smoothly
+        setTimeout(() => {
+          if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTo({
+              top: chatContainerRef.current.scrollHeight,
+              behavior: 'smooth'
+            });
+          }
+        }, 100);
+        
+        // 7. User feedback
+        toast.success(`Returned to Question ${previousQuestionNumber || 'previous'}`, {
+          autoClose: 2000
+        });
+      } else {
+        toast.error(data.message || "Cannot go back");
+      }
+    } catch (error) {
+      console.error("Error going back:", error);
+      toast.error("Failed to go back. Please try again.");
+    } finally {
+      setBackButtonLoading(false);
+    }
+  };
+
   const handleApprovePlan = async () => {
     setLoading(true);
     try {
@@ -2379,18 +2482,32 @@ export default function ChatPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 text-sm flex flex-col lg:flex-row">
+      {/* Back Button - Always Visible */}
+      {history.length > 0 && (progress.phase === 'KYC' || progress.phase === 'BUSINESS_PLAN') && (
+        <BackButton 
+          onClick={handleGoBack} 
+          disabled={history.length === 0 || loading}
+          loading={backButtonLoading}
+          currentQuestionNumber={currentQuestionNumber}
+          totalQuestions={progress.total}
+        />
+      )}
+      
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header Section */}
         <div className="flex-shrink-0 px-3 py-4 lg:px-3 lg:py-4">
           <div className="max-w-6xl mx-auto">
             <div className="flex items-center justify-between mb-3">
-              <button
+              {/* Back to Ventures - Redesigned with better positioning */}
+              <motion.button
+                whileHover={{ scale: 1.02, x: -2 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={() => navigate("/ventures")}
-                className="flex items-center gap-1 text-gray-600 hover:text-teal-600 transition-colors text-sm"
+                className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:text-teal-600 bg-white/60 hover:bg-white/90 backdrop-blur-sm rounded-full border border-gray-200/50 hover:border-teal-300/50 transition-all duration-200 shadow-sm hover:shadow-md text-sm group"
               >
                 <svg
-                  className="w-4 h-4"
+                  className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -2402,9 +2519,8 @@ export default function ChatPage() {
                     d="M15 19l-7-7 7-7"
                   />
                 </svg>
-                <span className="hidden sm:inline">Back to Ventures</span>
-                <span className="sm:hidden">Back</span>
-              </button>
+                <span className="font-medium">All Ventures</span>
+              </motion.button>
 
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-gradient-to-r from-teal-500 to-blue-500 rounded flex items-center justify-center text-white text-sm">
