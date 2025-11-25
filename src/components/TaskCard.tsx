@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { 
   Loader2, 
   CheckCircle, 
@@ -502,12 +504,39 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               </span>
             </h3>
             <div className="bg-green-50 p-4 rounded-lg">
-              <p className="text-sm text-green-800 mb-2">
+              <p className="text-sm text-green-800 mb-3">
                 Sources consulted: {ragResearch.sources_consulted} authoritative sources
               </p>
-              <p className="text-sm text-green-800 whitespace-pre-wrap">
-                {ragResearch.analysis}
-              </p>
+              <div className="prose prose-sm max-w-none text-green-900">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    h1: ({ children }) => <h1 className="text-lg font-bold text-green-900 mb-3 mt-4">{children}</h1>,
+                    h2: ({ children }) => <h2 className="text-base font-semibold text-green-900 mb-2 mt-3">{children}</h2>,
+                    h3: ({ children }) => <h3 className="text-sm font-semibold text-green-800 mb-2 mt-3">{children}</h3>,
+                    h4: ({ children }) => <h4 className="text-sm font-medium text-green-800 mb-1 mt-2">{children}</h4>,
+                    p: ({ children }) => <p className="text-sm text-green-800 leading-relaxed mb-2">{children}</p>,
+                    ul: ({ children }) => <ul className="list-disc ml-5 space-y-1 text-sm text-green-800 mb-2">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal ml-5 space-y-1 text-sm text-green-800 mb-2">{children}</ol>,
+                    li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                    strong: ({ children }) => <strong className="font-semibold text-green-900">{children}</strong>,
+                    em: ({ children }) => <em className="italic">{children}</em>,
+                    code: ({ children, inline }) => inline ? (
+                      <code className="bg-green-100 text-green-900 px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>
+                    ) : (
+                      <pre className="bg-green-100 text-green-900 p-2 rounded text-xs font-mono overflow-x-auto mb-2"><code>{children}</code></pre>
+                    ),
+                    blockquote: ({ children }) => (
+                      <blockquote className="border-l-4 border-green-400 bg-green-100 p-2 italic rounded my-2 text-sm text-green-800">
+                        {children}
+                      </blockquote>
+                    ),
+                    hr: () => <hr className="my-3 border-green-300" />,
+                  }}
+                >
+                  {ragResearch.analysis}
+                </ReactMarkdown>
+              </div>
             </div>
           </div>
         )}

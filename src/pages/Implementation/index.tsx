@@ -55,6 +55,12 @@ interface ImplementationTask {
   };
 }
 
+interface PhaseProgress {
+  completed: number;
+  total: number;
+  percent: number;
+}
+
 interface ImplementationProgress {
   completed: number;
   total: number;
@@ -62,6 +68,13 @@ interface ImplementationProgress {
   phases_completed?: number;
   milestone?: string;
   current_phase?: string;
+  phase_progress?: {
+    "Legal Foundation": PhaseProgress;
+    "Financial Systems": PhaseProgress;
+    "Operations Setup": PhaseProgress;
+    "Marketing & Sales": PhaseProgress;
+    "Launch & Growth": PhaseProgress;
+  };
 }
 
 interface ImplementationProps {
@@ -552,9 +565,12 @@ const Implementation: React.FC<ImplementationProps> = ({
                 phase="IMPLEMENTATION"
               />
               <div className="text-right">
-                <p className="text-sm text-gray-600">Progress</p>
+                <p className="text-sm text-gray-600">Overall Progress</p>
                 <p className="text-lg font-semibold text-gray-900">
-                  {progress.completed}/{progress.total} tasks
+                  {progress.completed}/{progress.total} steps
+                </p>
+                <p className="text-xs text-gray-500">
+                  ({completedTasks.filter(t => !t.includes('_substep_')).length} main tasks completed)
                 </p>
                 {progress.milestone && (
                   <p className="text-xs text-teal-600 font-medium mt-1">
@@ -643,8 +659,13 @@ const Implementation: React.FC<ImplementationProps> = ({
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Progress Overview</h3>
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Tasks Completed</span>
-                    <span className="font-medium">{completedTasks.length}/{progress.total}</span>
+                    <span className="text-gray-600">Steps Completed</span>
+                    <span className="font-medium">{progress.completed}/{progress.total}</span>
+                    <span className="text-xs text-gray-500">(includes substeps)</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Main Tasks Completed</span>
+                    <span className="font-medium">{completedTasks.filter(t => !t.includes('_substep_')).length}/25</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Phases Completed</span>
@@ -665,20 +686,43 @@ const Implementation: React.FC<ImplementationProps> = ({
                   {/* Phase Progress Indicators */}
                   <div className="mt-4 space-y-2">
                     <p className="text-xs font-medium text-gray-700 mb-2">Phase Progress:</p>
-                    {['Legal Foundation', 'Financial Systems', 'Operations Setup', 'Marketing & Sales', 'Launch & Growth'].map((phase, index) => (
-                      <div key={phase} className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${
-                          (progress.phases_completed || 0) > index ? 'bg-green-500' : 
-                          (progress.phases_completed || 0) === index ? 'bg-teal-500' : 'bg-gray-300'
-                        }`} />
-                        <span className={`text-xs ${
-                          (progress.phases_completed || 0) > index ? 'text-green-700 font-medium' : 
-                          (progress.phases_completed || 0) === index ? 'text-teal-700 font-medium' : 'text-gray-500'
-                        }`}>
-                          {phase}
-                        </span>
-                      </div>
-                    ))}
+                    {['Legal Foundation', 'Financial Systems', 'Operations Setup', 'Marketing & Sales', 'Launch & Growth'].map((phase, index) => {
+                      // Get phase progress from backend if available, otherwise use phases_completed count
+                      const phaseProgress = progress.phase_progress?.[phase as keyof typeof progress.phase_progress];
+                      const isCompleted = phaseProgress ? phaseProgress.percent === 100 : (progress.phases_completed || 0) > index;
+                      const isInProgress = phaseProgress ? phaseProgress.percent > 0 && phaseProgress.percent < 100 : (progress.phases_completed || 0) === index;
+                      const progressPercent = phaseProgress ? phaseProgress.percent : 0;
+                      
+                      return (
+                        <div key={phase} className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full ${
+                              isCompleted ? 'bg-green-500' : 
+                              isInProgress ? 'bg-teal-500' : 'bg-gray-300'
+                            }`} />
+                            <span className={`text-xs flex-1 ${
+                              isCompleted ? 'text-green-700 font-medium' : 
+                              isInProgress ? 'text-teal-700 font-medium' : 'text-gray-500'
+                            }`}>
+                              {phase}
+                            </span>
+                            {phaseProgress && (
+                              <span className="text-xs text-gray-500">
+                                {phaseProgress.completed}/{phaseProgress.total}
+                              </span>
+                            )}
+                          </div>
+                          {isInProgress && phaseProgress && (
+                            <div className="ml-4 w-full bg-gray-200 rounded-full h-1">
+                              <div 
+                                className="bg-teal-500 h-1 rounded-full transition-all duration-300"
+                                style={{ width: `${progressPercent}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>

@@ -12,6 +12,7 @@ import {
   NewVenture,
   AboutUs,
 } from "../pages";
+import RoadmapPage from "../pages/Roadmap/RoadmapPage";
 import Layout from "../features/Dashboard";
 import ChatLayout from "../layout/chatLayout";
 
@@ -80,6 +81,10 @@ const router = createBrowserRouter([
               {
                 path: ":id",
                 element: <Chat />,
+              },
+              {
+                path: ":id/roadmap",
+                element: <RoadmapPage />,
               },
             ],
           },

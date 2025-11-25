@@ -18,7 +18,6 @@ import { toast } from "react-toastify";
 import ProgressCircle from "../../components/ProgressCircle";
 import BusinessPlanModal from "../../components/BusinessPlanModal";
 import VentureLoader from "../../components/VentureLoader";
-import RoadmapModal from "../../components/RoadmapModal";
 import QuestionNavigator from "../../components/QuestionNavigator";
 import SmartInput from "../../components/SmartInput";
 import AcceptModifyButtons from "../../components/AcceptModifyButtons";
@@ -1188,29 +1187,25 @@ export default function ChatPage() {
       if (data.success) {
         toast.success("Implementation phase activated!");
         
-        // Clear all roadmap and transition states
+        // CRITICAL: Clear transition state FIRST so it doesn't block the Implementation component
         setRoadmapToImplementationTransition(null);
         setRoadmapData(null);
         setTransitionData(null);
         
-        // Update progress to IMPLEMENTATION phase
+        // Update progress to IMPLEMENTATION phase - this will trigger the Implementation component to show
         if (data.result?.progress) {
+          console.log("🔄 Updating progress to IMPLEMENTATION:", data.result.progress);
           applyProgressUpdate(data.result.progress);
+        } else {
+          // Fallback: manually set progress to IMPLEMENTATION if endpoint doesn't return it
+          console.log("⚠️ No progress in response, manually setting to IMPLEMENTATION");
+          applyProgressUpdate({
+            phase: "IMPLEMENTATION",
+            answered: 0,
+            total: 10,
+            percent: 0
+          });
         }
-        
-        // Set the first implementation question
-        const replyText = data.result.reply || '';
-        const formatted = formatAngelMessage(replyText);
-        setCurrentQuestion(formatted);
-        
-        // Add the implementation start message to conversation
-        setHistory((prev) => [
-          ...prev,
-          {
-            question: "Implementation Phase Started",
-            answer: formatted,
-          },
-        ]);
       } else {
         toast.error(data.message || "Failed to start implementation");
       }
@@ -2212,18 +2207,13 @@ export default function ChatPage() {
     }
   }, [history, currentQuestion, progress.phase, progress.answered]);
 
-  // Use useEffect to open roadmap modal when roadmap is generated
+  // Use useEffect to navigate to roadmap page when roadmap is generated
   useEffect(() => {
-    if (roadmapData && roadmapData.isGenerated && !planState.showModal && !roadmapState.showModal) {
-      setRoadmapState(prev => ({
-        ...prev,
-        showModal: true,
-        plan: roadmapData.roadmapContent,
-        loading: false,
-        error: null
-      }));
+    if (roadmapData && roadmapData.isGenerated && !planState.showModal && sessionId) {
+      // Navigate to roadmap page instead of opening modal
+      navigate(`/ventures/${sessionId}/roadmap`);
     }
-  }, [roadmapData, planState.showModal, roadmapState.showModal]);
+  }, [roadmapData, planState.showModal, sessionId, navigate]);
 
   // Handle phase transitions with smooth scrolling
   useEffect(() => {
@@ -2627,6 +2617,86 @@ export default function ChatPage() {
           }
         }
 
+        // CRITICAL: Check if we're in ROADMAP_TO_IMPLEMENTATION_TRANSITION phase
+        if (phase === "ROADMAP_TO_IMPLEMENTATION_TRANSITION") {
+          console.log("🚀 Detected ROADMAP_TO_IMPLEMENTATION_TRANSITION phase - fetching transition content");
+          try {
+            // Fetch the transition content from the endpoint
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/roadmap-to-implementation-transition`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`
+              }
+            });
+
+            const data = await response.json();
+            
+            if (data.success && data.result?.reply) {
+              setRoadmapToImplementationTransition({
+                roadmapContent: data.result.reply,
+                isActive: true
+              });
+              if (data.result?.progress) {
+                applyProgressUpdate(data.result.progress);
+              }
+              setBackendTotals({ answered: answeredPhase, total: totalPhase, overallAnswered, overallTotal });
+              setLoading(false);
+              return;
+            } else {
+              console.warn("⚠️ Transition endpoint did not return expected data");
+            }
+          } catch (transitionError) {
+            console.error("Failed to fetch transition content:", transitionError);
+            // Continue with normal flow
+          }
+        }
+
+        // CRITICAL: Check if we're in ROADMAP phase - automatically load and display roadmap
+        if (phase === "ROADMAP" || phase === "ROADMAP_GENERATED") {
+          console.log("🗺️ Detected ROADMAP phase - loading roadmap and opening modal");
+          try {
+            // Always fetch roadmap from API to ensure we get the new 8-stage format
+            // The API will regenerate if it's in old format
+            try {
+              const roadmapResponse = await fetchRoadmapPlan(sessionId);
+              const roadmapContent = roadmapResponse?.result?.plan || '';
+              
+              if (roadmapContent) {
+                // Check if it's in the new format (has Stage and tables)
+                const hasStageFormat = roadmapContent.includes("Stage") && 
+                                      roadmapContent.includes("| Task | Description | Dependencies | Angel's Role | Status |");
+                
+                if (hasStageFormat) {
+                  setRoadmapData({
+                    roadmapContent: roadmapContent,
+                    isGenerated: true
+                  });
+                  
+                  // Navigate to roadmap page
+                  console.log("✅ Roadmap loaded (8-stage format) - navigating to roadmap page");
+                  navigate(`/ventures/${sessionId}/roadmap`);
+                } else {
+                  // Old format detected - navigate anyway, the page will handle it
+                  console.warn("⚠️ Roadmap is not in expected 8-stage format - navigating anyway");
+                  navigate(`/ventures/${sessionId}/roadmap`);
+                }
+              } else {
+                console.warn("⚠️ No roadmap content returned from API - navigating anyway");
+                navigate(`/ventures/${sessionId}/roadmap`);
+              }
+            } catch (fetchError) {
+              console.error("Could not fetch roadmap:", fetchError);
+              // Navigate anyway, the page will show error state
+              navigate(`/ventures/${sessionId}/roadmap`);
+            }
+          } catch (roadmapError) {
+            console.error("Failed to load roadmap:", roadmapError);
+            // Navigate anyway, the page will show error state
+            navigate(`/ventures/${sessionId}/roadmap`);
+          }
+        }
+
         if (reconstructed.pendingQuestion) {
           setCurrentQuestion(reconstructed.pendingQuestion);
           setCurrentQuestionNumber(pendingNumber);
@@ -2784,7 +2854,7 @@ export default function ChatPage() {
     } catch (error) {
       console.error("Failed to fetch question:", error);
       toast.error("Something went wrong.");
-      setHistory((prev) => prev.slice(0, -1));
+        setHistory((prev) => prev.slice(0, -1));
       setCurrentInput(input);
     } finally {
       setLoading(false);
@@ -2929,16 +2999,16 @@ export default function ChatPage() {
 
       if (data.success) {
         // PROFESSIONAL FLOW - Senior Developer Best Practices
-        if (data.result?.progress) {
-          applyProgressUpdate(data.result.progress);
-          console.log("📊 Progress updated:", data.result.progress);
-        }
+      if (data.result?.progress) {
+        applyProgressUpdate(data.result.progress);
+        console.log("📊 Progress updated:", data.result.progress);
+      }
 
-        const replyText = data.result?.reply ?? '';
-        const formattedReply = formatAngelMessage(replyText);
-        const tagMatch = replyText.match(/\[\[Q:([A-Z_]+)\.(\d{2})]]/);
-        const previousQuestionNumber = tagMatch ? parseInt(tagMatch[2], 10) : null;
-        const previousPhase = tagMatch ? tagMatch[1] : progress.phase;
+      const replyText = data.result?.reply ?? '';
+      const formattedReply = formatAngelMessage(replyText);
+      const tagMatch = replyText.match(/\[\[Q:([A-Z_]+)\.(\d{2})]]/);
+      const previousQuestionNumber = tagMatch ? parseInt(tagMatch[2], 10) : null;
+      const previousPhase = tagMatch ? tagMatch[1] : progress.phase;
 
         if (previousQuestionNumber !== null) {
           setPhaseQuestionTracker((prev) => ({
@@ -2956,7 +3026,7 @@ export default function ChatPage() {
         });
 
         // CRITICAL: Sync session progress to backend so reload restores correct question
-        const progressData = data.result?.progress;
+      const progressData = data.result?.progress;
         if (progressData && sessionId) {
           const askedTag = progressData.phase && previousQuestionNumber 
             ? `${progressData.phase}.${previousQuestionNumber.toString().padStart(2, '0')}`
@@ -2980,81 +3050,81 @@ export default function ChatPage() {
 
         // CRITICAL: Refresh history from backend to ensure we're in sync with what was actually deleted
         // The backend should have deleted the records, so we need to fetch the updated history
-        try {
-          const refreshedHistory = await fetchSessionHistory(sessionId);
-          if (refreshedHistory && Array.isArray(refreshedHistory)) {
-            // Rebuild conversation pairs from refreshed history
-            const buildPairs = (records: RawChatRecord[]) => {
-              const pairs: ConversationPair[] = [];
-              let pendingQuestion: string | null = null;
-              let pendingNumber: number | null = null;
-              let pendingPhase: ConversationPair['phase'] | null = null;
+      try {
+        const refreshedHistory = await fetchSessionHistory(sessionId);
+        if (refreshedHistory && Array.isArray(refreshedHistory)) {
+          // Rebuild conversation pairs from refreshed history
+          const buildPairs = (records: RawChatRecord[]) => {
+            const pairs: ConversationPair[] = [];
+            let pendingQuestion: string | null = null;
+            let pendingNumber: number | null = null;
+            let pendingPhase: ConversationPair['phase'] | null = null;
 
-              records.forEach((record) => {
-                if (record.role === 'assistant') {
-                  if (!record.content) return;
-                  const formattedQuestion = formatAngelMessage(record.content);
-                  const tagMatch = record.content.match(/\[\[Q:([A-Z_]+)\.(\d{2})]]/);
-                  const rawPhase = tagMatch ? tagMatch[1] : record.phase;
-                  const normalizedPhase = rawPhase ? rawPhase.toUpperCase() : 'KYC';
-                  const parsedNumber = tagMatch ? parseInt(tagMatch[2], 10) : null;
+            records.forEach((record) => {
+              if (record.role === 'assistant') {
+                if (!record.content) return;
+                const formattedQuestion = formatAngelMessage(record.content);
+                const tagMatch = record.content.match(/\[\[Q:([A-Z_]+)\.(\d{2})]]/);
+                const rawPhase = tagMatch ? tagMatch[1] : record.phase;
+                const normalizedPhase = rawPhase ? rawPhase.toUpperCase() : 'KYC';
+                const parsedNumber = tagMatch ? parseInt(tagMatch[2], 10) : null;
 
-                  pendingQuestion = formattedQuestion;
-                  pendingNumber = parsedNumber;
-                  pendingPhase = normalizedPhase as ConversationPair['phase'];
-                } else if (record.role === 'user') {
-                  if (!pendingQuestion) return;
-                  const answerText = (record.content || '').trim();
-                  if (!answerText || answerText.toUpperCase() === 'EMPTY') {
-                    return;
-                  }
-                  pairs.push({
-                    question: pendingQuestion,
-                    answer: answerText,
-                    questionNumber: pendingNumber ?? undefined,
-                    phase: pendingPhase ?? undefined,
-                  });
-                  pendingQuestion = null;
-                  pendingNumber = null;
-                  pendingPhase = null;
+                pendingQuestion = formattedQuestion;
+                pendingNumber = parsedNumber;
+                pendingPhase = normalizedPhase as ConversationPair['phase'];
+              } else if (record.role === 'user') {
+                if (!pendingQuestion) return;
+                const answerText = (record.content || '').trim();
+                if (!answerText || answerText.toUpperCase() === 'EMPTY') {
+                  return;
                 }
-              });
+                pairs.push({
+                  question: pendingQuestion,
+                  answer: answerText,
+                  questionNumber: pendingNumber ?? undefined,
+                  phase: pendingPhase ?? undefined,
+                });
+                pendingQuestion = null;
+                pendingNumber = null;
+                pendingPhase = null;
+              }
+            });
 
-              return pairs;
-            };
+            return pairs;
+          };
 
             const refreshedPairs = buildPairs(refreshedHistory);
             setHistory((prevHistory) => {
               console.log("✅ History refreshed from backend after going back:", {
                 oldLength: prevHistory.length,
                 newLength: refreshedPairs.length,
-                pairs: refreshedPairs.map(p => ({ q: p.questionNumber, phase: p.phase }))
+            pairs: refreshedPairs.map(p => ({ q: p.questionNumber, phase: p.phase }))
               });
               return refreshedPairs;
-            });
-          }
-        } catch (refreshError) {
+          });
+        }
+      } catch (refreshError) {
           console.warn('Failed to refresh history after going back:', refreshError);
           // Continue with manually updated history as fallback
         }
 
         // Clear input and reset UI state
-        setCurrentInput("");
-        
+      setCurrentInput("");
+      
         // Scroll to current question smoothly
-        setTimeout(() => {
-          if (chatContainerRef.current) {
-            chatContainerRef.current.scrollTo({
-              top: chatContainerRef.current.scrollHeight,
-              behavior: 'smooth'
-            });
-          }
+      setTimeout(() => {
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTo({
+            top: chatContainerRef.current.scrollHeight,
+            behavior: 'smooth'
+          });
+        }
         }, 100);
-        
+      
         // User feedback
-        toast.success(`Returned to Question ${previousQuestionNumber ?? 'previous'}`, {
-          autoClose: 2000
-        });
+      toast.success(`Returned to Question ${previousQuestionNumber ?? 'previous'}`, {
+        autoClose: 2000
+      });
       } else {
         toast.error(data.message || "Cannot go back");
       }
@@ -3096,13 +3166,23 @@ export default function ChatPage() {
           toast.info("Full Business Plan Artifact generated. You can download it from the Plan viewer.");
         }
         
-        // Navigate to roadmap phase
+        // Navigate to roadmap phase and show roadmap modal immediately
         if (data.result.roadmap) {
+          const roadmapContent = data.result.roadmap;
           setRoadmapData({
-            roadmapContent: data.result.roadmap,
+            roadmapContent: roadmapContent,
             isGenerated: true
           });
-          console.log("Roadmap generated:", data.result.roadmap);
+          
+          // Immediately open the roadmap modal with the generated content
+          setRoadmapState({
+            showModal: true,
+            plan: roadmapContent,
+            loading: false,
+            error: ""
+          });
+          
+          console.log("✅ Roadmap generated and modal opened:", roadmapContent.substring(0, 200));
         }
       } else {
         toast.error(data.message || "Failed to approve plan");
@@ -3337,6 +3417,7 @@ export default function ChatPage() {
 
   // Show implementation phase
   if (progress.phase === "IMPLEMENTATION") {
+    console.log("✅ Rendering Implementation component - phase is IMPLEMENTATION");
     const sessionData = {
       sessionId: sessionId!,
       currentPhase: progress.phase,
@@ -3357,6 +3438,8 @@ export default function ChatPage() {
       />
     );
   }
+  
+  console.log("📊 Current phase:", progress.phase, "- Not showing Implementation component");
 
   // Transform history into questions array
   const questions = history.map((pair, index) => ({
@@ -3547,16 +3630,7 @@ export default function ChatPage() {
             onEditPlan={handleEditPlan}
           />
 
-          <RoadmapModal
-            open={roadmapState.showModal}
-            onClose={() =>
-              setRoadmapState((prev) => ({ ...prev, showModal: false }))
-            }
-            plan={roadmapState.plan}
-            loading={roadmapState.loading}
-            error={roadmapState.error}
-            onEditRoadmap={handleEditRoadmap}
-          />
+          {/* Roadmap is now shown as a full page, not a modal */}
         </div>
 
         {/* Scrollable Chat Area */}
@@ -3655,55 +3729,75 @@ export default function ChatPage() {
                             Angel is thinking...
                           </span>
                         </div>
+                      ) : progress.phase === "ROADMAP" || progress.phase === "ROADMAP_GENERATED" ? (
+                        <div className="space-y-4">
+                          <BusinessQuestionFormatter text={currentQuestion || "Your roadmap is ready!"} />
+                          <div className="mt-4 flex gap-3">
+                            <button
+                              onClick={() => navigate(`/ventures/${sessionId}/roadmap`)}
+                              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all transform hover:scale-105 flex items-center gap-2"
+                            >
+                              <span className="text-xl">🗺️</span>
+                              <span>View Your Roadmap</span>
+                            </button>
+                            <button
+                              onClick={handleStartImplementation}
+                              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all transform hover:scale-105 flex items-center gap-2"
+                            >
+                              <span className="text-xl">🚀</span>
+                              <span>Start Implementation</span>
+                            </button>
+                          </div>
+                        </div>
                       ) : (
                         progress.phase === "KYC" ? (
-                          <div dangerouslySetInnerHTML={{ 
-                            __html: (() => {
-                              let html = formatQuestionText(currentQuestion || "Loading...");
+                        <div dangerouslySetInnerHTML={{ 
+                          __html: (() => {
+                            let html = formatQuestionText(currentQuestion || "Loading...");
+                            
+                            // Apply aggressive cleanup for Angel introduction text
+                            if (html.toLowerCase().includes('welcome to founderport')) {
+                              // Clean up excessive spacing
+                              html = html.replace(/\n{3,}/g, '\n\n');
+                              html = html.replace(/\n\s*\n\s*\n/g, '\n\n');
                               
-                              // Apply aggressive cleanup for Angel introduction text
-                              if (html.toLowerCase().includes('welcome to founderport')) {
-                                // Clean up excessive spacing
-                                html = html.replace(/\n{3,}/g, '\n\n');
-                                html = html.replace(/\n\s*\n\s*\n/g, '\n\n');
-                                
-                                // Fix spacing around journey question
-                                html = html.replace(/\n\s*\n\s*Are you ready to begin your journey\?\s*\n\s*\n/g, '\n\nAre you ready to begin your journey?\n\n');
-                                html = html.replace(/\n{2,}\s*Are you ready to begin your journey\?\s*\n{2,}/g, '\n\nAre you ready to begin your journey?\n\n');
-                                
-                                // Fix spacing around questionnaire intro
-                                html = html.replace(/\n\s*\n\s*Let's start with the Getting to Know You questionnaire/g, '\n\nLet\'s start with the Getting to Know You questionnaire');
-                                
-                                // Fix spacing in critiquing feedback messages
-                                html = html.replace(/I need more detail from you\. That answer seems quite brief\.\s*\n\s*\n\s*\n\s*\n\s*Could you elaborate more\?/g, 'I need more detail from you. That answer seems quite brief.\n\nCould you elaborate more?');
-                                html = html.replace(/What specific aspects are you considering\s*\n\s*\n\s*\n\s*\n\s*\?/g, 'What specific aspects are you considering?');
-                                html = html.replace(/What challenges do you anticipate\s*\n\s*\n\s*\n\s*\n\s*\?/g, 'What challenges do you anticipate?');
-                              }
+                              // Fix spacing around journey question
+                              html = html.replace(/\n\s*\n\s*Are you ready to begin your journey\?\s*\n\s*\n/g, '\n\nAre you ready to begin your journey?\n\n');
+                              html = html.replace(/\n{2,}\s*Are you ready to begin your journey\?\s*\n{2,}/g, '\n\nAre you ready to begin your journey?\n\n');
                               
-                              // Convert to HTML with comprehensive spacing cleanup
-                              return html
-                                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                                .replace(/\n\n\n+/g, '\n\n') // Reduce 3+ newlines to 2
-                                .replace(/\n/g, '<br>')
-                                // Comprehensive cleanup of excessive br tags
-                                .replace(/<br><br><br><br><br><br>/g, '<br><br>') // Reduce 6 br tags to 2
-                                .replace(/<br><br><br><br><br>/g, '<br><br>') // Reduce 5 br tags to 2
-                                .replace(/<br><br><br><br>/g, '<br><br>') // Reduce 4 br tags to 2
-                                .replace(/<br><br><br>/g, '<br><br>') // Reduce 3 br tags to 2
-                                // Specific cleanup for questions
-                                .replace(/<br><br><strong>Are you ready to begin your journey\?<\/strong><br><br>/g, '<br><strong>Are you ready to begin your journey?</strong><br>')
-                                .replace(/<br><br><strong>What's your name and preferred name or nickname\?<\/strong><br><br>/g, '<br><strong>What\'s your name and preferred name or nickname?</strong>')
-                                .replace(/<br><br><br><br><strong>Are you ready to begin your journey\?<\/strong><br><br><br><br>/g, '<br><strong>Are you ready to begin your journey?</strong><br>')
-                                // Cleanup for critiquing feedback messages
-                                .replace(/I need more detail from you\. That answer seems quite brief\.<br><br><br><br><br>Could you elaborate more\?/g, 'I need more detail from you. That answer seems quite brief.<br><br>Could you elaborate more?')
-                                .replace(/What specific aspects are you considering<br><br><br><br><br>\?/g, 'What specific aspects are you considering?')
-                                .replace(/What challenges do you anticipate<br><br><br><br><br>\?/g, 'What challenges do you anticipate?')
-                                // Final cleanup - reduce any remaining excessive spacing
-                                .replace(/<br><br><br>/g, '<br><br>');
-                            })()
-                          }} />
-                ) : (
-                  <BusinessQuestionFormatter text={currentQuestion || "Loading..."} />
+                              // Fix spacing around questionnaire intro
+                              html = html.replace(/\n\s*\n\s*Let's start with the Getting to Know You questionnaire/g, '\n\nLet\'s start with the Getting to Know You questionnaire');
+                              
+                              // Fix spacing in critiquing feedback messages
+                              html = html.replace(/I need more detail from you\. That answer seems quite brief\.\s*\n\s*\n\s*\n\s*\n\s*Could you elaborate more\?/g, 'I need more detail from you. That answer seems quite brief.\n\nCould you elaborate more?');
+                              html = html.replace(/What specific aspects are you considering\s*\n\s*\n\s*\n\s*\n\s*\?/g, 'What specific aspects are you considering?');
+                              html = html.replace(/What challenges do you anticipate\s*\n\s*\n\s*\n\s*\n\s*\?/g, 'What challenges do you anticipate?');
+                            }
+                            
+                            // Convert to HTML with comprehensive spacing cleanup
+                            return html
+                              .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                              .replace(/\n\n\n+/g, '\n\n') // Reduce 3+ newlines to 2
+                              .replace(/\n/g, '<br>')
+                              // Comprehensive cleanup of excessive br tags
+                              .replace(/<br><br><br><br><br><br>/g, '<br><br>') // Reduce 6 br tags to 2
+                              .replace(/<br><br><br><br><br>/g, '<br><br>') // Reduce 5 br tags to 2
+                              .replace(/<br><br><br><br>/g, '<br><br>') // Reduce 4 br tags to 2
+                              .replace(/<br><br><br>/g, '<br><br>') // Reduce 3 br tags to 2
+                              // Specific cleanup for questions
+                              .replace(/<br><br><strong>Are you ready to begin your journey\?<\/strong><br><br>/g, '<br><strong>Are you ready to begin your journey?</strong><br>')
+                              .replace(/<br><br><strong>What's your name and preferred name or nickname\?<\/strong><br><br>/g, '<br><strong>What\'s your name and preferred name or nickname?</strong>')
+                              .replace(/<br><br><br><br><strong>Are you ready to begin your journey\?<\/strong><br><br><br><br>/g, '<br><strong>Are you ready to begin your journey?</strong><br>')
+                              // Cleanup for critiquing feedback messages
+                              .replace(/I need more detail from you\. That answer seems quite brief\.<br><br><br><br><br>Could you elaborate more\?/g, 'I need more detail from you. That answer seems quite brief.<br><br>Could you elaborate more?')
+                              .replace(/What specific aspects are you considering<br><br><br><br><br>\?/g, 'What specific aspects are you considering?')
+                              .replace(/What challenges do you anticipate<br><br><br><br><br>\?/g, 'What challenges do you anticipate?')
+                              // Final cleanup - reduce any remaining excessive spacing
+                              .replace(/<br><br><br>/g, '<br><br>');
+                          })()
+                        }} />
+                      ) : (
+                        <BusinessQuestionFormatter text={currentQuestion || "Loading..."} />
                 )
                       )}
                     </div>
