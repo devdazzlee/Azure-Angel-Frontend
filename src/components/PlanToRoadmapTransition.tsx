@@ -1,0 +1,949 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { toast } from 'react-toastify';
+import BusinessPlanPaywall from './BusinessPlanPaywall';
+
+interface PlanToRoadmapTransitionProps {
+  businessPlanSummary: string;
+  businessPlanArtifact?: string | null;
+  onApprove: () => void;
+  onRevisit: (modificationAreas?: string[]) => void;
+  loading?: boolean;
+  sessionId?: string;
+  initialQuote?: MotivationalQuote | null;
+}
+
+interface ModificationArea {
+  id: string;
+  title: string;
+  description: string;
+  questions: string[];
+}
+
+interface MotivationalQuote {
+  quote: string;
+  author: string;
+  category?: string;
+}
+
+const FALLBACK_QUOTES: MotivationalQuote[] = [
+  {
+    quote: "Success is not final; failure is not fatal: it is the courage to continue that counts.",
+    author: "Winston Churchill",
+    category: "Persistence"
+  },
+  {
+    quote: "The way to get started is to quit talking and begin doing.",
+    author: "Walt Disney",
+    category: "Action"
+  },
+  {
+    quote: "Innovation distinguishes between a leader and a follower.",
+    author: "Steve Jobs",
+    category: "Innovation"
+  },
+  {
+    quote: "The future belongs to those who believe in the beauty of their dreams.",
+    author: "Eleanor Roosevelt",
+    category: "Dreams"
+  },
+  {
+    quote: "Don't be afraid to give up the good to go for the great.",
+    author: "John D. Rockefeller",
+    category: "Excellence"
+  },
+  {
+    quote: "Opportunities don't happen, you create them.",
+    author: "Chris Grosser",
+    category: "Opportunity"
+  },
+  {
+    quote: "If you really look closely, most overnight successes took a long time.",
+    author: "Steve Jobs",
+    category: "Discipline"
+  },
+  {
+    quote: "Dream big. Start small. Act now.",
+    author: "Robin Sharma",
+    category: "Momentum"
+  }
+];
+
+const markdownComponents = {
+  h1: ({ children }: { children?: React.ReactNode }) => (
+    <h1 className="text-3xl font-semibold text-gray-900 mb-4">{children}</h1>
+  ),
+  h2: ({ children }: { children?: React.ReactNode }) => (
+    <h2 className="text-2xl font-semibold text-gray-900 mt-6 mb-3">{children}</h2>
+  ),
+  h3: ({ children }: { children?: React.ReactNode }) => (
+    <h3 className="text-xl font-semibold text-gray-800 mt-5 mb-2">{children}</h3>
+  ),
+  h4: ({ children }: { children?: React.ReactNode }) => (
+    <h4 className="text-lg font-semibold text-gray-800 mt-4 mb-2">{children}</h4>
+  ),
+  p: ({ children }: { children?: React.ReactNode }) => (
+    <p className="text-gray-700 leading-relaxed mb-3">{children}</p>
+  ),
+  ul: ({ children }: { children?: React.ReactNode }) => (
+    <ul className="list-disc ml-6 space-y-2 text-gray-700 mb-3">{children}</ul>
+  ),
+  ol: ({ children }: { children?: React.ReactNode }) => (
+    <ol className="list-decimal ml-6 space-y-2 text-gray-700 mb-3">{children}</ol>
+  ),
+  li: ({ children }: { children?: React.ReactNode }) => (
+    <li className="leading-relaxed">{children}</li>
+  ),
+  strong: ({ children }: { children?: React.ReactNode }) => (
+    <strong className="text-gray-900 font-semibold">{children}</strong>
+  ),
+  blockquote: ({ children }: { children?: React.ReactNode }) => (
+    <blockquote className="border-l-4 border-blue-400 bg-blue-50 p-4 italic rounded-md my-4 text-gray-700">
+      {children}
+    </blockquote>
+  )
+};
+
+const pickFallbackQuote = (exclude?: string): MotivationalQuote => {
+  const available = FALLBACK_QUOTES.filter((q) => q.quote !== exclude);
+  const pool = available.length > 0 ? available : FALLBACK_QUOTES;
+  // Use timestamp + random for better randomization
+  const seed = Date.now() + Math.random();
+  return pool[Math.floor(seed % pool.length)];
+};
+
+const normalizeBusinessPlanSummary = (summary: string): string => {
+  if (!summary) return "";
+
+  const lines = summary.split("\n");
+  const normalized = lines.map((rawLine) => {
+    const line = rawLine.trim();
+    if (!line) return "";
+
+    // Convert section headers with asterisks to proper markdown headers (bold)
+    // Match patterns like "**1. Section Name**" or "**Section Name**"
+    const headingMatch = line.match(/^\*\*(.+?)\*\*:?$/);
+    if (headingMatch) {
+      const heading = headingMatch[1].trim().replace(/:$/, "");
+      if (/^\d+\./.test(heading)) {
+        // Numbered section - use h3
+        return `### ${heading}`;
+      }
+      // Regular section - use h2
+      return `## ${heading}`;
+    }
+    
+    // Also handle headers that might have asterisks in the middle: "**1. Business Overview**"
+    const numberedHeadingMatch = line.match(/^\*\*(\d+\.\s*.+?)\*\*:?$/);
+    if (numberedHeadingMatch) {
+      const heading = numberedHeadingMatch[1].trim().replace(/:$/, "");
+      return `### ${heading}`;
+    }
+
+    // Preserve bold markdown in regular text (not headers)
+    return line.replace(/\*\*(.+?)\*\*/g, (_match, content) => `**${content.trim()}**`);
+  });
+
+  return normalized.join("\n");
+};
+
+const TRANSITION_QUOTE_STORAGE_PREFIX = "angel_transition_quote_";
+
+const convertSummaryToDocHtml = (markdown: string) => {
+  const lines = markdown.split('\n');
+  const htmlLines: string[] = [];
+  let inList = false;
+  
+  lines.forEach((rawLine) => {
+    const line = rawLine.trim();
+    
+    if (!line) {
+      if (inList) {
+        htmlLines.push('</ul>');
+        inList = false;
+      }
+      htmlLines.push('<br />');
+      return;
+    }
+    
+    // Handle headers
+    if (line.startsWith('###')) {
+      if (inList) {
+        htmlLines.push('</ul>');
+        inList = false;
+      }
+      const content = line.replace(/^###\s*/, '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      htmlLines.push(`<h3 style="color: #111827; font-size: 18px; font-weight: 600; margin-top: 20px; margin-bottom: 10px;">${content}</h3>`);
+      return;
+    }
+    
+    if (line.startsWith('##')) {
+      if (inList) {
+        htmlLines.push('</ul>');
+        inList = false;
+      }
+      const content = line.replace(/^##\s*/, '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      htmlLines.push(`<h2 style="color: #111827; font-size: 22px; font-weight: 600; margin-top: 24px; margin-bottom: 12px; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px;">${content}</h2>`);
+      return;
+    }
+    
+    if (line.startsWith('#')) {
+      if (inList) {
+        htmlLines.push('</ul>');
+        inList = false;
+      }
+      const content = line.replace(/^#\s*/, '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      htmlLines.push(`<h1 style="color: #111827; font-size: 28px; font-weight: 700; margin-top: 30px; margin-bottom: 15px;">${content}</h1>`);
+      return;
+    }
+    
+    // Handle lists
+    if (line.startsWith('- ') || line.startsWith('• ')) {
+      if (!inList) {
+        htmlLines.push('<ul style="margin: 10px 0; padding-left: 30px;">');
+        inList = true;
+      }
+      const content = line.replace(/^[-•]\s*/, '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      htmlLines.push(`<li style="margin: 5px 0; line-height: 1.6;">${content}</li>`);
+      return;
+    }
+    
+    // Handle numbered lists
+    if (/^\d+\.\s/.test(line)) {
+      if (inList) {
+        htmlLines.push('</ul>');
+        inList = false;
+      }
+      const content = line.replace(/^\d+\.\s*/, '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      htmlLines.push(`<p style="margin: 8px 0; line-height: 1.7; padding-left: 20px;"><strong style="color: #111827;">${line.match(/^\d+\./)?.[0]}</strong> ${content}</p>`);
+      return;
+    }
+    
+    // Regular paragraphs
+    if (inList) {
+      htmlLines.push('</ul>');
+      inList = false;
+    }
+    
+    const formatted = line.replace(/\*\*(.*?)\*\*/g, '<strong style="color: #111827; font-weight: 600;">$1</strong>');
+    htmlLines.push(`<p style="margin: 10px 0; line-height: 1.7; text-align: justify;">${formatted}</p>`);
+  });
+  
+  if (inList) {
+    htmlLines.push('</ul>');
+  }
+
+  return `<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="ProgId" content="Word.Document" />
+    <meta name="Generator" content="Microsoft Word" />
+    <meta name="Originator" content="Microsoft Word" />
+    <xml>
+      <w:WordDocument>
+        <w:View>Print</w:View>
+        <w:Zoom>100</w:Zoom>
+        <w:DoNotOptimizeForBrowser/>
+      </w:WordDocument>
+    </xml>
+    <style>
+      @page {
+        size: 8.5in 11in;
+        margin: 1in 1in 1in 1in;
+      }
+      body {
+        font-family: "Calibri", "Arial", sans-serif;
+        font-size: 11pt;
+        line-height: 1.6;
+        color: #1f2937;
+        max-width: 7.5in;
+        margin: 0 auto;
+      }
+      h1 {
+        color: #111827;
+        font-size: 20pt;
+        font-weight: 700;
+        margin-top: 24pt;
+        margin-bottom: 12pt;
+        page-break-after: avoid;
+      }
+      h2 {
+        color: #111827;
+        font-size: 16pt;
+        font-weight: 600;
+        margin-top: 18pt;
+        margin-bottom: 10pt;
+        border-bottom: 1.5pt solid #e5e7eb;
+        padding-bottom: 6pt;
+        page-break-after: avoid;
+      }
+      h3 {
+        color: #111827;
+        font-size: 14pt;
+        font-weight: 600;
+        margin-top: 14pt;
+        margin-bottom: 8pt;
+        page-break-after: avoid;
+      }
+      p {
+        margin: 8pt 0;
+        line-height: 1.7;
+        text-align: justify;
+      }
+      ul {
+        margin: 10pt 0;
+        padding-left: 30pt;
+      }
+      li {
+        margin: 4pt 0;
+        line-height: 1.6;
+      }
+      strong {
+        color: #111827;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    ${htmlLines.join('\n')}
+  </body>
+</html>`;
+};
+
+const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
+  businessPlanSummary,
+  businessPlanArtifact,
+  onApprove,
+  onRevisit,
+  loading = false,
+  sessionId,
+  initialQuote = null
+}) => {
+  const [isExporting, setIsExporting] = useState(false);
+  const [showModificationModal, setShowModificationModal] = useState(false);
+  const [selectedModifications, setSelectedModifications] = useState<string[]>([]);
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [quoteState, setQuoteState] = useState<MotivationalQuote>(() =>
+    initialQuote ?? pickFallbackQuote()
+  );
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const exportFileName = useMemo(() => {
+    const timestamp = new Date().toISOString().split('T')[0];
+    return `business-plan-summary-${timestamp}.doc`;
+  }, []);
+
+  const storageKey = useMemo(
+    () => `${TRANSITION_QUOTE_STORAGE_PREFIX}${sessionId ?? 'anonymous'}`,
+    [sessionId]
+  );
+
+  const normalizedSummary = useMemo(
+    () => normalizeBusinessPlanSummary(businessPlanSummary),
+    [businessPlanSummary]
+  );
+
+  const persistQuote = useCallback((quote: MotivationalQuote) => {
+    setQuoteState(quote);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(storageKey, quote.quote);
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const lastQuote =
+      typeof window !== 'undefined' ? localStorage.getItem(storageKey) ?? undefined : undefined;
+
+    if (initialQuote) {
+      const quoteToUse =
+        initialQuote.quote === lastQuote ? pickFallbackQuote(lastQuote) : initialQuote;
+      persistQuote(quoteToUse);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    const fetchQuote = async () => {
+      if (!sessionId) {
+        persistQuote(pickFallbackQuote(lastQuote));
+        return;
+      }
+
+      const token = localStorage.getItem('sb_access_token');
+      if (!token) {
+        persistQuote(pickFallbackQuote(lastQuote));
+        return;
+      }
+
+      try {
+        setQuoteLoading(true);
+        const response = await fetch(
+          `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/motivational-quote`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          }
+        );
+        const data = await response.json();
+        if (isMounted && data?.success && data.quote) {
+          const incoming = data.quote as MotivationalQuote;
+          if (incoming.quote === lastQuote) {
+            persistQuote(pickFallbackQuote(lastQuote));
+          } else {
+            persistQuote(incoming);
+          }
+        } else if (isMounted) {
+          persistQuote(pickFallbackQuote(lastQuote));
+        }
+      } catch (error) {
+        console.error('Failed to fetch motivational quote:', error);
+        if (isMounted) {
+          persistQuote(pickFallbackQuote(lastQuote));
+        }
+      } finally {
+        if (isMounted) {
+          setQuoteLoading(false);
+        }
+      }
+    };
+
+    fetchQuote();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [initialQuote, persistQuote, sessionId, storageKey]);
+
+  // Define modification areas based on business plan sections
+  const modificationAreas: ModificationArea[] = [
+    {
+      id: 'business-overview',
+      title: 'Business Overview',
+      description: 'Core business concept, mission, vision, and value proposition',
+      questions: [
+        'Is your business concept clearly defined?',
+        'Are your mission and vision statements compelling?',
+        'Is your value proposition unique and marketable?'
+      ]
+    },
+    {
+      id: 'market-research',
+      title: 'Market Research & Analysis',
+      description: 'Target market, customer segments, and competitive landscape',
+      questions: [
+        'Have you thoroughly researched your target market?',
+        'Are your customer personas detailed and accurate?',
+        'Is your competitive analysis comprehensive?'
+      ]
+    },
+    {
+      id: 'financial-projections',
+      title: 'Financial Projections',
+      description: 'Revenue models, cost structure, and financial forecasts',
+      questions: [
+        'Are your revenue projections realistic?',
+        'Have you accounted for all startup costs?',
+        'Do you have a clear path to profitability?'
+      ]
+    },
+    {
+      id: 'operations',
+      title: 'Operations & Logistics',
+      description: 'Day-to-day operations, supply chain, and resource requirements',
+      questions: [
+        'Are your operational processes clearly defined?',
+        'Have you identified key suppliers and partners?',
+        'Is your resource planning complete?'
+      ]
+    },
+    {
+      id: 'marketing-strategy',
+      title: 'Marketing & Sales Strategy',
+      description: 'Customer acquisition, branding, and sales processes',
+      questions: [
+        'Is your marketing strategy comprehensive?',
+        'Have you defined your sales process?',
+        'Are your branding elements consistent?'
+      ]
+    },
+    {
+      id: 'legal-compliance',
+      title: 'Legal & Compliance',
+      description: 'Business structure, licenses, permits, and regulatory requirements',
+      questions: [
+        'Is your business structure optimal?',
+        'Have you identified all required licenses?',
+        'Are you compliant with regulations?'
+      ]
+    }
+  ];
+
+  const handleExportPlan = async () => {
+    setIsExporting(true);
+    try {
+      const htmlContent = convertSummaryToDocHtml(normalizedSummary);
+      const element = document.createElement('a');
+      const file = new Blob([htmlContent], { type: 'application/msword' });
+      element.href = URL.createObjectURL(file);
+      element.download = exportFileName;
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+      
+      toast.success('Business plan summary exported as Word document!');
+    } catch {
+      toast.error('Failed to export business plan summary');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleRevisitClick = () => {
+    setShowModificationModal(true);
+  };
+
+  const handleModificationToggle = (areaId: string) => {
+    setSelectedModifications(prev => 
+      prev.includes(areaId) 
+        ? prev.filter(id => id !== areaId)
+        : [...prev, areaId]
+    );
+  };
+
+  const handleConfirmModifications = () => {
+    if (selectedModifications.length === 0) {
+      toast.warning('Please select at least one area to modify');
+      return;
+    }
+    
+    setShowModificationModal(false);
+    onRevisit(selectedModifications);
+    setSelectedModifications([]);
+  };
+
+  const handleCancelModifications = () => {
+    setShowModificationModal(false);
+    setSelectedModifications([]);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 flex items-center justify-center px-4">
+      <div className="w-full max-w-4xl bg-white/90 backdrop-blur-xl border border-white/30 shadow-2xl rounded-3xl p-8">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="w-20 h-20 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full flex items-center justify-center text-white text-4xl mx-auto mb-4">
+            🏆
+          </div>
+          <h1 className="text-2xl md:text-4xl font-bold text-gray-900 mb-2">
+            🎉 CONGRATULATIONS! Planning Champion Award 🎉
+          </h1>
+          <p className="text-lg text-gray-600 mb-4">
+            You've successfully completed your comprehensive business plan! This is a significant milestone in your entrepreneurial journey.
+          </p>
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 mb-6">
+            <blockquote className="text-lg font-medium text-blue-800 italic">
+              {quoteLoading ? 'Loading inspiration…' : `“${quoteState.quote}”`}
+            </blockquote>
+            {!quoteLoading && (
+              <cite className="text-sm text-blue-600 mt-2 block">– {quoteState.author}</cite>
+            )}
+          </div>
+        </div>
+
+        {/* Business Plan Summary Overview */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              📋 Business Plan Summary Overview
+            </h2>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowPaywall(true)}
+                className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2"
+              >
+                📄 {businessPlanArtifact ? 'View Full Business Plan' : 'View Full Business Plan'}
+              </button>
+              <button
+                onClick={handleExportPlan}
+                disabled={isExporting}
+                className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 disabled:opacity-50"
+              >
+                {isExporting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Exporting...
+                  </>
+                ) : (
+                  <>
+                    📥 Export Summary
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+          
+          {/* Clarification Note */}
+          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 rounded-r-lg">
+            <div className="flex items-start gap-3">
+              <span className="text-blue-600 text-xl">ℹ️</span>
+              <div>
+                <p className="text-sm font-semibold text-blue-900 mb-1">Note About Your Business Plan</p>
+                <p className="text-sm text-blue-800">
+                  This is a <strong>high-level summary</strong> of your comprehensive Business Plan. Your complete{' '}
+                  <strong>Business Plan Artifact</strong> has been generated and is available for download.
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 max-h-96 overflow-y-auto prose prose-sm max-w-none text-gray-800">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={markdownComponents}
+            >
+                {normalizedSummary}
+            </ReactMarkdown>
+          </div>
+        </div>
+
+        {/* What's Next Section - Moved before Roadmap Structure */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+            🚀 What's Next: Roadmap Generation
+          </h2>
+          <div className="bg-gradient-to-r from-teal-50 to-blue-50 border border-teal-200 rounded-xl p-6">
+            <p className="text-gray-700 mb-4">
+              Based on your detailed business plan, I will now generate a comprehensive, actionable launch roadmap that translates your plan into explicit, chronological tasks. This roadmap will include:
+            </p>
+            
+            {/* Five Phases Overview */}
+            <div className="bg-white/70 rounded-lg p-4 mb-4 border border-teal-100">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-blue-600 font-bold">1.</span>
+                  <span className="text-gray-800"><strong>Legal Formation</strong> - Business structure, licensing, permits</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-green-600 font-bold">2.</span>
+                  <span className="text-gray-800"><strong>Financial Planning</strong> - Funding strategies, budgeting, accounting setup</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-purple-600 font-bold">3.</span>
+                  <span className="text-gray-800"><strong>Product & Operations</strong> - Supply chain, equipment, operational processes</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-orange-600 font-bold">4.</span>
+                  <span className="text-gray-800"><strong>Marketing & Sales</strong> - Brand positioning, customer acquisition, sales processes</span>
+                </div>
+                <div className="flex items-center gap-2 md:col-span-2">
+                  <span className="text-teal-600 font-bold">5.</span>
+                  <span className="text-gray-800"><strong>Full Launch & Scaling</strong> - Go-to-market strategy, growth planning</span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Research Sources Highlight */}
+            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-lg p-4 mb-4">
+              <h4 className="font-bold text-indigo-900 mb-3 flex items-center gap-2">
+                <span className="text-xl">🔬</span>
+                Research-Backed Recommendations
+              </h4>
+              <p className="text-sm text-indigo-800 mb-3">
+                The roadmap will be tailored specifically to your business, industry, and location, with research drawn from:
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="bg-white/70 rounded-lg p-3 border border-indigo-200">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-indigo-600">🏛️</span>
+                    <h5 className="font-semibold text-gray-900 text-sm">Government Sources</h5>
+                  </div>
+                  <p className="text-xs text-gray-600">SBA, IRS, SEC, state agencies, regulatory bodies</p>
+                </div>
+                <div className="bg-white/70 rounded-lg p-3 border border-indigo-200">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-indigo-600">🎓</span>
+                    <h5 className="font-semibold text-gray-900 text-sm">Academic Research</h5>
+                  </div>
+                  <p className="text-xs text-gray-600">Universities, Google Scholar, JSTOR, research institutions</p>
+                </div>
+                <div className="bg-white/70 rounded-lg p-3 border border-indigo-200">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-indigo-600">📰</span>
+                    <h5 className="font-semibold text-gray-900 text-sm">Industry Reports</h5>
+                  </div>
+                  <p className="text-xs text-gray-600">Bloomberg, WSJ, Forbes, Harvard Business Review</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="font-semibold text-blue-900 mb-2">📋 Your Roadmap Will Include:</h4>
+              <ul className="text-blue-800 text-sm space-y-1">
+                <li>• <strong>Actionable Steps:</strong> Specific tasks with clear timelines in table format</li>
+                <li>• <strong>Research Citations:</strong> Source references for each step (Government, Academic, Industry)</li>
+                <li>• <strong>Decision Points:</strong> Multiple options presented for informed choices</li>
+                <li>• <strong>Service Providers:</strong> Local and credible providers for each task</li>
+                <li>• <strong>Progress Tracking:</strong> Clear milestones and completion indicators</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Roadmap Structure Section */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+            🎯 Roadmap Structure
+          </h2>
+          <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-6">
+            <p className="text-gray-700 mb-6">
+              Each phase of your roadmap is strategically sequenced to build a strong foundation for your business. Here's why this order is crucial for your success:
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                    1
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Legal Formation First</h3>
+                    <p className="text-sm text-gray-600 mb-2">Business structure, licensing, permits</p>
+                    <p className="text-xs text-gray-500">
+                      <strong>Why first?</strong> Establishes your business foundation and protects your interests before any operations begin. 
+                      This legal structure determines your tax obligations, liability protection, and business capabilities.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                    2
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Financial Planning Second</h3>
+                    <p className="text-sm text-gray-600 mb-2">Funding strategies, budgeting, accounting setup</p>
+                    <p className="text-xs text-gray-500">
+                      <strong>Why second?</strong> Sets up your financial systems and funding strategies to support all subsequent operations. 
+                      Without proper financial foundation, you can't effectively manage cash flow or secure necessary resources.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                    3
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Product & Operations Third</h3>
+                    <p className="text-sm text-gray-600 mb-2">Supply chain, equipment, operational processes</p>
+                    <p className="text-xs text-gray-500">
+                      <strong>Why third?</strong> Builds your operational infrastructure once legal and financial foundations are secure. 
+                      This ensures you can deliver your product or service efficiently and sustainably.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                    4
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Marketing & Sales Fourth</h3>
+                    <p className="text-sm text-gray-600 mb-2">Brand positioning, customer acquisition, sales processes</p>
+                    <p className="text-xs text-gray-500">
+                      <strong>Why fourth?</strong> Promotes your business once all systems are in place and ready to handle customer demand. 
+                      This prevents overwhelming your unprepared operations with too much demand too soon.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-teal-500 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                    5
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Full Launch & Scaling Last</h3>
+                    <p className="text-sm text-gray-600 mb-2">Go-to-market strategy, growth planning</p>
+                    <p className="text-xs text-gray-500">
+                      <strong>Why last?</strong> Executes your complete business strategy when all foundational elements are ready. 
+                      This systematic approach maximizes your chances of sustainable success and growth.
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <div className="flex items-start gap-2">
+                    <span className="text-yellow-600 text-sm">💡</span>
+                    <div>
+                      <h4 className="text-sm font-semibold text-yellow-800">Strategic Sequencing</h4>
+                      <p className="text-xs text-yellow-700">
+                        Each phase builds upon the previous one, creating a strong foundation that supports sustainable growth. 
+                        Skipping or rushing phases can lead to costly mistakes and operational challenges.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+
+        {/* Decision Buttons */}
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">
+            Ready to Move Forward?
+          </h2>
+          <p className="text-gray-600 mb-8">
+            Please review your business plan summary above. If everything looks accurate and complete, you can:
+          </p>
+          
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <button
+              onClick={onApprove}
+              disabled={loading}
+              className="group relative bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white px-10 py-5 rounded-xl text-xl font-bold shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border-2 border-green-400"
+            >
+              <div className="flex flex-col items-center justify-center gap-2">
+                <div className="flex items-center justify-center gap-3">
+                  <span className="text-2xl animate-pulse">🚀</span>
+                  <span className="text-2xl">Continue to Roadmap</span>
+                </div>
+                <div className="text-sm opacity-95 font-medium">Proceed to roadmap generation</div>
+              </div>
+              <div className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            </button>
+
+            <button
+              onClick={handleRevisitClick}
+              disabled={loading}
+              className="group relative bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-8 py-4 rounded-xl text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+            >
+              <div className="flex items-center justify-center gap-3">
+                <span className="text-xl">🔄</span>
+                <span>Modify</span>
+              </div>
+              <div className="text-sm opacity-90 mt-1">Adjust any aspects that need refinement</div>
+              <div className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Business Plan Paywall Modal */}
+      <BusinessPlanPaywall
+        isOpen={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        onPurchase={async () => {
+          // No payment needed - artifact is free to view
+          if (businessPlanArtifact) {
+            toast.success('Full Business Plan Artifact is available!');
+          } else {
+            toast.info('Business Plan Artifact is being generated...');
+          }
+        }}
+        businessPlanSummary={normalizedSummary}
+        fullBusinessPlan={businessPlanArtifact || undefined}
+        price={0}
+        loading={false}
+      />
+      
+      {/* Debug: Log artifact availability */}
+      {businessPlanArtifact && (
+        <div style={{ display: 'none' }}>
+          Business Plan Artifact available: {businessPlanArtifact.length} characters
+        </div>
+      )}
+
+      {/* Modification Modal */}
+      {showModificationModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Select Areas to Modify</h2>
+              <p className="text-gray-600">
+                Choose which sections of your business plan need adjustment. We'll guide you through the modification process for each selected area.
+              </p>
+            </div>
+
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                {modificationAreas.map((area) => (
+                  <div
+                    key={area.id}
+                    className={`border-2 rounded-lg p-4 cursor-pointer transition-all duration-200 ${
+                      selectedModifications.includes(area.id)
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    onClick={() => handleModificationToggle(area.id)}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                        selectedModifications.includes(area.id)
+                          ? 'border-blue-500 bg-blue-500'
+                          : 'border-gray-300'
+                      }`}>
+                        {selectedModifications.includes(area.id) && (
+                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900 mb-1">{area.title}</h3>
+                        <p className="text-sm text-gray-600 mb-2">{area.description}</p>
+                        <div className="space-y-1">
+                          {area.questions.map((question) => (
+                            <p key={question} className="text-xs text-gray-500">• {question}</p>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {selectedModifications.length > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                  <h4 className="font-semibold text-blue-900 mb-2">Selected Areas:</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedModifications.map((areaId) => {
+                      const area = modificationAreas.find(a => a.id === areaId);
+                      return (
+                        <span
+                          key={areaId}
+                          className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm"
+                        >
+                          {area?.title}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={handleCancelModifications}
+                  className="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmModifications}
+                  className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
+                >
+                  Proceed with Modifications ({selectedModifications.length})
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+};
+
+export default PlanToRoadmapTransition;
