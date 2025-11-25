@@ -43,6 +43,9 @@ const KickstartModal: React.FC<KickstartModalProps> = ({
 
   if (!isOpen || !task || !kickstartPlan) return null;
 
+  // Ensure sub_tasks is an array
+  const subTasks = Array.isArray(kickstartPlan.sub_tasks) ? kickstartPlan.sub_tasks : [];
+
   const handleSubTaskToggle = (subTask: string) => {
     setSelectedSubTasks(prev => 
       prev.includes(subTask) 
@@ -52,10 +55,10 @@ const KickstartModal: React.FC<KickstartModalProps> = ({
   };
 
   const handleSelectAll = () => {
-    if (selectedSubTasks.length === kickstartPlan.sub_tasks.length) {
+    if (selectedSubTasks.length === subTasks.length && subTasks.length > 0) {
       setSelectedSubTasks([]);
     } else {
-      setSelectedSubTasks([...kickstartPlan.sub_tasks]);
+      setSelectedSubTasks([...subTasks]);
     }
   };
 
@@ -133,6 +136,7 @@ const KickstartModal: React.FC<KickstartModalProps> = ({
           </div>
 
           {/* Sub-tasks Selection */}
+          {subTasks.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-semibold text-gray-900">✨ Angel Actions Available</h3>
@@ -140,11 +144,11 @@ const KickstartModal: React.FC<KickstartModalProps> = ({
                 onClick={handleSelectAll}
                 className="text-sm text-teal-600 hover:text-teal-800 font-medium"
               >
-                {selectedSubTasks.length === kickstartPlan.sub_tasks.length ? 'Deselect All' : 'Select All'}
+                {selectedSubTasks.length === subTasks.length ? 'Deselect All' : 'Select All'}
               </button>
             </div>
             <div className="space-y-2">
-              {kickstartPlan.sub_tasks.map((subTask, index) => (
+              {subTasks.map((subTask, index) => (
                 <label key={index} className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
                   <input
                     type="checkbox"
@@ -159,6 +163,7 @@ const KickstartModal: React.FC<KickstartModalProps> = ({
               ))}
             </div>
           </div>
+          )}
 
           {/* Timeline */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -166,7 +171,7 @@ const KickstartModal: React.FC<KickstartModalProps> = ({
             <div className="text-sm text-blue-800 space-y-1">
               <p><span className="font-medium">Estimated Time:</span> {kickstartPlan.estimated_time}</p>
               <p><span className="font-medium">Priority Level:</span> {kickstartPlan.priority}</p>
-              <p><span className="font-medium">Selected Actions:</span> {selectedSubTasks.length} of {kickstartPlan.sub_tasks.length}</p>
+              <p><span className="font-medium">Selected Actions:</span> {selectedSubTasks.length} of {subTasks.length}</p>
             </div>
           </div>
 
