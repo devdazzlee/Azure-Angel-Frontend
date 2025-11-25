@@ -216,10 +216,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   };
 
   const handleComplete = async () => {
-    if (!selectedOption && task.options.length > 0) {
-      setError('Please select an option before completing the task');
-      return;
-    }
+    // Decision field is now optional - no validation needed
 
     // CRITICAL: Check if all substeps are completed before allowing task completion
     if (task.substeps && task.substeps.length > 0) {
@@ -445,16 +442,21 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </div>
         )}
 
-        {/* Decision Options */}
+        {/* Decision Options - Optional, only show when completing the full task */}
         {task.options.length > 0 && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Select Your Option</label>
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Optional: What approach did you choose?
+            </label>
+            <p className="text-xs text-gray-500 mb-3">
+              Help us track your decisions (e.g., "LLC" for business structure, "Online Registration" for registration). This is optional.
+            </p>
             <select 
               value={selectedOption} 
               onChange={(e) => setSelectedOption(e.target.value)}
-              className="w-full max-w-md p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-sm"
             >
-              <option value="">Choose an option...</option>
+              <option value="">-- Optional: Select your approach --</option>
               {task.options.map((option, index) => (
                 <option key={index} value={option}>
                   {option}
@@ -521,11 +523,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     li: ({ children }) => <li className="leading-relaxed">{children}</li>,
                     strong: ({ children }) => <strong className="font-semibold text-green-900">{children}</strong>,
                     em: ({ children }) => <em className="italic">{children}</em>,
-                    code: ({ children, inline }) => inline ? (
-                      <code className="bg-green-100 text-green-900 px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>
-                    ) : (
-                      <pre className="bg-green-100 text-green-900 p-2 rounded text-xs font-mono overflow-x-auto mb-2"><code>{children}</code></pre>
-                    ),
+                    code: ({ children, ...props }: any) => {
+                      const isInline = props.inline !== false;
+                      return isInline ? (
+                        <code className="bg-green-100 text-green-900 px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>
+                      ) : (
+                        <pre className="bg-green-100 text-green-900 p-2 rounded text-xs font-mono overflow-x-auto mb-2"><code>{children}</code></pre>
+                      );
+                    },
                     blockquote: ({ children }) => (
                       <blockquote className="border-l-4 border-green-400 bg-green-100 p-2 italic rounded my-2 text-sm text-green-800">
                         {children}
@@ -586,7 +591,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         <div className="flex flex-col sm:flex-row gap-3">
           <button
             onClick={handleComplete}
-            disabled={loading || (task.options.length > 0 && !selectedOption)}
+            disabled={loading}
             className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
           >
             {loading ? (

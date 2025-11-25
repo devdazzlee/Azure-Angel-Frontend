@@ -561,16 +561,16 @@ const Implementation: React.FC<ImplementationProps> = ({
             </div>
               <div className="flex items-center gap-4">
               <ProgressCircle
-                progress={progress.percent}
+                progress={Math.min(100, progress.percent)}
                 phase="IMPLEMENTATION"
               />
               <div className="text-right">
                 <p className="text-sm text-gray-600">Overall Progress</p>
                 <p className="text-lg font-semibold text-gray-900">
-                  {progress.completed}/{progress.total} steps
+                  {(progress as any).main_tasks_completed ?? completedTasks.filter(t => !t.includes('_substep_')).length}/25 tasks
                 </p>
                 <p className="text-xs text-gray-500">
-                  ({completedTasks.filter(t => !t.includes('_substep_')).length} main tasks completed)
+                  {(progress as any).substeps_completed ?? completedTasks.filter(t => t.includes('_substep_')).length} steps completed
                 </p>
                 {progress.milestone && (
                   <p className="text-xs text-teal-600 font-medium mt-1">
@@ -654,77 +654,52 @@ const Implementation: React.FC<ImplementationProps> = ({
 
             {/* Sidebar */}
             <div className="space-y-6">
-              {/* Progress Overview */}
+              {/* Progress Overview - Simplified */}
               <div className="bg-white/90 backdrop-blur-xl border border-white/30 rounded-xl p-6 shadow-sm">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Progress Overview</h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Steps Completed</span>
-                    <span className="font-medium">{progress.completed}/{progress.total}</span>
-                    <span className="text-xs text-gray-500">(includes substeps)</span>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Your Progress</h3>
+                
+                {/* Main Progress Bar */}
+                <div className="mb-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-medium text-gray-700">Tasks Completed</span>
+                    <span className="text-lg font-bold text-teal-600">
+                      {(progress as any).main_tasks_completed ?? completedTasks.filter(t => !t.includes('_substep_')).length}/25
+                    </span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Main Tasks Completed</span>
-                    <span className="font-medium">{completedTasks.filter(t => !t.includes('_substep_')).length}/25</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Phases Completed</span>
-                    <span className="font-medium">{progress.phases_completed || 0}/5</span>
-                  </div>
-                  {progress.milestone && (
-                    <div className="p-2 bg-teal-50 rounded-lg border border-teal-200">
-                      <p className="text-xs text-teal-800 font-medium">Current Milestone:</p>
-                      <p className="text-sm text-teal-900 font-semibold">{progress.milestone}</p>
-                    </div>
-                  )}
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-gray-200 rounded-full h-3">
                     <div
-                      className="bg-teal-500 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${progress.percent}%` }}
+                      className="bg-gradient-to-r from-teal-500 to-green-500 h-3 rounded-full transition-all duration-300"
+                      style={{ width: `${Math.min(100, progress.percent)}%` }}
                     ></div>
                   </div>
-                  {/* Phase Progress Indicators */}
-                  <div className="mt-4 space-y-2">
-                    <p className="text-xs font-medium text-gray-700 mb-2">Phase Progress:</p>
-                    {['Legal Foundation', 'Financial Systems', 'Operations Setup', 'Marketing & Sales', 'Launch & Growth'].map((phase, index) => {
-                      // Get phase progress from backend if available, otherwise use phases_completed count
-                      const phaseProgress = progress.phase_progress?.[phase as keyof typeof progress.phase_progress];
-                      const isCompleted = phaseProgress ? phaseProgress.percent === 100 : (progress.phases_completed || 0) > index;
-                      const isInProgress = phaseProgress ? phaseProgress.percent > 0 && phaseProgress.percent < 100 : (progress.phases_completed || 0) === index;
-                      const progressPercent = phaseProgress ? phaseProgress.percent : 0;
-                      
-                      return (
-                        <div key={phase} className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${
-                              isCompleted ? 'bg-green-500' : 
-                              isInProgress ? 'bg-teal-500' : 'bg-gray-300'
-                            }`} />
-                            <span className={`text-xs flex-1 ${
-                              isCompleted ? 'text-green-700 font-medium' : 
-                              isInProgress ? 'text-teal-700 font-medium' : 'text-gray-500'
-                            }`}>
-                              {phase}
-                            </span>
-                            {phaseProgress && (
-                              <span className="text-xs text-gray-500">
-                                {phaseProgress.completed}/{phaseProgress.total}
-                              </span>
-                            )}
-                          </div>
-                          {isInProgress && phaseProgress && (
-                            <div className="ml-4 w-full bg-gray-200 rounded-full h-1">
-                              <div 
-                                className="bg-teal-500 h-1 rounded-full transition-all duration-300"
-                                style={{ width: `${progressPercent}%` }}
-                              />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                  <p className="text-xs text-gray-500 mt-1 text-center">
+                    {Math.min(100, progress.percent)}% Complete
+                  </p>
+                </div>
+
+                {/* Simple Stats */}
+                <div className="grid grid-cols-2 gap-3 pt-4 border-t border-gray-200">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-teal-600">
+                      {progress.phases_completed || 0}
+                    </p>
+                    <p className="text-xs text-gray-600">Phases Done</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-blue-600">
+                      {(progress as any).substeps_completed ?? completedTasks.filter(t => t.includes('_substep_')).length}
+                    </p>
+                    <p className="text-xs text-gray-600">Steps Done</p>
                   </div>
                 </div>
+
+                {/* Current Phase */}
+                {progress.milestone && (
+                  <div className="mt-4 p-3 bg-teal-50 rounded-lg border border-teal-200">
+                    <p className="text-xs text-teal-800 font-medium mb-1">Current Phase:</p>
+                    <p className="text-sm text-teal-900 font-semibold">{progress.milestone}</p>
+                  </div>
+                )}
               </div>
 
               {/* Quick Actions */}
