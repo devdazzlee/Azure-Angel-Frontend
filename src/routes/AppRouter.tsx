@@ -15,6 +15,7 @@ import {
 import RoadmapPage from "../pages/Roadmap/RoadmapPage";
 import Layout from "../features/Dashboard";
 import ChatLayout from "../layout/chatLayout";
+import TestQuestionFormatter from "../pages/TestQuestionFormatter";
 
 const isAuthenticated = (): boolean =>
   !!localStorage.getItem("sb_access_token");
@@ -92,6 +93,10 @@ const router = createBrowserRouter([
             path: "/about",
             element: <AboutUs />,
             errorElement: <AboutUs />,
+          },
+          {
+            path: "/test-question-formatter",
+            element: <TestQuestionFormatter />,
           },
         ],
       },

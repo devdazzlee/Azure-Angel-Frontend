@@ -289,8 +289,13 @@ const SmartInput: React.FC<SmartInputProps> = ({
           />
         </div>
         <button
+          type="button"
           className="bg-gradient-to-r from-teal-500 to-blue-500 hover:from-teal-600 hover:to-blue-600 text-white p-2 sm:p-2.5 rounded-lg font-medium text-sm disabled:opacity-50 shadow-md transition-all duration-200 flex-shrink-0"
-          onClick={() => onSubmit(value)}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onSubmit(value);
+          }}
           disabled={loading || !value.trim()}
         >
           {loading ? (

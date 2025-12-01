@@ -33,6 +33,8 @@ import Implementation from "../Implementation";
 import RoadmapEditModal from "../../components/RoadmapEditModal";
 import BusinessQuestionFormatter from "../../components/BusinessQuestionFormatter";
 import BackButton from "../../components/BackButton";
+import AngelThinkingLoader from "../../components/AngelThinkingLoader";
+import QuestionFormatter from "../../components/QuestionFormatter";
 
 interface ConversationPair {
   question: string;
@@ -2733,11 +2735,21 @@ export default function ChatPage() {
       return;
     }
 
+    // Store current question for history
+    const previousQuestion = currentQuestion;
+    const previousQuestionNumber = currentQuestionNumber;
+
+    // Optimistically update UI immediately - add user's message to history
+    // DO NOT clear currentQuestion - it causes early return and looks like page refresh
     setLoading(true);
     setCurrentInput("");
     
-    // Don't add to history yet - wait to see if it's a transition
-    let shouldAddToHistory = true;
+    // Immediately add user's message to history
+    // Keep currentQuestion visible - UI will show loading state on top of it
+    setHistory((prev) => [
+      ...prev,
+      { question: previousQuestion, answer: input, questionNumber: previousQuestionNumber },
+    ]);
 
     try {
       const response = await fetchQuestion(input, sessionId!);
@@ -2774,8 +2786,8 @@ export default function ChatPage() {
           businessPlanSummary: summary,
           transitionPhase: "PLAN_TO_ROADMAP"
         });
-        // Don't add to history - show modal instead
-        shouldAddToHistory = false;
+        // Remove optimistic update - show modal instead
+        setHistory((prev) => prev.slice(0, -1));
         setLoading(false);
         return;
       }
@@ -2797,18 +2809,10 @@ export default function ChatPage() {
             autoClose: 5000
           });
         }
-        // Don't add to history - show modal instead
-        shouldAddToHistory = false;
+        // Remove optimistic update - show modal instead
+        setHistory((prev) => prev.slice(0, -1));
         setLoading(false);
         return;
-      }
-      
-      // Only add to history if NOT a transition
-      if (shouldAddToHistory) {
-        setHistory((prev) => [
-          ...prev,
-          { question: currentQuestion, answer: input, questionNumber: currentQuestionNumber },
-        ]);
       }
 
       // Handle KYC to Business Plan transition
@@ -2818,6 +2822,7 @@ export default function ChatPage() {
           kycSummary: reply || "KYC completed successfully!",
           isActive: true
         });
+        // Keep the optimistic update for this transition
         return;
       }
       
@@ -2827,9 +2832,11 @@ export default function ChatPage() {
           roadmapContent: reply,
           isGenerated: true
         });
+        // Keep the optimistic update for this transition
         return;
       }
       
+      // Update current question with the new question from API response
       const formatted = formatAngelMessage(reply);
       const nextQuestionNumber = deriveQuestionNumber(question_number, reply, progress);
       setCurrentQuestion(formatted);
@@ -2854,7 +2861,8 @@ export default function ChatPage() {
     } catch (error) {
       console.error("Failed to fetch question:", error);
       toast.error("Something went wrong.");
-        setHistory((prev) => prev.slice(0, -1));
+      // Remove optimistic update on error - restore input
+      setHistory((prev) => prev.slice(0, -1));
       setCurrentInput(input);
     } finally {
       setLoading(false);
@@ -3670,13 +3678,7 @@ export default function ChatPage() {
                         </div>
                       )}
                       <div className="text-gray-800 whitespace-pre-wrap text-sm">
-                        {progress.phase === "KYC" ? (
-                          <div dangerouslySetInnerHTML={{ 
-                            __html: formatQuestionText(pair.question).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') 
-                          }} />
-                ) : (
-                  <BusinessQuestionFormatter text={pair.question} />
-                )}
+                        <QuestionFormatter text={pair.question} phase={progress.phase} />
                       </div>
                     </div>
                   </div>
@@ -3723,15 +3725,10 @@ export default function ChatPage() {
                     )}
                     <div className="text-gray-800 whitespace-pre-wrap text-sm angel-intro-text">
                       {loading ? (
-                        <div className="flex items-center gap-2">
-                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-teal-500"></div>
-                          <span className="text-teal-600 text-xs">
-                            Angel is thinking...
-                          </span>
-                        </div>
+                        <AngelThinkingLoader />
                       ) : progress.phase === "ROADMAP" || progress.phase === "ROADMAP_GENERATED" ? (
                         <div className="space-y-4">
-                          <BusinessQuestionFormatter text={currentQuestion || "Your roadmap is ready!"} />
+                          <QuestionFormatter text={currentQuestion || "Your roadmap is ready!"} phase={progress.phase} />
                           <div className="mt-4 flex gap-3">
                             <button
                               onClick={() => navigate(`/ventures/${sessionId}/roadmap`)}
@@ -3750,55 +3747,7 @@ export default function ChatPage() {
                           </div>
                         </div>
                       ) : (
-                        progress.phase === "KYC" ? (
-                        <div dangerouslySetInnerHTML={{ 
-                          __html: (() => {
-                            let html = formatQuestionText(currentQuestion || "Loading...");
-                            
-                            // Apply aggressive cleanup for Angel introduction text
-                            if (html.toLowerCase().includes('welcome to founderport')) {
-                              // Clean up excessive spacing
-                              html = html.replace(/\n{3,}/g, '\n\n');
-                              html = html.replace(/\n\s*\n\s*\n/g, '\n\n');
-                              
-                              // Fix spacing around journey question
-                              html = html.replace(/\n\s*\n\s*Are you ready to begin your journey\?\s*\n\s*\n/g, '\n\nAre you ready to begin your journey?\n\n');
-                              html = html.replace(/\n{2,}\s*Are you ready to begin your journey\?\s*\n{2,}/g, '\n\nAre you ready to begin your journey?\n\n');
-                              
-                              // Fix spacing around questionnaire intro
-                              html = html.replace(/\n\s*\n\s*Let's start with the Getting to Know You questionnaire/g, '\n\nLet\'s start with the Getting to Know You questionnaire');
-                              
-                              // Fix spacing in critiquing feedback messages
-                              html = html.replace(/I need more detail from you\. That answer seems quite brief\.\s*\n\s*\n\s*\n\s*\n\s*Could you elaborate more\?/g, 'I need more detail from you. That answer seems quite brief.\n\nCould you elaborate more?');
-                              html = html.replace(/What specific aspects are you considering\s*\n\s*\n\s*\n\s*\n\s*\?/g, 'What specific aspects are you considering?');
-                              html = html.replace(/What challenges do you anticipate\s*\n\s*\n\s*\n\s*\n\s*\?/g, 'What challenges do you anticipate?');
-                            }
-                            
-                            // Convert to HTML with comprehensive spacing cleanup
-                            return html
-                              .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                              .replace(/\n\n\n+/g, '\n\n') // Reduce 3+ newlines to 2
-                              .replace(/\n/g, '<br>')
-                              // Comprehensive cleanup of excessive br tags
-                              .replace(/<br><br><br><br><br><br>/g, '<br><br>') // Reduce 6 br tags to 2
-                              .replace(/<br><br><br><br><br>/g, '<br><br>') // Reduce 5 br tags to 2
-                              .replace(/<br><br><br><br>/g, '<br><br>') // Reduce 4 br tags to 2
-                              .replace(/<br><br><br>/g, '<br><br>') // Reduce 3 br tags to 2
-                              // Specific cleanup for questions
-                              .replace(/<br><br><strong>Are you ready to begin your journey\?<\/strong><br><br>/g, '<br><strong>Are you ready to begin your journey?</strong><br>')
-                              .replace(/<br><br><strong>What's your name and preferred name or nickname\?<\/strong><br><br>/g, '<br><strong>What\'s your name and preferred name or nickname?</strong>')
-                              .replace(/<br><br><br><br><strong>Are you ready to begin your journey\?<\/strong><br><br><br><br>/g, '<br><strong>Are you ready to begin your journey?</strong><br>')
-                              // Cleanup for critiquing feedback messages
-                              .replace(/I need more detail from you\. That answer seems quite brief\.<br><br><br><br><br>Could you elaborate more\?/g, 'I need more detail from you. That answer seems quite brief.<br><br>Could you elaborate more?')
-                              .replace(/What specific aspects are you considering<br><br><br><br><br>\?/g, 'What specific aspects are you considering?')
-                              .replace(/What challenges do you anticipate<br><br><br><br><br>\?/g, 'What challenges do you anticipate?')
-                              // Final cleanup - reduce any remaining excessive spacing
-                              .replace(/<br><br><br>/g, '<br><br>');
-                          })()
-                        }} />
-                      ) : (
-                        <BusinessQuestionFormatter text={currentQuestion || "Loading..."} />
-                )
+                        <QuestionFormatter text={currentQuestion || "Loading..."} phase={progress.phase} />
                       )}
                     </div>
                     

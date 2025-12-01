@@ -10,7 +10,11 @@
     "preview": "vite preview",
     "start": "node startup.js",
     "azure:build": "npm run build",
-    "azure:start": "npm run start"
+    "azure:start": "npm run start",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.12",
@@ -70,6 +74,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",
+    "@playwright/test": "^1.57.0",
     "@types/axios": "^0.9.36",
     "@types/node": "^24.5.2",
     "@types/react": "^19.1.2",
@@ -80,6 +85,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.0.0",
+    "playwright": "^1.57.0",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
     "terser": "^5.44.0",
