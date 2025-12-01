@@ -3,10 +3,10 @@ import ReactMarkdown from 'react-markdown';
 
 interface QuestionFormatterProps {
   text: string;
-  phase?: 'KYC' | 'BUSINESS_PLAN' | 'ROADMAP' | 'IMPLEMENTATION';
+  phase?: 'KYC' | 'BUSINESS_PLAN' | 'PLAN_TO_ROADMAP_TRANSITION' | 'ROADMAP' | 'ROADMAP_GENERATED' | 'ROADMAP_TO_IMPLEMENTATION_TRANSITION' | 'IMPLEMENTATION';
 }
 
-const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) => {
+const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text }) => {
   if (!text || typeof text !== 'string') {
     return <div>{String(text || '')}</div>;
   }
@@ -20,7 +20,7 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
   processedText = processedText.replace(/Question\s+\d+(?:\s+of\s+\d+)?/gi, '').trim();
 
   // Step 3: Fix broken questions
-  processedText = processedText.replace(/([A-Za-z0-9,;:\)])\s*\n+\s*\?/g, '$1?');
+  processedText = processedText.replace(/([A-Za-z0-9,;:)])\s*\n+\s*\?/g, '$1?');
 
   // Step 4: ROOT CAUSE FIX - Handle heading+question patterns
   // Process line by line to handle both same-line and multi-line cases
@@ -33,7 +33,7 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
     const line = lines[i].trim();
     
     // Check if line contains heading+question on same line
-    const sameLineMatch = line.match(/(🧠|💡|📌|📋|🚀|🧩|🌍)?\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):\s+([A-Z][^?\n]{15,}?\?)/i);
+    const sameLineMatch = line.match(/(🧠|💡|📌|📋|🚀|🧩|🌍)?\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):\s+([A-Z][^?\n]{15,}?\?)/iu);
     
     if (sameLineMatch) {
       const emoji = sameLineMatch[1] || '';
@@ -54,7 +54,7 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
     }
     
     // Check if line is JUST a heading (ends with colon)
-    const headingOnlyMatch = line.match(/^(🧠|💡|📌|📋|🚀|🧩|🌍)?\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):\s*$/i);
+    const headingOnlyMatch = line.match(/^(🧠|💡|📌|📋|🚀|🧩|🌍)?\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):\s*$/iu);
     
     if (headingOnlyMatch) {
       // Look for question on next line(s)
@@ -104,7 +104,7 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
     // Skip if already part of heading+question pattern
     const beforeText = processedText.substring(0, processedText.indexOf(match));
     const lineWithMatch = (beforeText + match).split('\n').pop() || '';
-    if (/(🧠|💡|📌|📋|🚀|🧩|🌍)?\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):/.test(lineWithMatch)) {
+    if (/(🧠|💡|📌|📋|🚀|🧩|🌍)?\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):/u.test(lineWithMatch)) {
       return match; // Already processed
     }
     return `**${question}**`;
@@ -116,22 +116,22 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
   processedText = processedText.replace(/^[-–—•]+\s*/gm, '');
 
   // Step 8: Add spacing for regular questions
-  processedText = processedText.replace(/([^:\-–—\n🧠💡📌📋🚀🧩🌍])\s*(\*\*[^*]+\?\*\*)/g, '$1\n\n$2');
+  processedText = processedText.replace(/([^:\-–—\n🧠💡📌📋🚀🧩🌍])\s*(\*\*[^*]+\?\*\*)/gu, '$1\n\n$2');
   processedText = processedText.replace(/(\*\*[^*]+\?\*\*)([^\n])/g, '$1\n\n$2');
   
   // Step 9: Ensure proper spacing around heading+question patterns
   processedText = processedText.replace(
-    /([^\n])\s*((🧠|💡|📌|📋|🚀|🧩|🌍)\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):\s*\*\*[^*]+\?\*\*)/g,
+    /([^\n])\s*((🧠|💡|📌|📋|🚀|🧩|🌍)\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):\s*\*\*[^*]+\?\*\*)/gu,
     '$1\n\n$2'
   );
   
   processedText = processedText.replace(
-    /((🧠|💡|📌|📋|🚀|🧩|🌍)\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):)\s*\n+\s*(\*\*[^*]+\?\*\*)/g,
+    /((🧠|💡|📌|📋|🚀|🧩|🌍)\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):)\s*\n+\s*(\*\*[^*]+\?\*\*)/gu,
     '$1 $3'
   );
   
   processedText = processedText.replace(
-    /((🧠|💡|📌|📋|🚀|🧩|🌍)\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):\s*\*\*[^*]+\?\*\*)\s*\n\n/g,
+    /((🧠|💡|📌|📋|🚀|🧩|🌍)\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):\s*\*\*[^*]+\?\*\*)\s*\n\n/gu,
     '$1\n'
   );
 
@@ -150,7 +150,7 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
           },
           p: ({ children }) => {
             const text = String(children);
-            if (text.match(/(🧠|💡|📌|📋|🚀|🧩|🌍).*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):.*\*\*.*\?\*\*/)) {
+            if (text.match(/(🧠|💡|📌|📋|🚀|🧩|🌍).*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):.*\*\*.*\?\*\*/u)) {
               return (
                 <p className="mb-2 leading-relaxed text-gray-800" style={{ display: 'block', whiteSpace: 'normal' }}>
                   {children}
