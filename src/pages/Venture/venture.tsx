@@ -2622,6 +2622,10 @@ export default function ChatPage() {
         // CRITICAL: Check if we're in ROADMAP_TO_IMPLEMENTATION_TRANSITION phase
         if (phase === "ROADMAP_TO_IMPLEMENTATION_TRANSITION") {
           console.log("🚀 Detected ROADMAP_TO_IMPLEMENTATION_TRANSITION phase - fetching transition content");
+          
+          // Show loading state
+          setLoading(true);
+          
           try {
             // Fetch the transition content from the endpoint
             const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/roadmap-to-implementation-transition`, {
@@ -2635,6 +2639,7 @@ export default function ChatPage() {
             const data = await response.json();
             
             if (data.success && data.result?.reply) {
+              console.log("✅ Roadmap to Implementation transition content received");
               setRoadmapToImplementationTransition({
                 roadmapContent: data.result.reply,
                 isActive: true
@@ -2647,9 +2652,11 @@ export default function ChatPage() {
               return;
             } else {
               console.warn("⚠️ Transition endpoint did not return expected data");
+              setLoading(false);
             }
           } catch (transitionError) {
             console.error("Failed to fetch transition content:", transitionError);
+            setLoading(false);
             // Continue with normal flow
           }
         }
@@ -3365,9 +3372,13 @@ export default function ChatPage() {
                 {/* Modify Button */}
                 <button
                   onClick={() => {
-                    setKycToBusinessTransition(null);
-                    // Allow user to review and modify their KYC responses
-                    toast.info('Review your responses below. You can continue answering or modify any previous answers.');
+                    setLoading(true);
+                    setTimeout(() => {
+                      setKycToBusinessTransition(null);
+                      setLoading(false);
+                      // Allow user to review and modify their KYC responses
+                      toast.info('Review your responses below. You can continue answering or modify any previous answers.');
+                    }, 300);
                   }}
                   disabled={loading}
                   className="group relative bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 text-gray-700 px-8 py-4 rounded-xl text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border-2 border-gray-300"
@@ -3375,6 +3386,9 @@ export default function ChatPage() {
                   <div className="flex items-center justify-center gap-3">
                     <span className="text-xl">✏️</span>
                     <span>Modify My Responses</span>
+                    {loading && (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-700 ml-2"></div>
+                    )}
                   </div>
                   <div className="absolute inset-0 bg-gray-400/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 </button>
@@ -3407,6 +3421,28 @@ export default function ChatPage() {
         sessionId={sessionId}
         initialQuote={transitionQuote}
       />
+    );
+  }
+
+  // Show loading screen while fetching roadmap to implementation transition
+  if (progress.phase === "ROADMAP_TO_IMPLEMENTATION_TRANSITION" && !roadmapToImplementationTransition?.isActive) {
+    return (
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-50 to-teal-50 flex items-center justify-center z-50">
+        <div className="text-center">
+          <svg className="animate-spin h-20 w-20 text-orange-500 mx-auto mb-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <h3 className="text-3xl font-bold text-gray-900 mb-3">🏅 Preparing Your Achievement</h3>
+          <p className="text-lg text-gray-600 mb-6">Loading your roadmap completion celebration...</p>
+          <div className="flex items-center justify-center gap-3 mb-6">
+            <div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+          </div>
+          <p className="text-base text-gray-500">This will just take a moment...</p>
+        </div>
+      </div>
     );
   }
 
@@ -3866,6 +3902,26 @@ export default function ChatPage() {
                     </div>
                     <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-amber-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 </button>
+
+                  {/* 🧪 TESTING: Skip to Q44 Button - Only show in Business Plan phase */}
+                  {progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) && (
+                    <button
+                      onClick={() => handleNext("skip to 44")}
+                      disabled={loading}
+                      className="group relative bg-gradient-to-br from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100 border border-purple-200 hover:border-purple-300 rounded-xl p-4 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    >
+                      <div className="flex flex-col items-center space-y-2">
+                        <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center text-white text-lg group-hover:scale-110 transition-transform duration-300">
+                          ⏭️
+                        </div>
+                        <div className="text-center">
+                          <div className="text-sm font-semibold text-purple-800 group-hover:text-purple-900">Skip to 44</div>
+                          <div className="text-xs text-purple-600 group-hover:text-purple-700">Testing only</div>
+                        </div>
+                      </div>
+                      <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    </button>
+                  )}
                   </div>
 
                 <div className="mt-3 text-center">

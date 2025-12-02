@@ -245,11 +245,11 @@ const FounderportHome: React.FC = () => {
           })}
         </div>
         <div className="text-center">
-          <Link to="/features" className="px-6 py-2 bg-white text-teal-600 font-semibold rounded-full border border-teal-600 hover:bg-teal-50 transition mr-4">
+          <Link to="/learn-more" className="px-6 py-2 bg-white text-teal-600 font-semibold rounded-full border border-teal-600 hover:bg-teal-50 transition mr-4">
             Learn More
           </Link>
-          <Link to="/walkthrough" className="px-6 py-2 bg-teal-600 text-white font-semibold rounded-full hover:bg-teal-700 transition">
-            Walkthrough
+          <Link to="/learn-more" className="px-6 py-2 bg-teal-600 text-white font-semibold rounded-full hover:bg-teal-700 transition">
+            Get Started
           </Link>
         </div>
       </Section>

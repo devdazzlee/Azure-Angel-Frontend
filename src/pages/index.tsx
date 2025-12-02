@@ -4,6 +4,7 @@ export { default as SignUp } from './SignUp';
 export { default as ConfirmEmail } from './SignUp/confirmEmail';
 export { default as VerifyEmailPage } from './SignUp/verifyEmailPage';
 export { default as AboutUs } from './About';
+export { default as LearnMore } from './LearnMore';
 
 export { default as KnowYourCustomer } from './KYC';
 export { default as NewVenture } from './Venture/newVenture';

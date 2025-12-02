@@ -11,8 +11,10 @@ import {
   Chat,
   NewVenture,
   AboutUs,
+  LearnMore,
 } from "../pages";
 import RoadmapPage from "../pages/Roadmap/RoadmapPage";
+import BusinessPlanView from "../pages/BusinessPlan/BusinessPlanView";
 import Layout from "../features/Dashboard";
 import ChatLayout from "../layout/chatLayout";
 import TestQuestionFormatter from "../pages/TestQuestionFormatter";
@@ -87,12 +89,21 @@ const router = createBrowserRouter([
                 path: ":id/roadmap",
                 element: <RoadmapPage />,
               },
+              {
+                path: ":id/business-plan",
+                element: <BusinessPlanView />,
+              },
             ],
           },
           {
             path: "/about",
             element: <AboutUs />,
             errorElement: <AboutUs />,
+          },
+          {
+            path: "/learn-more",
+            element: <LearnMore />,
+            errorElement: <LearnMore />,
           },
           {
             path: "/test-question-formatter",

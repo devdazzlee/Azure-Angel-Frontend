@@ -1,8 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'react-toastify';
 import BusinessPlanPaywall from './BusinessPlanPaywall';
+import DocumentExportModal from './DocumentExportModal';
 
 interface PlanToRoadmapTransitionProps {
   businessPlanSummary: string;
@@ -321,7 +323,9 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
   sessionId,
   initialQuote = null
 }) => {
-  const [isExporting, setIsExporting] = useState(false);
+  const navigate = useNavigate(); // Initialize navigate hook
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [showModificationModal, setShowModificationModal] = useState(false);
   const [selectedModifications, setSelectedModifications] = useState<string[]>([]);
   const [showPaywall, setShowPaywall] = useState(false);
@@ -481,24 +485,8 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
     }
   ];
 
-  const handleExportPlan = async () => {
-    setIsExporting(true);
-    try {
-      const htmlContent = convertSummaryToDocHtml(normalizedSummary);
-      const element = document.createElement('a');
-      const file = new Blob([htmlContent], { type: 'application/msword' });
-      element.href = URL.createObjectURL(file);
-      element.download = exportFileName;
-      document.body.appendChild(element);
-      element.click();
-      document.body.removeChild(element);
-      
-      toast.success('Business plan summary exported as Word document!');
-    } catch {
-      toast.error('Failed to export business plan summary');
-    } finally {
-      setIsExporting(false);
-    }
+  const handleExportPlan = () => {
+    setShowExportModal(true);
   };
 
   const handleRevisitClick = () => {
@@ -530,8 +518,29 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-4xl bg-white/90 backdrop-blur-xl border border-white/30 shadow-2xl rounded-3xl p-8">
+    <>
+      {/* Full-Screen Loading Overlay - Fixed Position */}
+      {loading && (
+        <div className="fixed inset-0 bg-white/95 backdrop-blur-md flex items-center justify-center z-[9999]">
+          <div className="text-center">
+            <svg className="animate-spin h-20 w-20 text-green-500 mx-auto mb-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <h3 className="text-3xl font-bold text-gray-900 mb-3">🚀 Generating Your Roadmap</h3>
+            <p className="text-lg text-gray-600 mb-6">Creating your personalized launch roadmap...</p>
+            <div className="flex items-center justify-center gap-3 mb-6">
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+            <p className="text-base text-gray-500">This may take 10-30 seconds...</p>
+          </div>
+        </div>
+      )}
+      
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 flex items-center justify-center px-4">
+        <div className="w-full max-w-4xl bg-white/90 backdrop-blur-xl border border-white/30 shadow-2xl rounded-3xl p-8">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="w-20 h-20 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full flex items-center justify-center text-white text-4xl mx-auto mb-4">
@@ -554,58 +563,137 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
         </div>
 
         {/* Business Plan Summary Overview */}
-        <div className="mb-8">
+        <div className="mb-8" ref={contentRef} id="business-plan-summary-content">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
               📋 Business Plan Summary Overview
             </h2>
             <div className="flex gap-2">
               <button
-                onClick={() => setShowPaywall(true)}
-                className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2"
+                onClick={() => {
+                  // Navigate and pass business plan data via state
+                  navigate(`/ventures/${sessionId}/business-plan`, {
+                    state: {
+                      businessPlan: businessPlanArtifact,
+                      businessPlanSummary: businessPlanSummary,
+                      sessionId: sessionId
+                    }
+                  });
+                }}
+                className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105"
               >
-                📄 {businessPlanArtifact ? 'View Full Business Plan' : 'View Full Business Plan'}
-              </button>
-              <button
-                onClick={handleExportPlan}
-                disabled={isExporting}
-                className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 disabled:opacity-50"
-              >
-                {isExporting ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Exporting...
-                  </>
-                ) : (
-                  <>
-                    📥 Export Summary
-                  </>
-                )}
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                📄 View Full Business Plan
               </button>
             </div>
           </div>
           
-          {/* Clarification Note */}
-          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 rounded-r-lg">
-            <div className="flex items-start gap-3">
-              <span className="text-blue-600 text-xl">ℹ️</span>
-              <div>
-                <p className="text-sm font-semibold text-blue-900 mb-1">Note About Your Business Plan</p>
-                <p className="text-sm text-blue-800">
-                  This is a <strong>high-level summary</strong> of your comprehensive Business Plan. Your complete{' '}
-                  <strong>Business Plan Artifact</strong> has been generated and is available for download.
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 max-h-96 overflow-y-auto prose prose-sm max-w-none text-gray-800">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={markdownComponents}
-            >
+          {/* Full Viewable Business Plan Summary - No Height Restriction */}
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="p-8 prose prose-lg max-w-none">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  h1: ({ children }) => (
+                    <h1 className="text-3xl font-bold text-gray-900 mb-6 pb-4 border-b-2 border-teal-500">
+                      {children}
+                    </h1>
+                  ),
+                  h2: ({ children }) => (
+                    <h2 className="text-2xl font-bold text-gray-900 mb-4 mt-8 flex items-center gap-2">
+                      <span className="w-2 h-8 bg-gradient-to-b from-teal-500 to-blue-500 rounded-full"></span>
+                      {children}
+                    </h2>
+                  ),
+                  h3: ({ children }) => (
+                    <h3 className="text-xl font-semibold text-gray-800 mb-3 mt-6">
+                      {children}
+                    </h3>
+                  ),
+                  h4: ({ children }) => (
+                    <h4 className="text-lg font-semibold text-gray-700 mb-2 mt-4">
+                      {children}
+                    </h4>
+                  ),
+                  p: ({ children }) => (
+                    <p className="text-gray-700 leading-relaxed mb-4 text-justify">
+                      {children}
+                    </p>
+                  ),
+                  ul: ({ children }) => (
+                    <ul className="space-y-3 mb-6">
+                      {children}
+                    </ul>
+                  ),
+                  ol: ({ children }) => (
+                    <ol className="space-y-3 mb-6">
+                      {children}
+                    </ol>
+                  ),
+                  li: ({ children }) => (
+                    <li className="flex items-start gap-3 text-gray-700 leading-relaxed">
+                      <span className="text-teal-500 font-bold mt-1">•</span>
+                      <span className="flex-1">{children}</span>
+                    </li>
+                  ),
+                  strong: ({ children }) => (
+                    <strong className="text-gray-900 font-bold">{children}</strong>
+                  ),
+                  em: ({ children }) => (
+                    <em className="text-teal-700 font-medium not-italic">{children}</em>
+                  ),
+                  blockquote: ({ children }) => (
+                    <blockquote className="border-l-4 border-teal-500 bg-teal-50 pl-6 pr-4 py-4 my-6 rounded-r-lg">
+                      <div className="text-gray-800 italic">{children}</div>
+                    </blockquote>
+                  ),
+                  table: ({ children }) => (
+                    <div className="my-8 overflow-x-auto shadow-lg rounded-lg">
+                      <table className="min-w-full border-collapse bg-white">
+                        {children}
+                      </table>
+                    </div>
+                  ),
+                  thead: ({ children }) => (
+                    <thead className="bg-gradient-to-r from-teal-600 to-blue-600">
+                      {children}
+                    </thead>
+                  ),
+                  tbody: ({ children }) => (
+                    <tbody className="divide-y divide-gray-200 bg-white tbody-hover-rows">
+                      {children}
+                    </tbody>
+                  ),
+                  tr: ({ children }) => (
+                    <tr>
+                      {children}
+                    </tr>
+                  ),
+                  th: ({ children }) => (
+                    <th className="px-6 py-4 text-left text-sm font-bold text-white uppercase tracking-wider">
+                      {children}
+                    </th>
+                  ),
+                  td: ({ children }) => (
+                    <td className="px-6 py-4 text-sm text-gray-700 leading-relaxed">
+                      {children}
+                    </td>
+                  ),
+                  hr: () => (
+                    <hr className="my-8 border-t-2 border-gray-200" />
+                  ),
+                  code: ({ children }) => (
+                    <code className="bg-gray-100 text-teal-700 px-2 py-1 rounded text-sm font-mono">
+                      {children}
+                    </code>
+                  ),
+                }}
+              >
                 {normalizedSummary}
-            </ReactMarkdown>
+              </ReactMarkdown>
+            </div>
           </div>
         </div>
 
@@ -804,13 +892,26 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
               disabled={loading}
               className="group relative bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white px-10 py-5 rounded-xl text-xl font-bold shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border-2 border-green-400"
             >
-              <div className="flex flex-col items-center justify-center gap-2">
-                <div className="flex items-center justify-center gap-3">
-                  <span className="text-2xl animate-pulse">🚀</span>
-                  <span className="text-2xl">Continue to Roadmap</span>
+              {loading ? (
+                <div className="flex flex-col items-center justify-center gap-2">
+                  <div className="flex items-center justify-center gap-3">
+                    <svg className="animate-spin h-7 w-7 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span className="text-2xl font-bold">Generating Roadmap...</span>
+                  </div>
+                  <div className="text-sm opacity-95 font-medium">This may take 10-30 seconds</div>
                 </div>
-                <div className="text-sm opacity-95 font-medium">Proceed to roadmap generation</div>
-              </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-2">
+                  <div className="flex items-center justify-center gap-3">
+                    <span className="text-2xl animate-pulse">🚀</span>
+                    <span className="text-2xl">Continue to Roadmap</span>
+                  </div>
+                  <div className="text-sm opacity-95 font-medium">Proceed to roadmap generation</div>
+                </div>
+              )}
               <div className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             </button>
 
@@ -819,11 +920,26 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
               disabled={loading}
               className="group relative bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-8 py-4 rounded-xl text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
-              <div className="flex items-center justify-center gap-3">
-                <span className="text-xl">🔄</span>
-                <span>Modify</span>
-              </div>
-              <div className="text-sm opacity-90 mt-1">Adjust any aspects that need refinement</div>
+              {loading ? (
+                <div className="flex flex-col items-center justify-center gap-2">
+                  <div className="flex items-center justify-center gap-3">
+                    <svg className="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span className="text-lg font-semibold">Loading...</span>
+                  </div>
+                  <div className="text-sm opacity-90">Preparing review mode</div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-center gap-3">
+                    <span className="text-xl">🔄</span>
+                    <span>Modify</span>
+                  </div>
+                  <div className="text-sm opacity-90 mt-1">Adjust any aspects that need refinement</div>
+                </>
+              )}
               <div className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             </button>
           </div>
@@ -941,8 +1057,25 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
           </div>
         </div>
       )}
+      </div>
+      
+      {/* Custom CSS for table hover - only tbody rows */}
+      <style>{`
+        .tbody-hover-rows > tr:hover {
+          background-color: #f0fdfa !important;
+          transition: background-color 150ms ease-in-out;
+        }
+      `}</style>
 
-    </div>
+      {/* Export Modal */}
+      <DocumentExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        documentTitle="Business Plan Summary"
+        documentContent={contentRef.current?.innerHTML || normalizedSummary}
+        documentType="business-plan"
+      />
+    </>
   );
 };
 

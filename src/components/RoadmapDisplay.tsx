@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'react-toastify';
+import DocumentExportModal from './DocumentExportModal';
 
 interface RoadmapDisplayProps {
   roadmapContent: string;
@@ -81,7 +82,8 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
   loading = false,
   sessionId
 }) => {
-  const [isExporting, setIsExporting] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editSections, setEditSections] = useState<EditSection[]>([]);
   const [editingSection, setEditingSection] = useState<EditSection | null>(null);
@@ -836,31 +838,8 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
     );
   };
 
-  const handleExport = async () => {
-    setIsExporting(true);
-    try {
-      const docHtml = convertRoadmapToDocHtml(roadmapContent);
-      const timestamp = new Date().toISOString().split('T')[0];
-      
-      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-      const fileType = isSafari ? 'application/pdf' : 'application/msword';
-      const extension = isSafari ? 'pdf' : 'doc';
-      
-      const file = new Blob([docHtml], { type: fileType });
-      const element = document.createElement('a');
-      element.href = URL.createObjectURL(file);
-      element.download = `launch-roadmap-${timestamp}.${extension}`;
-      document.body.appendChild(element);
-      element.click();
-      document.body.removeChild(element);
-      
-      toast.success('Roadmap exported as Word document!');
-    } catch (error) {
-      console.error('Roadmap export failed:', error);
-      toast.error('Failed to export roadmap');
-    } finally {
-      setIsExporting(false);
-    }
+  const handleExport = () => {
+    setShowExportModal(true);
   };
 
   return (
@@ -958,10 +937,10 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
               </button>
               <button
                 onClick={handleExport}
-                disabled={isExporting || loading}
+                disabled={loading}
                 className="px-4 py-2 bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 disabled:cursor-not-allowed text-gray-700 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2"
               >
-                {isExporting ? (
+                {false ? (
                   <>
                     <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -1093,7 +1072,7 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
             </div>
           </div>
           
-          <div className="p-8">
+          <div className="p-8" ref={contentRef} id="roadmap-content">
             <div className="prose prose-lg max-w-none roadmap-content">
               {renderMarkdownTable(roadmapContent)}
             </div>
@@ -1378,6 +1357,15 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
           </div>
         </div>
       )}
+
+      {/* Export Modal */}
+      <DocumentExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        documentTitle="Launch Roadmap"
+        documentContent={contentRef.current?.innerHTML || roadmapContent}
+        documentType="roadmap"
+      />
     </div>
   );
 };
