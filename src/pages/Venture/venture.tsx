@@ -2578,23 +2578,37 @@ export default function ChatPage() {
         }
 
         // CRITICAL: Check if we're in PLAN_TO_ROADMAP_TRANSITION phase
-        // If so, fetch business plan summary and show modal
+        // If so, fetch business plan summary AND artifact (which may be generating in background)
         if (phase === "PLAN_TO_ROADMAP_TRANSITION") {
-          console.log("🎯 Detected PLAN_TO_ROADMAP_TRANSITION phase - fetching summary to show modal");
+          console.log("🎯 Detected PLAN_TO_ROADMAP_TRANSITION phase - fetching complete session data");
           try {
-            // Fetch business plan summary
-            const summaryResponse = await httpClient.get(
-              `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/business-plan-summary`
+            // ROOT CAUSE FIX: Fetch FRESH session data to get the artifact
+            // The artifact is generated in background, so we need to fetch it separately
+            const sessionResponse = await httpClient.get(
+              `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}`
             );
-            const summaryData = summaryResponse.data as { result?: { summary?: string } | string } | undefined;
-            const summary = (summaryData?.result && typeof summaryData.result === 'object' 
-              ? summaryData.result.summary 
-              : typeof summaryData?.result === 'string' 
-                ? summaryData.result 
-                : undefined) || "Your business plan has been completed successfully!";
             
-            // Get business plan artifact from session if available
-            const artifact = (sessionMeta as any)?.business_plan_artifact || null;
+            const sessionData = sessionResponse.data as { success?: boolean; result?: any };
+            const freshSession = sessionData?.success ? sessionData.result : null;
+            
+            console.log("📄 Fresh session data:", {
+              hasArtifact: !!freshSession?.business_plan_artifact,
+              hasSummary: !!freshSession?.business_plan_summary,
+              artifactLength: freshSession?.business_plan_artifact?.length || 0,
+              summaryLength: freshSession?.business_plan_summary?.length || 0
+            });
+            
+            // Get summary and artifact from fresh session data
+            const summary = freshSession?.business_plan_summary || "Your business plan has been completed successfully!";
+            const artifact = freshSession?.business_plan_artifact || null;
+            
+            // If artifact is still being generated, show a message
+            if (!artifact) {
+              console.log("⏳ Business plan artifact is still being generated in background");
+              toast.info("Your business plan is being generated. You can view it shortly.", {
+                autoClose: 5000
+              });
+            }
             
             setTransitionData({
               businessPlanSummary: summary,
@@ -2606,7 +2620,7 @@ export default function ChatPage() {
             setLoading(false);
             return;
           } catch (summaryError) {
-            console.error("Failed to fetch business plan summary:", summaryError);
+            console.error("Failed to fetch business plan data:", summaryError);
             // Fallback: still show modal with default message
             setTransitionData({
               businessPlanSummary: "Your business plan has been completed successfully!",

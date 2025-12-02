@@ -316,7 +316,7 @@ const convertSummaryToDocHtml = (markdown: string) => {
 
 const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
   businessPlanSummary,
-  businessPlanArtifact,
+  businessPlanArtifact: initialArtifact,
   onApprove,
   onRevisit,
   loading = false,
@@ -329,6 +329,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
   const [showModificationModal, setShowModificationModal] = useState(false);
   const [selectedModifications, setSelectedModifications] = useState<string[]>([]);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [businessPlanArtifact, setBusinessPlanArtifact] = useState<string | null>(initialArtifact || null);
   const [quoteState, setQuoteState] = useState<MotivationalQuote>(() =>
     initialQuote ?? pickFallbackQuote()
   );
@@ -354,6 +355,49 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
       localStorage.setItem(storageKey, quote.quote);
     }
   }, [storageKey]);
+
+  // ROOT CAUSE FIX: Check for artifact availability if it wasn't initially provided
+  useEffect(() => {
+    if (!businessPlanArtifact && sessionId) {
+      console.log('⏳ Business plan artifact not available yet, checking periodically...');
+      
+      const checkArtifact = async () => {
+        try {
+          const response = await fetch(
+            `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}`,
+            {
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
+              },
+            }
+          );
+          
+          const data = await response.json();
+          if (data.success && data.result?.business_plan_artifact) {
+            console.log('✅ Business plan artifact is now available!');
+            setBusinessPlanArtifact(data.result.business_plan_artifact);
+          }
+        } catch (error) {
+          console.error('Failed to check artifact:', error);
+        }
+      };
+      
+      // Check immediately
+      checkArtifact();
+      
+      // Then check every 3 seconds for up to 60 seconds
+      const interval = setInterval(checkArtifact, 3000);
+      const timeout = setTimeout(() => {
+        clearInterval(interval);
+        console.log('⏱️ Stopped checking for artifact after 60 seconds');
+      }, 60000);
+      
+      return () => {
+        clearInterval(interval);
+        clearTimeout(timeout);
+      };
+    }
+  }, [businessPlanArtifact, sessionId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -571,6 +615,14 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
             <div className="flex gap-2">
               <button
                 onClick={() => {
+                  // Check if artifact is available
+                  if (!businessPlanArtifact) {
+                    toast.warning('Your business plan is still being generated. Please wait a moment and try again.', {
+                      autoClose: 5000
+                    });
+                    return;
+                  }
+                  
                   // Navigate and pass business plan data via state
                   navigate(`/ventures/${sessionId}/business-plan`, {
                     state: {
@@ -580,12 +632,13 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
                     }
                   });
                 }}
-                className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105"
+                className={`bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 ${!businessPlanArtifact ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title={!businessPlanArtifact ? 'Business plan is being generated...' : 'View your complete business plan'}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                📄 View Full Business Plan
+                {businessPlanArtifact ? '📄 View Full Business Plan' : '⏳ Generating Business Plan...'}
               </button>
             </div>
           </div>
