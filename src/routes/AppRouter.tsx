@@ -12,6 +12,7 @@ import {
   NewVenture,
   AboutUs,
   LearnMore,
+  TermsAndConditions,
 } from "../pages";
 import RoadmapPage from "../pages/Roadmap/RoadmapPage";
 import BusinessPlanView from "../pages/BusinessPlan/BusinessPlanView";
@@ -104,6 +105,11 @@ const router = createBrowserRouter([
             path: "/learn-more",
             element: <LearnMore />,
             errorElement: <LearnMore />,
+          },
+          {
+            path: "/terms-and-conditions",
+            element: <TermsAndConditions />,
+            errorElement: <TermsAndConditions />,
           },
           {
             path: "/test-question-formatter",

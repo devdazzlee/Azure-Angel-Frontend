@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'react-toastify';
 import DocumentExportModal from './DocumentExportModal';
+import PaymentForm from './PaymentForm';
+import { PRICING, checkPaymentStatus, markAsPaid } from '../config/pricing';
 
 interface RoadmapDisplayProps {
   roadmapContent: string;
@@ -83,11 +85,15 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
   sessionId
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editSections, setEditSections] = useState<EditSection[]>([]);
   const [editingSection, setEditingSection] = useState<EditSection | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [hasPaid, setHasPaid] = useState(() => 
+    sessionId ? checkPaymentStatus(sessionId, 'roadmap') : false
+  ); // Track payment status
   const [quoteState, setQuoteState] = useState<MotivationalQuote>(() => pickFallbackQuote());
   
   const TRANSITION_QUOTE_STORAGE_PREFIX = "angel_roadmap_quote_";
@@ -839,6 +845,26 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
   };
 
   const handleExport = () => {
+    // Check if user has already paid for this document
+    if (hasPaid) {
+      setShowExportModal(true);
+    } else {
+      // Show payment modal first
+      setShowPaymentModal(true);
+    }
+  };
+
+  const handlePaymentSuccess = () => {
+    setShowPaymentModal(false);
+    setHasPaid(true);
+    
+    // Mark as paid in storage
+    if (sessionId) {
+      markAsPaid(sessionId, 'roadmap');
+    }
+    
+    toast.success('Payment successful! You can now download your Roadmap.');
+    // Open export modal after successful payment
     setShowExportModal(true);
   };
 
@@ -1357,6 +1383,15 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
           </div>
         </div>
       )}
+
+      {/* Payment Modal */}
+      <PaymentForm
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        onPaymentSuccess={handlePaymentSuccess}
+        amount={PRICING.LAUNCH_ROADMAP.amount}
+        itemName={PRICING.LAUNCH_ROADMAP.itemName}
+      />
 
       {/* Export Modal */}
       <DocumentExportModal

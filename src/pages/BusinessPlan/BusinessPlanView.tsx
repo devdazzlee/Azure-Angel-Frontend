@@ -4,6 +4,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'react-toastify';
 import DocumentExportModal from '../../components/DocumentExportModal';
+import PaymentForm from '../../components/PaymentForm';
+import { PRICING, checkPaymentStatus, markAsPaid } from '../../config/pricing';
 
 interface LocationState {
   businessPlan?: string;
@@ -23,7 +25,11 @@ const BusinessPlanView: React.FC = () => {
   const [businessPlanSummary, setBusinessPlanSummary] = useState<string>(locationState?.businessPlanSummary || '');
   const [loading, setLoading] = useState(!locationState?.businessPlan); // Only load if no data passed
   const [viewMode, setViewMode] = useState<'summary' | 'full'>('full');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [hasPaid, setHasPaid] = useState(() => 
+    sessionId ? checkPaymentStatus(sessionId, 'business_plan') : false
+  ); // Track payment status
 
   useEffect(() => {
     // Only fetch if data wasn't passed via navigation state
@@ -32,6 +38,29 @@ const BusinessPlanView: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
+
+  // ROOT CAUSE FIX: Poll for artifact if it's being generated
+  useEffect(() => {
+    if (!businessPlan && loading && sessionId) {
+      console.log('📊 Polling for business plan artifact...');
+      
+      const pollInterval = setInterval(() => {
+        fetchBusinessPlan();
+      }, 3000); // Check every 3 seconds
+      
+      const timeout = setTimeout(() => {
+        clearInterval(pollInterval);
+        setLoading(false);
+        toast.error('Business plan generation timed out. Please try again.');
+        console.log('⏱️ Polling timeout reached');
+      }, 90000); // 90 second timeout
+      
+      return () => {
+        clearInterval(pollInterval);
+        clearTimeout(timeout);
+      };
+    }
+  }, [businessPlan, loading, sessionId]);
 
   const fetchBusinessPlan = async () => {
     if (!sessionId) {
@@ -42,7 +71,6 @@ const BusinessPlanView: React.FC = () => {
     }
 
     try {
-      setLoading(true);
       console.log('Fetching business plan for session:', sessionId);
       
       const response = await fetch(
@@ -68,6 +96,7 @@ const BusinessPlanView: React.FC = () => {
         // Update state if we have data
         if (session.business_plan_artifact) {
           setBusinessPlan(session.business_plan_artifact);
+          setLoading(false);
           console.log('✅ Business plan artifact loaded!');
         }
         if (session.business_plan_summary) {
@@ -75,25 +104,44 @@ const BusinessPlanView: React.FC = () => {
           console.log('✅ Business plan summary loaded!');
         }
         
-        // Show message only on first load, not during polling
-        if (!session.business_plan_artifact && !session.business_plan_summary && loading) {
-          console.log('⏳ Business plan is being generated in background...');
-          toast.info('Your business plan is being generated. This may take a moment...', {
-            autoClose: 3000
-          });
+        // ROOT CAUSE FIX: If artifact is not ready, keep loading and poll
+        if (!session.business_plan_artifact) {
+          console.log('⏳ Business plan artifact not ready yet, will check again...');
+          // Don't set loading to false - keep showing loading screen
+          // Polling will continue in useEffect below
         }
       } else {
         toast.error(data.message || 'Failed to load business plan');
+        setLoading(false);
       }
     } catch (error) {
       console.error('Failed to fetch business plan:', error);
       toast.error('Failed to load business plan');
-    } finally {
       setLoading(false);
     }
   };
 
   const handleDownload = () => {
+    // Check if user has already paid for this document
+    if (hasPaid) {
+      setShowExportModal(true);
+    } else {
+      // Show payment modal first
+      setShowPaymentModal(true);
+    }
+  };
+
+  const handlePaymentSuccess = () => {
+    setShowPaymentModal(false);
+    setHasPaid(true);
+    
+    // Mark as paid in storage
+    if (sessionId) {
+      markAsPaid(sessionId, 'business_plan');
+    }
+    
+    toast.success('Payment successful! You can now download your Business Plan.');
+    // Open export modal after successful payment
     setShowExportModal(true);
   };
 
@@ -340,6 +388,15 @@ const BusinessPlanView: React.FC = () => {
           }
         }
       `}</style>
+
+      {/* Payment Modal */}
+      <PaymentForm
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        onPaymentSuccess={handlePaymentSuccess}
+        amount={PRICING.BUSINESS_PLAN_FULL.amount}
+        itemName={PRICING.BUSINESS_PLAN_FULL.itemName}
+      />
 
       {/* Export Modal */}
       <DocumentExportModal

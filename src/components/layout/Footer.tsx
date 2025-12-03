@@ -14,6 +14,7 @@ const socialLinks = [
 const footerLinks = {
   Businesses: ['Startups', 'Enterprise', 'Case Studies', 'Partners'],
   Resources: ['Blog', 'Documentation', 'Guides', 'Support'],
+  Legal: ['Terms and Conditions', 'Privacy Policy'],
 };
 
 const Footer: React.FC = () => (
@@ -22,7 +23,7 @@ const Footer: React.FC = () => (
     <div className="absolute -top-20 left-0 w-64 h-64 bg-gradient-to-br from-teal-300 to-blue-400 opacity-20 rounded-full filter blur-3xl animate-blob"></div>
 
     <div className="relative max-w-7xl mx-auto z-10">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         {/* Column 1: Brand + Social */}
         <div className="space-y-4">
           <Link to="/" className="text-2xl font-bold text-teal-600 transition-colors">
@@ -49,9 +50,6 @@ const Footer: React.FC = () => (
             ))}
           </div>
         </div>
-
-        {/* Spacer */}
-        <div className="hidden md:block"></div>
 
         {/* Links Columns */}
         {Object.entries(footerLinks).map(([section, items]) => (

@@ -5,6 +5,8 @@ import remarkGfm from 'remark-gfm';
 import { toast } from 'react-toastify';
 import BusinessPlanPaywall from './BusinessPlanPaywall';
 import DocumentExportModal from './DocumentExportModal';
+import PaymentForm from './PaymentForm';
+import { PRICING, checkPaymentStatus, markAsPaid } from '../config/pricing';
 
 interface PlanToRoadmapTransitionProps {
   businessPlanSummary: string;
@@ -72,6 +74,7 @@ const FALLBACK_QUOTES: MotivationalQuote[] = [
   }
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const markdownComponents = {
   h1: ({ children }: { children?: React.ReactNode }) => (
     <h1 className="text-3xl font-semibold text-gray-900 mb-4">{children}</h1>
@@ -152,6 +155,7 @@ const normalizeBusinessPlanSummary = (summary: string): string => {
 
 const TRANSITION_QUOTE_STORAGE_PREFIX = "angel_transition_quote_";
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const convertSummaryToDocHtml = (markdown: string) => {
   const lines = markdown.split('\n');
   const htmlLines: string[] = [];
@@ -325,15 +329,21 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
 }) => {
   const navigate = useNavigate(); // Initialize navigate hook
   const contentRef = useRef<HTMLDivElement>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showModificationModal, setShowModificationModal] = useState(false);
   const [selectedModifications, setSelectedModifications] = useState<string[]>([]);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [hasPaid, setHasPaid] = useState(() => 
+    sessionId ? checkPaymentStatus(sessionId, 'business_plan_summary') : false
+  ); // Track payment status
   const [businessPlanArtifact, setBusinessPlanArtifact] = useState<string | null>(initialArtifact || null);
+  const [isGeneratingArtifact, setIsGeneratingArtifact] = useState(false);
   const [quoteState, setQuoteState] = useState<MotivationalQuote>(() =>
     initialQuote ?? pickFallbackQuote()
   );
   const [quoteLoading, setQuoteLoading] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const exportFileName = useMemo(() => {
     const timestamp = new Date().toISOString().split('T')[0];
     return `business-plan-summary-${timestamp}.doc`;
@@ -356,48 +366,61 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
     }
   }, [storageKey]);
 
-  // ROOT CAUSE FIX: Check for artifact availability if it wasn't initially provided
-  useEffect(() => {
-    if (!businessPlanArtifact && sessionId) {
-      console.log('⏳ Business plan artifact not available yet, checking periodically...');
-      
-      const checkArtifact = async () => {
-        try {
-          const response = await fetch(
-            `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}`,
-            {
-              headers: {
-                Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
-              },
-            }
-          );
-          
-          const data = await response.json();
-          if (data.success && data.result?.business_plan_artifact) {
-            console.log('✅ Business plan artifact is now available!');
-            setBusinessPlanArtifact(data.result.business_plan_artifact);
-          }
-        } catch (error) {
-          console.error('Failed to check artifact:', error);
-        }
-      };
-      
-      // Check immediately
-      checkArtifact();
-      
-      // Then check every 3 seconds for up to 60 seconds
-      const interval = setInterval(checkArtifact, 3000);
-      const timeout = setTimeout(() => {
-        clearInterval(interval);
-        console.log('⏱️ Stopped checking for artifact after 60 seconds');
-      }, 60000);
-      
-      return () => {
-        clearInterval(interval);
-        clearTimeout(timeout);
-      };
+  // ✅ PROPER ARCHITECTURE: Generate artifact on-demand when user clicks button
+  // No polling, no race conditions - just reliable synchronous generation
+  const handleGenerateArtifact = async () => {
+    if (!sessionId || isGeneratingArtifact || businessPlanArtifact) {
+      return; // Already generating or already have artifact
     }
-  }, [businessPlanArtifact, sessionId]);
+
+    setIsGeneratingArtifact(true);
+    console.log('📄 Generating business plan artifact on-demand...');
+
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/generate-business-plan-artifact`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.success && data.result?.business_plan_artifact) {
+        console.log('✅ Business plan artifact generated successfully!');
+        console.log(`📄 Artifact length: ${data.result.business_plan_artifact.length} characters`);
+        setBusinessPlanArtifact(data.result.business_plan_artifact);
+
+        toast.success('✅ Full Business Plan generated successfully!', {
+          position: 'top-center',
+          autoClose: 3000,
+        });
+
+        // Navigate to view the plan
+        navigate(`/ventures/${sessionId}/business-plan`, {
+          state: {
+            businessPlan: data.result.business_plan_artifact,
+            businessPlanSummary: businessPlanSummary,
+            sessionId: sessionId,
+          },
+        });
+      } else {
+        throw new Error(data.message || 'Failed to generate business plan');
+      }
+    } catch (error) {
+      console.error('Failed to generate artifact:', error);
+      toast.error('Failed to generate business plan. Please try again.', {
+        position: 'top-center',
+        autoClose: 5000,
+      });
+    } finally {
+      setIsGeneratingArtifact(false);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -529,7 +552,28 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
     }
   ];
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleExportPlan = () => {
+    // Check if user has already paid for this document
+    if (hasPaid) {
+      setShowExportModal(true);
+    } else {
+      // Show payment modal first
+      setShowPaymentModal(true);
+    }
+  };
+
+  const handlePaymentSuccess = () => {
+    setShowPaymentModal(false);
+    setHasPaid(true);
+    
+    // Mark as paid in storage
+    if (sessionId) {
+      markAsPaid(sessionId, 'business_plan_summary');
+    }
+    
+    toast.success('Payment successful! You can now download your Business Plan Summary.');
+    // Open export modal after successful payment
     setShowExportModal(true);
   };
 
@@ -606,6 +650,23 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
           </div>
         </div>
 
+        {/* Info Banner - How to Generate Full Plan */}
+        {!businessPlanArtifact && !isGeneratingArtifact && (
+          <div className="mb-6 bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <svg className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <h3 className="font-semibold text-blue-900 mb-1">📄 Full Business Plan Available</h3>
+                <p className="text-sm text-blue-800">
+                  This is a high-level summary. Click the <strong>"Generate Full Business Plan"</strong> button above to create your complete, detailed business plan document (typically takes 30-60 seconds).
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Business Plan Summary Overview */}
         <div className="mb-8" ref={contentRef} id="business-plan-summary-content">
           <div className="flex items-center justify-between mb-4">
@@ -614,31 +675,41 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
             </h2>
             <div className="flex gap-2">
               <button
+                disabled={isGeneratingArtifact}
                 onClick={() => {
-                  // Check if artifact is available
-                  if (!businessPlanArtifact) {
-                    toast.warning('Your business plan is still being generated. Please wait a moment and try again.', {
-                      autoClose: 5000
+                  if (businessPlanArtifact) {
+                    // Artifact exists - navigate to view it
+                    navigate(`/ventures/${sessionId}/business-plan`, {
+                      state: {
+                        businessPlan: businessPlanArtifact,
+                        businessPlanSummary: businessPlanSummary,
+                        sessionId: sessionId
+                      }
                     });
-                    return;
+                  } else {
+                    // Artifact doesn't exist - generate it on-demand
+                    handleGenerateArtifact();
                   }
-                  
-                  // Navigate and pass business plan data via state
-                  navigate(`/ventures/${sessionId}/business-plan`, {
-                    state: {
-                      businessPlan: businessPlanArtifact,
-                      businessPlanSummary: businessPlanSummary,
-                      sessionId: sessionId
-                    }
-                  });
                 }}
-                className={`bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 ${!businessPlanArtifact ? 'opacity-50 cursor-not-allowed' : ''}`}
-                title={!businessPlanArtifact ? 'Business plan is being generated...' : 'View your complete business plan'}
+                className={`bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none`}
+                title={businessPlanArtifact ? 'View your complete business plan' : 'Click to generate your full business plan'}
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                {businessPlanArtifact ? '📄 View Full Business Plan' : '⏳ Generating Business Plan...'}
+                {isGeneratingArtifact ? (
+                  <>
+                    <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>⏳ Generating... (30-60s)</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>{businessPlanArtifact ? '📄 View Full Business Plan' : '🎯 Generate Full Business Plan'}</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -1119,6 +1190,15 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
           transition: background-color 150ms ease-in-out;
         }
       `}</style>
+
+      {/* Payment Modal */}
+      <PaymentForm
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        onPaymentSuccess={handlePaymentSuccess}
+        amount={PRICING.BUSINESS_PLAN_SUMMARY.amount}
+        itemName={PRICING.BUSINESS_PLAN_SUMMARY.itemName}
+      />
 
       {/* Export Modal */}
       <DocumentExportModal

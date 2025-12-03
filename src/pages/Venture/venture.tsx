@@ -3916,26 +3916,6 @@ export default function ChatPage() {
                     </div>
                     <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-amber-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 </button>
-
-                  {/* 🧪 TESTING: Skip to Q44 Button - Only show in Business Plan phase */}
-                  {progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) && (
-                    <button
-                      onClick={() => handleNext("skip to 44")}
-                      disabled={loading}
-                      className="group relative bg-gradient-to-br from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100 border border-purple-200 hover:border-purple-300 rounded-xl p-4 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                    >
-                      <div className="flex flex-col items-center space-y-2">
-                        <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center text-white text-lg group-hover:scale-110 transition-transform duration-300">
-                          ⏭️
-                        </div>
-                        <div className="text-center">
-                          <div className="text-sm font-semibold text-purple-800 group-hover:text-purple-900">Skip to 44</div>
-                          <div className="text-xs text-purple-600 group-hover:text-purple-700">Testing only</div>
-                        </div>
-                      </div>
-                      <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                    </button>
-                  )}
                   </div>
 
                 <div className="mt-3 text-center">
