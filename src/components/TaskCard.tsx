@@ -187,7 +187,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       }
       
       const response = await httpClient.post(
-        `/implementation/sessions/${currentSessionId}/implementation/tasks/${task.id}/complete`, 
+        `/implementation/sessions/${currentSessionId}/tasks/${task.id}/complete`, 
         completionData, 
         {
           headers: {
@@ -252,7 +252,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       };
 
       const response = await httpClient.post(
-        `/implementation/sessions/${currentSessionId}/implementation/tasks/${task.id}/complete`, 
+        `/implementation/sessions/${currentSessionId}/tasks/${task.id}/complete`, 
         completionData, 
         {
           headers: {

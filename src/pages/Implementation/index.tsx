@@ -246,7 +246,7 @@ const Implementation: React.FC<ImplementationProps> = ({
   const loadImplementationData = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/implementation/sessions/${sessionId}/implementation/tasks`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/implementation/sessions/${sessionId}/tasks`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`,
           'Content-Type': 'application/json'
@@ -293,7 +293,7 @@ const Implementation: React.FC<ImplementationProps> = ({
     if (!currentTask) return;
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/implementation/sessions/${sessionId}/implementation/tasks/${currentTask.id}/complete`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/implementation/sessions/${sessionId}/tasks/${currentTask.id}/complete`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`,
@@ -340,7 +340,7 @@ const Implementation: React.FC<ImplementationProps> = ({
     if (!currentTask) return;
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/implementation/sessions/${sessionId}/implementation/contact`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/implementation/sessions/${sessionId}/contact`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`,
@@ -371,7 +371,7 @@ const Implementation: React.FC<ImplementationProps> = ({
     if (!currentTask) return;
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/implementation/sessions/${sessionId}/implementation/tasks/${currentTask.id}/kickstart`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/implementation/sessions/${sessionId}/tasks/${currentTask.id}/kickstart`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`,
@@ -401,7 +401,7 @@ const Implementation: React.FC<ImplementationProps> = ({
     if (!currentTask) return;
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/implementation/sessions/${sessionId}/implementation/help`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/implementation/sessions/${sessionId}/help`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`,
@@ -435,7 +435,7 @@ const Implementation: React.FC<ImplementationProps> = ({
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/implementation/sessions/${sessionId}/implementation/tasks/${currentTask.id}/upload-document`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/implementation/sessions/${sessionId}/tasks/${currentTask.id}/upload-document`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`
