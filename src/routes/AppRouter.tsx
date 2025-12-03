@@ -13,6 +13,7 @@ import {
   AboutUs,
   LearnMore,
   TermsAndConditions,
+  PrivacyPolicy,
 } from "../pages";
 import RoadmapPage from "../pages/Roadmap/RoadmapPage";
 import BusinessPlanView from "../pages/BusinessPlan/BusinessPlanView";
@@ -110,6 +111,11 @@ const router = createBrowserRouter([
             path: "/terms-and-conditions",
             element: <TermsAndConditions />,
             errorElement: <TermsAndConditions />,
+          },
+          {
+            path: "/privacy-policy",
+            element: <PrivacyPolicy />,
+            errorElement: <PrivacyPolicy />,
           },
           {
             path: "/test-question-formatter",

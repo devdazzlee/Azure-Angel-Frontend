@@ -6,6 +6,7 @@ export { default as VerifyEmailPage } from './SignUp/verifyEmailPage';
 export { default as AboutUs } from './About';
 export { default as LearnMore } from './LearnMore';
 export { default as TermsAndConditions } from './TermsAndConditions';
+export { default as PrivacyPolicy } from './PrivacyPolicy';
 
 export { default as KnowYourCustomer } from './KYC';
 export { default as NewVenture } from './Venture/newVenture';
