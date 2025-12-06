@@ -291,7 +291,7 @@ const EnhancedPlanToRoadmapTransition: React.FC<EnhancedPlanToRoadmapTransitionP
                             Interactive Commands
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-700">
-                            Help, Kickstart, and Who do I contact? appear dynamically.
+                            Help and Find Providers options appear dynamically.
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-600 italic">
                             "Need a lawyer? Type 'Who do I contact?'."

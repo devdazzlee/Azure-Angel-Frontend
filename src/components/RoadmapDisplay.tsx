@@ -10,6 +10,7 @@ interface RoadmapDisplayProps {
   onEditRoadmap?: (modifiedRoadmap: string) => void;
   loading?: boolean;
   sessionId?: string;
+  hideStartButton?: boolean; // Hide button if already in Implementation phase
 }
 
 interface EditSection {
@@ -82,7 +83,8 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
   onStartImplementation,
   onEditRoadmap,
   loading = false,
-  sessionId
+  sessionId,
+  hideStartButton = false
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -121,6 +123,9 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
   const formatTableCell = (cell: string): string =>
     cell
       .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em class="italic">$1</em>')
+      .replace(/^\* /gm, '')
+      .replace(/\*/g, '')
       .replace(/`([^`]+)`/g, '<code class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-xs">$1</code>')
       .replace(/<br>/g, '<br/>')
       .replace(/\n/g, '<br/>');
@@ -266,14 +271,14 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
       return (
         <div
           key={key}
-          className="mb-10 rounded-3xl border border-indigo-200 shadow-[0_10px_30px_rgba(79,70,229,0.12)] overflow-hidden"
+          className="mb-6 sm:mb-8 md:mb-10 rounded-xl sm:rounded-2xl md:rounded-3xl border border-indigo-200 shadow-[0_10px_30px_rgba(79,70,229,0.12)] overflow-hidden"
         >
-          <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-sky-500 px-6 py-4">
+          <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-sky-500 px-4 sm:px-5 md:px-6 py-3 sm:py-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <h4 className="text-white text-lg font-semibold tracking-wide">
+              <h4 className="text-white text-base sm:text-lg font-semibold tracking-wide">
                 {contextTitle || 'Roadmap Tasks'}
               </h4>
-              <span className="text-indigo-100 text-xs uppercase tracking-[0.2em]">
+              <span className="text-indigo-100 text-[10px] sm:text-xs uppercase tracking-wider sm:tracking-[0.2em]">
                 Sequential Execution
               </span>
             </div>
@@ -282,19 +287,19 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
             <table className="min-w-full border-separate border-spacing-0">
               <thead>
                 <tr className="bg-white">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100">
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100">
                     Task
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100">
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100">
                     Description
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100">
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100 hidden lg:table-cell">
                     Dependencies
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100">
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100 hidden md:table-cell">
                     Angel's Role
                   </th>
-                  <th className="w-20 px-4 py-3 text-center text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100">
+                  <th className="w-16 sm:w-20 px-2 sm:px-4 py-2 sm:py-3 text-center text-[10px] sm:text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100">
                     Status
                   </th>
                 </tr>
@@ -314,32 +319,32 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
                         rowIdx % 2 === 0 ? 'bg-white' : 'bg-indigo-50/40'
                       } border-b border-indigo-100 last:border-none hover:bg-indigo-100/60 transition-colors`}
                     >
-                      <td className="px-4 py-4 align-top">
+                      <td className="px-3 sm:px-4 py-3 sm:py-4 align-top">
                         <div
-                          className="text-base font-bold text-gray-900"
+                          className="text-sm sm:text-base font-bold text-gray-900"
                           dangerouslySetInnerHTML={{ __html: formatTableCell(task) }}
                         />
                       </td>
-                      <td className="px-4 py-4 align-top">
+                      <td className="px-3 sm:px-4 py-3 sm:py-4 align-top">
                         <div
-                          className="text-sm leading-relaxed text-gray-700"
+                          className="text-xs sm:text-sm leading-relaxed text-gray-700"
                           dangerouslySetInnerHTML={{ __html: formatTableCell(description) }}
                         />
                       </td>
-                      <td className="px-4 py-4 align-top">
+                      <td className="px-3 sm:px-4 py-3 sm:py-4 align-top hidden lg:table-cell">
                         <div
-                          className="text-sm text-gray-600 italic"
+                          className="text-xs sm:text-sm text-gray-600 italic"
                           dangerouslySetInnerHTML={{ __html: formatTableCell(dependencies) }}
                         />
                       </td>
-                      <td className="px-4 py-4 align-top">
+                      <td className="px-3 sm:px-4 py-3 sm:py-4 align-top hidden md:table-cell">
                         <div
-                          className="text-sm text-indigo-700"
+                          className="text-xs sm:text-sm text-indigo-700"
                           dangerouslySetInnerHTML={{ __html: formatTableCell(angelRole) }}
                         />
                       </td>
-                      <td className="px-4 py-4 align-top text-center">
-                        <span className={`text-2xl ${statusColor}`}>
+                      <td className="px-2 sm:px-4 py-3 sm:py-4 align-top text-center">
+                        <span className={`text-xl sm:text-2xl ${statusColor}`}>
                           {statusIcon}
                         </span>
                       </td>
@@ -358,14 +363,14 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
       return (
         <div
           key={key}
-          className="mb-10 rounded-3xl border border-indigo-200 shadow-[0_10px_30px_rgba(79,70,229,0.12)] overflow-hidden"
+          className="mb-6 sm:mb-8 md:mb-10 rounded-xl sm:rounded-2xl md:rounded-3xl border border-indigo-200 shadow-[0_10px_30px_rgba(79,70,229,0.12)] overflow-hidden"
         >
-          <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-sky-500 px-6 py-4">
+          <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-sky-500 px-4 sm:px-5 md:px-6 py-3 sm:py-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <h4 className="text-white text-lg font-semibold tracking-wide">
+              <h4 className="text-white text-base sm:text-lg font-semibold tracking-wide">
                 {contextTitle || 'Roadmap Steps'}
               </h4>
-              <span className="text-indigo-100 text-xs uppercase tracking-[0.2em]">
+              <span className="text-indigo-100 text-[10px] sm:text-xs uppercase tracking-wider sm:tracking-[0.2em]">
                 Sequential Execution
               </span>
             </div>
@@ -374,16 +379,16 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
             <table className="min-w-full border-separate border-spacing-0">
               <thead>
                 <tr className="bg-white">
-                  <th className="w-16 px-4 py-3 text-left text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100">
+                  <th className="w-12 sm:w-16 px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100">
                     #
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100">
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100">
                     Step & Guidance
                   </th>
-                  <th className="w-44 px-4 py-3 text-left text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100">
+                  <th className="w-32 sm:w-40 md:w-44 px-3 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100 hidden sm:table-cell">
                     Timeline
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100">
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100 hidden md:table-cell">
                     Research Sources
                   </th>
                 </tr>
@@ -400,27 +405,27 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
                         rowIdx % 2 === 0 ? 'bg-white' : 'bg-indigo-50/40'
                       } border-b border-indigo-100 last:border-none hover:bg-indigo-100/60 transition-colors`}
                     >
-                      <td className="px-4 py-4 align-top">
-                        <div className="inline-flex items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold text-sm h-10 w-10 shadow-md">
+                      <td className="px-2 sm:px-4 py-3 sm:py-4 align-top">
+                        <div className="inline-flex items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold text-xs sm:text-sm h-8 w-8 sm:h-10 sm:w-10 shadow-md">
                           {stepNumber}
                         </div>
                       </td>
-                      <td className="px-4 py-4 align-top">
+                      <td className="px-3 sm:px-4 py-3 sm:py-4 align-top">
                         <div
-                          className="text-base font-bold text-gray-900 mb-2"
+                          className="text-sm sm:text-base font-bold text-gray-900 mb-1 sm:mb-2"
                           dangerouslySetInnerHTML={{ __html: formatTableCell(stepTitle) }}
                         />
                         <div
-                          className="text-sm leading-relaxed text-gray-700"
+                          className="text-xs sm:text-sm leading-relaxed text-gray-700"
                           dangerouslySetInnerHTML={{ __html: formatTableCell(stepDescription) }}
                         />
                       </td>
-                      <td className="px-4 py-4 align-top">
-                        <span className="inline-flex items-center rounded-full bg-blue-100 text-blue-800 px-3 py-1.5 text-xs font-semibold border border-blue-200">
+                      <td className="px-3 sm:px-4 py-3 sm:py-4 align-top hidden sm:table-cell">
+                        <span className="inline-flex items-center rounded-full bg-blue-100 text-blue-800 px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-semibold border border-blue-200">
                           {sanitizeTimeline(timeline)}
                         </span>
                       </td>
-                      <td className="px-4 py-4 align-top text-xs text-gray-700 leading-relaxed">
+                      <td className="px-3 sm:px-4 py-3 sm:py-4 align-top text-xs text-gray-700 leading-relaxed hidden md:table-cell">
                         <div className="bg-gray-50 rounded-md p-2 border border-gray-200" dangerouslySetInnerHTML={{ __html: formatTableCell(source) }} />
                       </td>
                     </tr>
@@ -434,7 +439,7 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
     }
 
     return (
-      <div key={key} className="overflow-x-auto mb-6 shadow-md rounded-lg">
+      <div key={key} className="overflow-x-auto mb-4 sm:mb-6 shadow-md rounded-lg">
         <table className="min-w-full border-collapse bg-white rounded-lg overflow-hidden">
           <thead className={isResearchTable 
             ? "bg-gradient-to-r from-indigo-100 to-purple-100" 
@@ -444,11 +449,11 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
               {headerCells.map((header, idx) => (
                 <th
                   key={idx}
-                  className={`px-4 py-3 text-left text-xs sm:text-sm font-bold border-b-2 ${
+                  className={`px-3 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs md:text-sm font-bold border-b-2 ${
                     isResearchTable ? 'text-indigo-900 border-indigo-300' : 'text-gray-900 border-indigo-200'
                   }`}
                 >
-                  {header}
+                  {header.replace(/\*\*/g, '')}
                 </th>
               ))}
             </tr>
@@ -466,7 +471,7 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
                   return (
                     <td
                       key={cellIdx}
-                      className={`px-4 py-3 text-xs sm:text-sm border-b border-gray-200 ${
+                      className={`px-3 sm:px-4 py-2 sm:py-3 text-[11px] sm:text-xs md:text-sm border-b border-gray-200 ${
                         isResearchCell ? 'bg-indigo-50/50' : ''
                       }`}
                       dangerouslySetInnerHTML={{
@@ -475,6 +480,8 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
                           .replace(/\*Government\*/g, '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">🏛️ Government</span>')
                           .replace(/\*Academic\*/g, '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">🎓 Academic</span>')
                           .replace(/\*Industry\*/g, '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">📰 Industry</span>')
+                          .replace(/\*(.*?)\*/g, '<em class="italic">$1</em>')
+                          .replace(/\*/g, '')
                           .replace(/<br>/g, '<br/>')
                           .replace(/\n/g, '<br/>')
                       }}
@@ -992,16 +999,16 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
       <div className="max-w-6xl mx-auto px-4 py-4 sm:py-8">
         {/* Research Foundation Banner */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-lg p-4 sm:p-6 mb-6 sm:mb-8 text-white shadow-xl">
-          <div className="flex flex-col sm:flex-row items-center gap-4 mb-4">
-            <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
-              <span className="text-2xl">🔬</span>
+          <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 mb-4">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+              <span className="text-xl sm:text-2xl">🔬</span>
             </div>
             <div className="text-center sm:text-left flex-1">
-              <h2 className="text-xl sm:text-2xl font-bold mb-1">Launch Roadmap</h2>
-              <p className="text-blue-100 text-sm sm:text-base font-medium">Built on Government Sources, Academic Research & Industry Reports</p>
+              <h2 className="text-lg sm:text-xl md:text-2xl font-bold mb-1">Launch Roadmap</h2>
+              <p className="text-blue-100 text-xs sm:text-sm md:text-base font-medium">Built on Government Sources, Academic Research & Industry Reports</p>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-xl">🏛️</span>
@@ -1033,7 +1040,7 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
         </div>
 
         {/* Planning Champion Achievement */}
-        <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-lg p-6 mb-8">
+        <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-lg p-4 sm:p-6 mb-6 sm:mb-8">
           <div className="flex items-center gap-4 mb-4">
             <div className="w-16 h-16 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full flex items-center justify-center text-white text-2xl">
               🏆
@@ -1068,7 +1075,7 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
         {/* Roadmap Content */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           {/* Table Format Info Banner */}
-          <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border-b-2 border-amber-200 px-6 py-4">
+          <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border-b-2 border-amber-200 px-4 sm:px-6 py-3 sm:py-4">
             <div className="flex items-start gap-3">
               <span className="text-2xl">📊</span>
               <div className="flex-1">
@@ -1098,14 +1105,14 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
             </div>
           </div>
           
-          <div className="p-8" ref={contentRef} id="roadmap-content">
-            <div className="prose prose-lg max-w-none roadmap-content">
+          <div className="p-4 sm:p-6 md:p-8" ref={contentRef} id="roadmap-content">
+            <div className="prose prose-sm sm:prose-base md:prose-lg max-w-none roadmap-content">
               {renderMarkdownTable(roadmapContent)}
             </div>
           </div>
 
           {/* Execution Excellence Section */}
-          <div className="bg-gradient-to-r from-green-50 to-blue-50 border-t border-green-200 px-8 py-6">
+          <div className="bg-gradient-to-r from-green-50 to-blue-50 border-t border-green-200 px-4 sm:px-6 md:px-8 py-4 sm:py-6">
             <div className="mb-6">
               <h3 className="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
                 <span className="text-2xl">🚀</span>
@@ -1148,28 +1155,30 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
                 </p>
               </div>
               
-              <button
-                onClick={onStartImplementation}
-                disabled={loading}
-                className="px-8 py-3 bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
-              >
-                {loading ? (
-                  <>
-                    <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Starting...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                    Start Implementation
-                  </>
-                )}
-              </button>
+              {!hideStartButton && (
+                <button
+                  onClick={onStartImplementation}
+                  disabled={loading}
+                  className="px-8 py-3 bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
+                >
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Starting...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      Start Implementation
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>

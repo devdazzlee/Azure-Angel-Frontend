@@ -18,7 +18,8 @@ import {
   Settings,
   Megaphone,
   ChevronRight,
-  Circle
+  Circle,
+  MapPin
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import httpClient from '../api/httpClient';
@@ -57,7 +58,6 @@ interface TaskCardProps {
   task: ImplementationTask;
   onComplete: () => void;
   onGetServiceProviders: () => void;
-  onGetKickstart: () => void;
   onGetHelp: () => void;
   onUploadDocument: (file: File) => void;
   sessionId?: string;  // Add sessionId prop
@@ -67,7 +67,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   task,
   onComplete,
   onGetServiceProviders,
-  onGetKickstart,
   onGetHelp,
   onUploadDocument,
   sessionId
@@ -345,13 +344,43 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         {/* Task Description */}
         <div>
           <h3 className="font-semibold text-gray-900 mb-2">Task Description</h3>
-          <p className="text-gray-700">{task.description}</p>
+          <div className="prose prose-sm max-w-none">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                p: ({ children }) => <p className="text-sm text-gray-700 leading-relaxed mb-2">{children}</p>,
+                ul: ({ children }) => <ul className="list-disc ml-5 space-y-1 text-sm text-gray-700">{children}</ul>,
+                ol: ({ children }) => <ol className="list-decimal ml-5 space-y-1 text-sm text-gray-700">{children}</ol>,
+                li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+                em: ({ children }) => <em className="italic">{children}</em>,
+                code: ({ children }) => <code className="bg-gray-100 text-gray-900 px-1.5 py-0.5 rounded text-xs">{children}</code>,
+              }}
+            >
+              {task.description}
+            </ReactMarkdown>
+          </div>
         </div>
 
         {/* Purpose */}
         <div>
           <h3 className="font-semibold text-gray-900 mb-2">Purpose</h3>
-          <p className="text-gray-700">{task.purpose}</p>
+          <div className="prose prose-sm max-w-none">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                p: ({ children }) => <p className="text-sm text-gray-700 leading-relaxed mb-2">{children}</p>,
+                ul: ({ children }) => <ul className="list-disc ml-5 space-y-1 text-sm text-gray-700">{children}</ul>,
+                ol: ({ children }) => <ol className="list-decimal ml-5 space-y-1 text-sm text-gray-700">{children}</ol>,
+                li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+                em: ({ children }) => <em className="italic">{children}</em>,
+                code: ({ children }) => <code className="bg-gray-100 text-gray-900 px-1.5 py-0.5 rounded text-xs">{children}</code>,
+              }}
+            >
+              {task.purpose}
+            </ReactMarkdown>
+          </div>
         </div>
 
         {/* Substeps - CRITICAL: Show 3-5 synchronous substeps */}
@@ -396,16 +425,52 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                         }`}>
                           {substep.title}
                         </h4>
-                        {index === currentSubstepIndex && !substep.completed && (
+                        {substep.completed ? (
+                          <button
+                            onClick={() => handleSubstepClick(substep)}
+                            className="text-xs font-medium text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1 rounded transition-colors flex items-center gap-1"
+                          >
+                            <CheckCircle className="h-3 w-3" />
+                            Click to Edit
+                          </button>
+                        ) : index === currentSubstepIndex ? (
                           <span className="text-xs font-medium text-blue-600 bg-blue-100 px-2 py-1 rounded">
                             Current Step
                           </span>
-                        )}
+                        ) : null}
                       </div>
-                      <p className="text-sm text-gray-700 mb-2">{substep.description}</p>
+                      <div className="prose prose-sm max-w-none mb-2">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            p: ({ children }) => <p className="text-sm text-gray-700 leading-relaxed mb-1">{children}</p>,
+                            ul: ({ children }) => <ul className="list-disc ml-4 space-y-0.5 text-sm text-gray-700">{children}</ul>,
+                            ol: ({ children }) => <ol className="list-decimal ml-4 space-y-0.5 text-sm text-gray-700">{children}</ol>,
+                            li: ({ children }) => <li className="text-xs leading-relaxed">{children}</li>,
+                            strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+                            code: ({ children }) => <code className="bg-gray-100 text-gray-900 px-1 py-0.5 rounded text-xs">{children}</code>,
+                          }}
+                        >
+                          {substep.description}
+                        </ReactMarkdown>
+                      </div>
                       <div className="bg-blue-50 rounded p-2 mb-2">
                         <p className="text-xs font-medium text-blue-800 mb-1">Angel can help:</p>
-                        <p className="text-xs text-blue-700">{substep.angel_can_help}</p>
+                        <div className="prose prose-sm max-w-none">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              p: ({ children }) => <p className="text-xs text-blue-700 leading-relaxed mb-1">{children}</p>,
+                              ul: ({ children }) => <ul className="list-disc ml-4 space-y-0.5 text-xs text-blue-700">{children}</ul>,
+                              ol: ({ children }) => <ol className="list-decimal ml-4 space-y-0.5 text-xs text-blue-700">{children}</ol>,
+                              li: ({ children }) => <li className="text-xs leading-relaxed">{children}</li>,
+                              strong: ({ children }) => <strong className="font-semibold text-blue-800">{children}</strong>,
+                              code: ({ children }) => <code className="bg-blue-100 text-blue-900 px-1 py-0.5 rounded text-xs">{children}</code>,
+                            }}
+                          >
+                            {substep.angel_can_help}
+                          </ReactMarkdown>
+                        </div>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-gray-500 flex items-center gap-1">
@@ -490,20 +555,35 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               Mentor Insights
             </h3>
             <div className="bg-yellow-50 p-4 rounded-lg">
-              <p className="text-sm text-yellow-800 whitespace-pre-wrap">{mentorInsights}</p>
+              <div className="prose prose-sm max-w-none text-yellow-900">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    h1: ({ children }) => <h1 className="text-lg font-bold text-yellow-900 mb-3 mt-4">{children}</h1>,
+                    h2: ({ children }) => <h2 className="text-base font-semibold text-yellow-900 mb-2 mt-3">{children}</h2>,
+                    h3: ({ children }) => <h3 className="text-sm font-semibold text-yellow-800 mb-2 mt-3">{children}</h3>,
+                    p: ({ children }) => <p className="text-sm text-yellow-800 leading-relaxed mb-2">{children}</p>,
+                    ul: ({ children }) => <ul className="list-disc ml-5 space-y-1 text-sm text-yellow-800 mb-2">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal ml-5 space-y-1 text-sm text-yellow-800 mb-2">{children}</ol>,
+                    li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                    strong: ({ children }) => <strong className="font-semibold text-yellow-900">{children}</strong>,
+                    code: ({ children }) => <code className="bg-yellow-100 text-yellow-900 px-1.5 py-0.5 rounded text-xs">{children}</code>,
+                    blockquote: ({ children }) => <blockquote className="border-l-4 border-yellow-400 pl-4 italic text-yellow-800 my-2">{children}</blockquote>,
+                  }}
+                >
+                  {mentorInsights}
+                </ReactMarkdown>
+              </div>
             </div>
           </div>
         )}
 
-        {/* RAG Research */}
+        {/* Research */}
         {ragResearch && (
           <div>
             <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-green-600" />
               Research-Backed Guidance
-              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                RAG-Powered
-              </span>
             </h3>
             <div className="bg-green-50 p-4 rounded-lg">
               <p className="text-sm text-green-800 mb-3">
@@ -607,54 +687,76 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             )}
           </button>
 
-          <div className="flex gap-2">
-            <button
-              onClick={onGetHelp}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <Lightbulb className="h-4 w-4" />
-              Help
-            </button>
-
-            <button
-              onClick={onGetKickstart}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <Rocket className="h-4 w-4" />
-              Kickstart
-            </button>
-
-            <button
-              onClick={onGetServiceProviders}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <Phone className="h-4 w-4" />
-              Contact
-            </button>
-          </div>
+          
         </div>
 
         {/* Business Context */}
         <div className="pt-4 border-t border-gray-200">
-          <h3 className="font-semibold text-gray-900 mb-2">Business Context</h3>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-gray-600">Business:</span>
-              <span className="font-medium ml-2">{task.business_context.business_name}</span>
+          <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <div className="p-1.5 bg-gradient-to-br from-teal-500 to-blue-600 rounded-lg">
+              <Building2 className="h-4 w-4 text-white" />
             </div>
-            <div>
-              <span className="text-gray-600">Industry:</span>
-              <span className="font-medium ml-2">{task.business_context.industry}</span>
+            <span className="bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
+              Business Context
+            </span>
+          </h3>
+          {!task.business_context.business_name || task.business_context.business_name === 'Unsure' ? (
+            // Beautiful Skeleton Loader
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-pulse">
+              <div className="flex items-center gap-2 p-2.5 bg-gradient-to-r from-teal-50 to-blue-50 rounded-lg">
+                <div className="h-6 w-6 bg-gradient-to-br from-teal-200 to-blue-200 rounded"></div>
+                <div className="flex-1">
+                  <div className="h-3 bg-gray-200 rounded w-20 mb-1.5"></div>
+                  <div className="h-4 bg-gray-300 rounded w-32"></div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 p-2.5 bg-gradient-to-r from-teal-50 to-blue-50 rounded-lg">
+                <div className="h-6 w-6 bg-gradient-to-br from-teal-200 to-blue-200 rounded"></div>
+                <div className="flex-1">
+                  <div className="h-3 bg-gray-200 rounded w-16 mb-1.5"></div>
+                  <div className="h-4 bg-gray-300 rounded w-28"></div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 p-2.5 bg-gradient-to-r from-teal-50 to-blue-50 rounded-lg">
+                <div className="h-6 w-6 bg-gradient-to-br from-teal-200 to-blue-200 rounded"></div>
+                <div className="flex-1">
+                  <div className="h-3 bg-gray-200 rounded w-20 mb-1.5"></div>
+                  <div className="h-4 bg-gray-300 rounded w-36"></div>
+                </div>
+              </div>
             </div>
-            <div>
-              <span className="text-gray-600">Location:</span>
-              <span className="font-medium ml-2">{task.business_context.location}</span>
+          ) : (
+            // Beautiful Actual Content
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="flex items-center gap-2.5 p-3 bg-gradient-to-r from-teal-50/80 to-blue-50/80 hover:from-teal-100 hover:to-blue-100 rounded-xl backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-md group">
+                <div className="p-2 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg shadow-sm group-hover:scale-110 transition-transform">
+                  <Building2 className="h-4 w-4 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Business</p>
+                  <p className="text-sm font-bold text-gray-900 truncate">{task.business_context.business_name}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 p-3 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 hover:from-blue-100 hover:to-indigo-100 rounded-xl backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-md group">
+                <div className="p-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-sm group-hover:scale-110 transition-transform">
+                  <Target className="h-4 w-4 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Industry</p>
+                  <p className="text-sm font-semibold text-gray-800 truncate">{task.business_context.industry}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 p-3 bg-gradient-to-r from-indigo-50/80 to-purple-50/80 hover:from-indigo-100 hover:to-purple-100 rounded-xl backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-md group">
+                <div className="p-2 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg shadow-sm group-hover:scale-110 transition-transform">
+                  <MapPin className="h-4 w-4 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Location</p>
+                  <p className="text-sm font-semibold text-gray-800 truncate">{task.business_context.location}</p>
+                </div>
+              </div>
             </div>
-            <div>
-              <span className="text-gray-600">Type:</span>
-              <span className="font-medium ml-2">{task.business_context.business_type}</span>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 

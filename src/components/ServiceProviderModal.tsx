@@ -1,4 +1,6 @@
 import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface ServiceProvider {
   name: string;
@@ -101,7 +103,18 @@ const ServiceProviderModal: React.FC<ServiceProviderModalProps> = ({
           {/* Task Context */}
           <div className="bg-gray-50 rounded-lg p-4 mb-6">
             <h3 className="font-semibold text-gray-900 mb-2">Task Context</h3>
-            <p className="text-gray-700 text-sm mb-2">{task.description}</p>
+            <div className="prose prose-sm max-w-none mb-2">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  p: ({ children }) => <p className="text-sm text-gray-700 leading-relaxed mb-0">{children}</p>,
+                  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                  em: ({ children }) => <em className="italic">{children}</em>,
+                }}
+              >
+                {task.description}
+              </ReactMarkdown>
+            </div>
             <div className="text-xs text-gray-500">
               <span className="font-medium">Business:</span> {task.business_context.business_name} • 
               <span className="font-medium ml-1">Industry:</span> {task.business_context.industry} • 
@@ -124,7 +137,18 @@ const ServiceProviderModal: React.FC<ServiceProviderModalProps> = ({
                       )}
                     </div>
                     <p className="text-sm text-gray-600 mb-2">{provider.type}</p>
-                    <p className="text-gray-700 mb-3">{provider.description}</p>
+                    <div className="prose prose-sm max-w-none mb-3">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          p: ({ children }) => <p className="text-sm text-gray-700 leading-relaxed mb-0">{children}</p>,
+                          strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                          em: ({ children }) => <em className="italic">{children}</em>,
+                        }}
+                      >
+                        {provider.description}
+                      </ReactMarkdown>
+                    </div>
                   </div>
                   <div className="text-right">
                     <div className="text-lg font-semibold text-gray-900">{provider.pricing}</div>

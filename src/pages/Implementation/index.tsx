@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
-import ProgressCircle from '../../components/ProgressCircle';
 import TaskCard from '../../components/TaskCard';
 import TaskCompletionModal from '../../components/TaskCompletionModal';
 import ServiceProviderModal from '../../components/ServiceProviderModal';
-import KickstartModal from '../../components/KickstartModal';
 import HelpModal from '../../components/HelpModal';
 import ComprehensiveSupport from '../../components/ComprehensiveSupport';
+import FloatingComprehensiveSupport from '../../components/FloatingComprehensiveSupport';
 import RoadmapDisplay from '../../components/RoadmapDisplay';
 import ImplementationCompletionModal from '../../components/ImplementationCompletionModal';
 import httpClient from '../../api/httpClient';
@@ -22,7 +21,9 @@ import {
   Shield,
   DollarSign,
   FileText,
-  Download
+  Download,
+  Building2,
+  MapPin
 } from 'lucide-react';
 
 interface ImplementationSubstep {
@@ -105,6 +106,11 @@ const Implementation: React.FC<ImplementationProps> = ({
   const [supportLoaded, setSupportLoaded] = useState(false);
   const [roadmapLoaded, setRoadmapLoaded] = useState(false);
   
+  // Local business context that can be updated independently
+  const [localBusinessContext, setLocalBusinessContext] = useState<any>(null);
+  const [extractionAttempted, setExtractionAttempted] = useState(false);
+  const [businessContextLoading, setBusinessContextLoading] = useState(false);
+  
   // Cache for ComprehensiveSupport API responses
   const [agentsCache, setAgentsCache] = useState<any>(null);
   const [providersCache, setProvidersCache] = useState<any>(null);
@@ -116,12 +122,14 @@ const Implementation: React.FC<ImplementationProps> = ({
   // Modal states
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [showServiceProviderModal, setShowServiceProviderModal] = useState(false);
-  const [showKickstartModal, setShowKickstartModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  
+  // Loading states for Quick Actions
+  const [helpLoading, setHelpLoading] = useState(false);
+  const [serviceProvidersLoading, setServiceProvidersLoading] = useState(false);
   
   // Modal data
   const [serviceProviders, setServiceProviders] = useState<any[]>([]);
-  const [kickstartPlan, setKickstartPlan] = useState<any>(null);
   const [helpContent, setHelpContent] = useState<string>('');
 
   useEffect(() => {
@@ -134,7 +142,66 @@ const Implementation: React.FC<ImplementationProps> = ({
     hasFetchedProviders.current = false;
     setAgentsCache(null);
     setProvidersCache(null);
+    setExtractionAttempted(false);
+    setLocalBusinessContext(null);
   }, [sessionId]);
+  
+  // Separate effect for business context extraction (runs once)
+  useEffect(() => {
+    if (!extractionAttempted && sessionData) {
+      extractBusinessContextIfNeeded();
+    }
+  }, [sessionData, extractionAttempted]);
+
+  const extractBusinessContextIfNeeded = async () => {
+    // Mark as attempted to prevent infinite loop
+    setExtractionAttempted(true);
+    
+    // Check if business name is invalid (Unsure, Your Business, etc.)
+    const invalidValues = ["", "unsure", "your business", "none", "n/a", "not specified"];
+    const currentBusinessName = (businessContext?.business_name || "").toLowerCase().trim();
+    
+    if (!invalidValues.includes(currentBusinessName)) {
+      console.log('✅ Business name is valid, no extraction needed');
+      return;
+    }
+    
+    try {
+      console.log('🔍 Business name is invalid:', currentBusinessName);
+      console.log('   Extracting/generating from chat history...');
+      
+      setBusinessContextLoading(true);
+      
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/business-context/sessions/${sessionId}/extract-business-context`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.result.extracted) {
+            const extractedContext = data.result.business_context;
+            console.log('✅ Business context extracted/generated:', extractedContext);
+            console.log('   Previous:', data.result.previous_context?.business_name);
+            console.log('   New:', extractedContext.business_name);
+            
+            // Store in local state to override parent's sessionData
+            setLocalBusinessContext(extractedContext);
+            
+            // CRITICAL: Wait a moment for database and cache to update, then reload
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await loadImplementationData();
+          }
+        }
+      } catch (error) {
+        console.error('Error extracting business context:', error);
+      } finally {
+        setBusinessContextLoading(false);
+      }
+  };
 
   const handleTabChange = (tab: 'task' | 'support' | 'roadmap') => {
     setActiveTab(tab);
@@ -235,8 +302,8 @@ const Implementation: React.FC<ImplementationProps> = ({
     }
   };
 
-  // Use sessionData for business context if available
-  const businessContext = sessionData || {
+  // Use localBusinessContext if available (from extraction), otherwise use sessionData
+  const businessContext = localBusinessContext || sessionData || {
     business_name: "Your Business",
     industry: "General Business", 
     location: "United States",
@@ -337,9 +404,10 @@ const Implementation: React.FC<ImplementationProps> = ({
   };
 
   const handleGetServiceProviders = async () => {
-    if (!currentTask) return;
+    if (!currentTask || serviceProvidersLoading) return;
 
     try {
+      setServiceProvidersLoading(true);
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/implementation/sessions/${sessionId}/contact`, {
         method: 'POST',
         headers: {
@@ -364,43 +432,17 @@ const Implementation: React.FC<ImplementationProps> = ({
     } catch (err) {
       console.error('Error getting service providers:', err);
       toast.error('Failed to get service providers');
+    } finally {
+      setServiceProvidersLoading(false);
     }
   };
 
-  const handleGetKickstart = async () => {
-    if (!currentTask) return;
-
-    try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/implementation/sessions/${sessionId}/tasks/${currentTask.id}/kickstart`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to get kickstart plan');
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        setKickstartPlan(data.kickstart_plan);
-        setShowKickstartModal(true);
-      } else {
-        toast.error(data.message || 'Failed to get kickstart plan');
-      }
-    } catch (err) {
-      console.error('Error getting kickstart plan:', err);
-      toast.error('Failed to get kickstart plan');
-    }
-  };
 
   const handleGetHelp = async () => {
-    if (!currentTask) return;
+    if (!currentTask || helpLoading) return;
 
     try {
+      setHelpLoading(true);
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/implementation/sessions/${sessionId}/help`, {
         method: 'POST',
         headers: {
@@ -425,6 +467,8 @@ const Implementation: React.FC<ImplementationProps> = ({
     } catch (err) {
       console.error('Error getting help:', err);
       toast.error('Failed to get help');
+    } finally {
+      setHelpLoading(false);
     }
   };
 
@@ -544,13 +588,15 @@ const Implementation: React.FC<ImplementationProps> = ({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 pb-20 sm:pb-0">
       {/* Header */}
       <div className="bg-white/90 backdrop-blur-xl border-b border-white/30 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Implementation Phase</h1>
+          {/* Row 1: Implementation Phase */}
+          <div className="flex flex-col gap-6 mb-4">
+            {/* Top Row - Title */}
+            <div className="flex-1">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Implementation Phase</h1>
               <p className="text-gray-600 mt-1">Turning your roadmap into actionable results</p>
               <div className="flex items-center gap-2 mt-2">
                 {getPhaseIcon(currentTask.phase_name)}
@@ -559,28 +605,163 @@ const Implementation: React.FC<ImplementationProps> = ({
                 </span>
               </div>
             </div>
-              <div className="flex items-center gap-4">
-              <ProgressCircle
-                progress={Math.min(100, progress.percent)}
-                phase="IMPLEMENTATION"
-              />
-              <div className="text-right">
-                <p className="text-sm text-gray-600">Overall Progress</p>
-                <p className="text-lg font-semibold text-gray-900">
-                  {(progress as any).main_tasks_completed ?? completedTasks.filter(t => !t.includes('_substep_')).length}/25 tasks
-                </p>
-                <p className="text-xs text-gray-500">
-                  {(progress as any).substeps_completed ?? completedTasks.filter(t => t.includes('_substep_')).length} steps completed
-                </p>
-                {progress.milestone && (
-                  <p className="text-xs text-teal-600 font-medium mt-1">
-                    Current: {progress.milestone}
-                  </p>
+
+          </div>
+
+          {/* Row 2: Business Information and Progress - Side by Side */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+            {/* Business Information Card */}
+            <div className="relative bg-gradient-to-br from-teal-50 via-blue-50 to-indigo-50 border border-teal-200/50 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group animate-fadeIn">
+              {/* Animated background gradient */}
+              <div className="absolute inset-0 bg-gradient-to-r from-teal-400/0 via-blue-400/5 to-indigo-400/0 group-hover:from-teal-400/10 group-hover:via-blue-400/10 group-hover:to-indigo-400/10 transition-all duration-500"></div>
+              
+              {/* Content */}
+              <div className="relative z-10">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2 animate-slideDown">
+                  <div className="p-2 bg-gradient-to-br from-teal-500 to-blue-600 rounded-lg shadow-md">
+                    <Building2 className="h-5 w-5 text-white" />
+                  </div>
+                  <span className="bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
+                    Business Information
+                  </span>
+                </h3>
+                
+                {businessContextLoading ? (
+                  // Beautiful Skeleton Loader
+                  <div className="space-y-3 animate-pulse">
+                    <div className="flex items-center gap-3 p-3 bg-white/60 rounded-xl backdrop-blur-sm">
+                      <div className="h-8 w-8 bg-gradient-to-br from-teal-200 to-blue-200 rounded-lg"></div>
+                      <div className="flex-1">
+                        <div className="h-4 bg-gradient-to-r from-teal-200 via-blue-200 to-indigo-200 rounded w-32 mb-2"></div>
+                        <div className="h-5 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-48"></div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-white/60 rounded-xl backdrop-blur-sm">
+                      <div className="h-8 w-8 bg-gradient-to-br from-teal-200 to-blue-200 rounded-lg"></div>
+                      <div className="flex-1">
+                        <div className="h-4 bg-gradient-to-r from-teal-200 via-blue-200 to-indigo-200 rounded w-28 mb-2"></div>
+                        <div className="h-5 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-40"></div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-white/60 rounded-xl backdrop-blur-sm">
+                      <div className="h-8 w-8 bg-gradient-to-br from-teal-200 to-blue-200 rounded-lg"></div>
+                      <div className="flex-1">
+                        <div className="h-4 bg-gradient-to-r from-teal-200 via-blue-200 to-indigo-200 rounded w-32 mb-2"></div>
+                        <div className="h-5 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-52"></div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  // Beautiful Actual Content
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-3 bg-white/70 hover:bg-white/90 rounded-xl backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-md animate-slideInLeft">
+                      <div className="p-2 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg shadow-sm">
+                        <Building2 className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Business Name</p>
+                        <p className="text-base font-bold text-gray-900">{businessContext.business_name || currentTask?.business_context.business_name}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3 p-3 bg-white/70 hover:bg-white/90 rounded-xl backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-md animate-slideInLeft animation-delay-100">
+                      <div className="p-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-sm">
+                        <Target className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Industry</p>
+                        <p className="text-base font-semibold text-gray-800">{businessContext.industry || currentTask?.business_context.industry}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3 p-3 bg-white/70 hover:bg-white/90 rounded-xl backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-md animate-slideInLeft animation-delay-200">
+                      <div className="p-2 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg shadow-sm">
+                        <MapPin className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Location</p>
+                        <p className="text-base font-semibold text-gray-800">{businessContext.location || currentTask?.business_context.location}</p>
+                      </div>
+                    </div>
+                  </div>
                 )}
-                {progress.phases_completed !== undefined && (
-                  <p className="text-xs text-gray-500">
-                    {progress.phases_completed}/5 phases completed
-                  </p>
+              </div>
+            </div>
+
+            {/* Implementation Progress Card - Subtle Colors */}
+            <div className="relative bg-gradient-to-br from-teal-50 via-blue-50 to-indigo-50 border border-teal-200/50 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group animate-fadeIn">
+              {/* Subtle background pattern */}
+              <div className="absolute inset-0 bg-gradient-to-r from-teal-100/30 via-blue-100/30 to-indigo-100/30 opacity-50 group-hover:opacity-70 transition-opacity duration-500"></div>
+              
+              {/* Content */}
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-gradient-to-br from-teal-500 to-blue-600 rounded-xl shadow-md">
+                      <Target className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900">Implementation Progress</h3>
+                      <p className="text-sm text-gray-600">Track your journey to success</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-3xl font-bold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
+                      {Math.min(100, progress.percent)}%
+                    </div>
+                    <p className="text-xs text-gray-600">Complete</p>
+                  </div>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="mb-4">
+                  <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-teal-500 to-blue-500 rounded-full transition-all duration-1000 ease-out shadow-sm relative overflow-hidden"
+                      style={{ width: `${Math.min(100, progress.percent)}%` }}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stats Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-white/80 backdrop-blur-sm rounded-lg p-3 border border-gray-200 shadow-sm">
+                    <div className="text-2xl font-bold text-gray-900">
+                      {(progress as any).main_tasks_completed ?? completedTasks.filter(t => !t.includes('_substep_')).length}
+                    </div>
+                    <div className="text-xs text-gray-600 mt-1">Tasks Done</div>
+                  </div>
+                  <div className="bg-white/80 backdrop-blur-sm rounded-lg p-3 border border-gray-200 shadow-sm">
+                    <div className="text-2xl font-bold text-gray-900">
+                      {(progress as any).substeps_completed ?? completedTasks.filter(t => t.includes('_substep_')).length}
+                    </div>
+                    <div className="text-xs text-gray-600 mt-1">Steps Done</div>
+                  </div>
+                  <div className="bg-white/80 backdrop-blur-sm rounded-lg p-3 border border-gray-200 shadow-sm">
+                    <div className="text-2xl font-bold text-gray-900">
+                      {progress.phases_completed ?? 0}
+                    </div>
+                    <div className="text-xs text-gray-600 mt-1">Phases Done</div>
+                  </div>
+                  <div className="bg-white/80 backdrop-blur-sm rounded-lg p-3 border border-gray-200 shadow-sm">
+                    <div className="text-2xl font-bold text-gray-900">
+                      {25 - ((progress as any).main_tasks_completed ?? completedTasks.filter(t => !t.includes('_substep_')).length)}
+                    </div>
+                    <div className="text-xs text-gray-600 mt-1">Remaining</div>
+                  </div>
+                </div>
+
+                {/* Milestone */}
+                {progress.milestone && (
+                  <div className="mt-4 flex items-center gap-2 bg-white/80 backdrop-blur-sm rounded-lg p-3 border border-gray-200 shadow-sm">
+                    <Rocket className="h-5 w-5 text-teal-600" />
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-600">Current Milestone</p>
+                      <p className="text-sm font-semibold text-gray-900">{progress.milestone}</p>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -645,7 +826,6 @@ const Implementation: React.FC<ImplementationProps> = ({
                 task={currentTask}
                 onComplete={handleSubstepCompletion}
                 onGetServiceProviders={handleGetServiceProviders}
-                onGetKickstart={handleGetKickstart}
                 onGetHelp={handleGetHelp}
                 onUploadDocument={handleUploadDocument}
                 sessionId={sessionId}
@@ -708,47 +888,50 @@ const Implementation: React.FC<ImplementationProps> = ({
                 <div className="space-y-3">
                   <button
                     onClick={handleGetHelp}
-                    className="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+                    disabled={helpLoading}
+                    className="relative w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-blue-400 disabled:to-blue-400 disabled:cursor-not-allowed text-white px-4 py-3 rounded-lg font-medium transition-all duration-300 flex items-center justify-center gap-2 shadow-md hover:shadow-lg overflow-hidden group"
                   >
-                    <Lightbulb className="h-4 w-4" />
-                    Get Help
-                  </button>
-                  <button
-                    onClick={handleGetKickstart}
-                    className="w-full bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
-                  >
-                    <Rocket className="h-4 w-4" />
-                    Kickstart Plan
+                    {helpLoading ? (
+                      <>
+                        <div className="relative">
+                          <div className="absolute inset-0 rounded-full border-2 border-white/30"></div>
+                          <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                        </div>
+                        <span className="animate-pulse">Getting help for you...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Lightbulb className="h-5 w-5 group-hover:scale-110 transition-transform duration-300" />
+                        <span>Get Help</span>
+                        <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                      </>
+                    )}
                   </button>
                   <button
                     onClick={handleGetServiceProviders}
-                    className="w-full bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+                    disabled={serviceProvidersLoading}
+                    className="relative w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 disabled:from-purple-400 disabled:to-purple-400 disabled:cursor-not-allowed text-white px-4 py-3 rounded-lg font-medium transition-all duration-300 flex items-center justify-center gap-2 shadow-md hover:shadow-lg overflow-hidden group"
                   >
-                    <Phone className="h-4 w-4" />
-                    Find Providers
+                    {serviceProvidersLoading ? (
+                      <>
+                        <div className="relative">
+                          <div className="absolute inset-0 rounded-full border-2 border-white/30"></div>
+                          <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                        </div>
+                        <span className="animate-pulse">Finding providers...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Phone className="h-5 w-5 group-hover:scale-110 transition-transform duration-300" />
+                        <span>Find Providers</span>
+                        <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
 
-              {/* Business Context */}
-              <div className="bg-white/90 backdrop-blur-xl border border-white/30 rounded-xl p-6 shadow-sm">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Business Context</h3>
-                <div className="space-y-2 text-sm">
-                  <div>
-                    <span className="text-gray-600">Business:</span>
-                    <span className="font-medium ml-2">{businessContext.business_name || currentTask?.business_context.business_name}</span>
                   </div>
-                  <div>
-                    <span className="text-gray-600">Industry:</span>
-                    <span className="font-medium ml-2">{businessContext.industry || currentTask?.business_context.industry}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Location:</span>
-                    <span className="font-medium ml-2">{businessContext.location || currentTask?.business_context.location}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -783,11 +966,11 @@ const Implementation: React.FC<ImplementationProps> = ({
 
         {mountedTabs.roadmap && (
           <div className={activeTab === 'roadmap' ? 'block' : 'hidden'}>
-            <div className="bg-white/90 backdrop-blur-xl border border-white/30 rounded-xl p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-6">
+            <div className="bg-white/90 backdrop-blur-xl border border-white/30 rounded-xl p-4 sm:p-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Full Launch Roadmap</h2>
-                <p className="text-gray-600 mt-1">Complete roadmap in table format</p>
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Full Launch Roadmap</h2>
+                <p className="text-sm sm:text-base text-gray-600 mt-1">Complete roadmap in table format</p>
               </div>
               {roadmapContent && (
                 <a
@@ -797,10 +980,11 @@ const Implementation: React.FC<ImplementationProps> = ({
                     // The RoadmapDisplay component has its own export button, so we'll just show a message
                     toast.info('Use the export button in the roadmap view below');
                   }}
-                  className="flex items-center gap-2 bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                  className="flex items-center justify-center gap-2 bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base whitespace-nowrap"
                 >
                   <Download className="h-4 w-4" />
-                  Export Available Below
+                  <span className="hidden sm:inline">Export Available Below</span>
+                  <span className="sm:hidden">Export Below</span>
                 </a>
               )}
             </div>
@@ -815,6 +999,7 @@ const Implementation: React.FC<ImplementationProps> = ({
                 onStartImplementation={() => {}}
                 loading={false}
                 sessionId={sessionId}
+                hideStartButton={true}
               />
             ) : (
               <div className="text-center py-12">
@@ -847,13 +1032,6 @@ const Implementation: React.FC<ImplementationProps> = ({
         task={currentTask}
       />
 
-      <KickstartModal
-        isOpen={showKickstartModal}
-        onClose={() => setShowKickstartModal(false)}
-        kickstartPlan={kickstartPlan}
-        task={currentTask}
-      />
-
             <HelpModal
               isOpen={showHelpModal}
               onClose={() => setShowHelpModal(false)}
@@ -871,6 +1049,41 @@ const Implementation: React.FC<ImplementationProps> = ({
               }}
               progress={progress}
             />
+
+      {/* Floating Comprehensive Support - Always Visible */}
+      <FloatingComprehensiveSupport
+        taskContext={currentTask?.title || 'general business support'}
+        businessContext={businessContext}
+        angelCanHelp={currentTask?.angel_actions || []}
+        sessionId={sessionId}
+        currentTask={currentTask}
+      />
+      
+      {/* Custom Animations */}
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideInLeft {
+          from { opacity: 0; transform: translateX(-20px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        .animate-fadeIn { animation: fadeIn 0.6s ease-out; }
+        .animate-slideDown { animation: slideDown 0.5s ease-out; }
+        .animate-slideInLeft { animation: slideInLeft 0.5s ease-out; }
+        .animate-shimmer { animation: shimmer 2s infinite; }
+        .animation-delay-100 { animation-delay: 0.1s; }
+        .animation-delay-200 { animation-delay: 0.2s; }
+      `}</style>
           </div>
         );
       };

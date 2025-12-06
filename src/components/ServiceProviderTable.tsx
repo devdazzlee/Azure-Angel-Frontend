@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Loader2, MapPin, Globe, Building2, DollarSign, Star, CheckCircle, AlertCircle } from 'lucide-react';
 import httpClient from '../api/httpClient';
+import ServiceProviderDetailModal from './ServiceProviderDetailModal';
+import BusinessContextDisplay from './BusinessContextDisplay';
 
 interface ServiceProvider {
   name: string;
@@ -44,6 +48,8 @@ const ServiceProviderTable: React.FC<ServiceProviderTableProps> = ({
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedLocation, setSelectedLocation] = useState<string>('all');
+  const [selectedProvider, setSelectedProvider] = useState<ServiceProvider | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
 
   useEffect(() => {
     if (cachedData) {
@@ -164,7 +170,7 @@ const ServiceProviderTable: React.FC<ServiceProviderTableProps> = ({
           <Building2 className="h-5 w-5 text-blue-600" />
           <h2 className="text-lg font-semibold text-gray-900">Service Provider Table</h2>
           <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-            Local & Online
+            Local & Nationwide
           </span>
         </div>
         <p className="text-sm text-gray-600 mt-1">
@@ -201,23 +207,29 @@ const ServiceProviderTable: React.FC<ServiceProviderTableProps> = ({
             >
               <option value="all">All Locations</option>
               <option value="local">Local Only</option>
-              <option value="online">Online Only</option>
+              <option value="online">Nationwide Only</option>
             </select>
           </div>
         </div>
 
-        {/* Loading State */}
+        {/* Loading State - Beautiful Loader */}
         {(loading || isLoading) && (
-          <div className="flex items-center justify-center py-8">
+          <div className="flex items-center justify-center py-16">
             <div className="text-center">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-500 mx-auto mb-2" />
-              <p className="text-gray-600">Loading service providers...</p>
+              <div className="relative inline-block mb-4">
+                <div className="absolute inset-0 bg-gradient-to-r from-teal-400 to-blue-500 rounded-full blur-xl opacity-30 animate-pulse"></div>
+                <div className="relative bg-gradient-to-br from-teal-500 to-blue-600 p-4 rounded-full shadow-lg">
+                  <Loader2 className="h-10 w-10 animate-spin text-white" />
+                </div>
+              </div>
+              <p className="text-gray-700 font-medium">Loading service providers...</p>
+              <p className="text-sm text-gray-500 mt-1">Finding the best providers for you</p>
             </div>
           </div>
         )}
 
         {/* Error State */}
-        {error && (
+        {error && !loading && !isLoading && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <div className="flex items-center gap-2">
               <AlertCircle className="h-4 w-4 text-red-500" />
@@ -227,13 +239,17 @@ const ServiceProviderTable: React.FC<ServiceProviderTableProps> = ({
         )}
 
         {/* Providers Grid */}
-        {!loading && !error && (
+        {!loading && !isLoading && !error && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredProviders.map((provider, index) => (
               <div
                 key={index}
-                className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => onProviderSelect?.(provider)}
+                className="border border-gray-200 rounded-lg p-4 hover:shadow-lg hover:border-blue-300 transition-all cursor-pointer transform hover:scale-[1.02]"
+                onClick={() => {
+                  setSelectedProvider(provider);
+                  setShowDetailModal(true);
+                  onProviderSelect?.(provider);
+                }}
               >
                 {/* Provider Header */}
                 <div className="flex items-start justify-between mb-3">
@@ -252,7 +268,18 @@ const ServiceProviderTable: React.FC<ServiceProviderTableProps> = ({
                 </div>
 
                 {/* Description */}
-                <p className="text-sm text-gray-700 mb-3 line-clamp-2">{provider.description}</p>
+                <div className="prose prose-sm max-w-none mb-3 line-clamp-2">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      p: ({ children }) => <p className="text-sm text-gray-700 leading-relaxed mb-0">{children}</p>,
+                      strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                      em: ({ children }) => <em className="italic">{children}</em>,
+                    }}
+                  >
+                    {provider.description}
+                  </ReactMarkdown>
+                </div>
 
                 {/* Specialties */}
                 {provider.specialties && (
@@ -298,8 +325,8 @@ const ServiceProviderTable: React.FC<ServiceProviderTableProps> = ({
           </div>
         )}
 
-        {/* No Results */}
-        {!loading && !error && filteredProviders.length === 0 && (
+        {/* No Results - Only show when NOT loading */}
+        {!loading && !isLoading && !error && filteredProviders.length === 0 && (
           <div className="text-center py-8">
             <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No Providers Found</h3>
@@ -324,29 +351,22 @@ const ServiceProviderTable: React.FC<ServiceProviderTableProps> = ({
           </div>
         )}
 
-        {/* Business Context */}
-        <div className="pt-4 border-t border-gray-200">
-          <h3 className="font-semibold text-gray-900 mb-2">Business Context</h3>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-gray-600">Business:</span>
-              <span className="font-medium ml-2">{businessContext.business_name || 'Not specified'}</span>
-            </div>
-            <div>
-              <span className="text-gray-600">Industry:</span>
-              <span className="font-medium ml-2">{businessContext.industry || 'Not specified'}</span>
-            </div>
-            <div>
-              <span className="text-gray-600">Location:</span>
-              <span className="font-medium ml-2">{businessContext.location || 'Not specified'}</span>
-            </div>
-            <div>
-              <span className="text-gray-600">Type:</span>
-              <span className="font-medium ml-2">{businessContext.business_type || 'Not specified'}</span>
-            </div>
-          </div>
-        </div>
+        {/* Business Context - Removed to avoid duplication in FloatingComprehensiveSupport */}
       </div>
+
+      {/* Service Provider Detail Modal */}
+      <ServiceProviderDetailModal
+        isOpen={showDetailModal}
+        onClose={() => {
+          setShowDetailModal(false);
+          setSelectedProvider(null);
+        }}
+        provider={selectedProvider}
+        onContactProvider={(provider) => {
+          console.log('Contacting provider:', provider);
+          // Parent component can handle this via onProviderSelect
+        }}
+      />
     </div>
   );
 };

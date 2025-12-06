@@ -12,6 +12,7 @@ import ServiceProviderTable from './ServiceProviderTable';
 import RAGResearch from './RAGResearch';
 import SpecializedAgents from './SpecializedAgents';
 import InteractiveCommands from './InteractiveCommands';
+import BusinessContextDisplay from './BusinessContextDisplay';
 
 interface ComprehensiveSupportProps {
   taskContext?: string;
@@ -58,7 +59,7 @@ const ComprehensiveSupport: React.FC<ComprehensiveSupportProps> = ({
     },
     {
       id: 'research',
-      label: 'RAG Research',
+      label: 'Research',
       icon: <Search className="h-4 w-4" />,
       description: 'Conduct comprehensive research'
     },
@@ -199,25 +200,7 @@ const ComprehensiveSupport: React.FC<ComprehensiveSupportProps> = ({
 
       {/* Business Context Summary */}
       <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
-        <h3 className="font-semibold text-gray-900 mb-2">Business Context</h3>
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="text-gray-600">Business:</span>
-            <span className="font-medium ml-2">{businessContext.business_name || 'Not specified'}</span>
-          </div>
-          <div>
-            <span className="text-gray-600">Industry:</span>
-            <span className="font-medium ml-2">{businessContext.industry || 'Not specified'}</span>
-          </div>
-          <div>
-            <span className="text-gray-600">Location:</span>
-            <span className="font-medium ml-2">{businessContext.location || 'Not specified'}</span>
-          </div>
-          <div>
-            <span className="text-gray-600">Type:</span>
-            <span className="font-medium ml-2">{businessContext.business_type || 'Not specified'}</span>
-          </div>
-        </div>
+        <BusinessContextDisplay businessContext={businessContext} />
       </div>
     </div>
   );

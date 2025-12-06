@@ -99,3 +99,5 @@ export const clearPaymentStatus = (sessionId: string, documentType: string): voi
   localStorage.removeItem(`${storageKey}_timestamp`);
 };
 
+
+

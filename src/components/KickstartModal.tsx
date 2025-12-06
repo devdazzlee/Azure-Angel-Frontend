@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { toast } from 'react-toastify';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface KickstartPlan {
   plan: string;
@@ -116,7 +118,18 @@ const KickstartModal: React.FC<KickstartModalProps> = ({
                 {task.priority} Priority
               </span>
             </div>
-            <p className="text-gray-700 text-sm mb-2">{task.description}</p>
+            <div className="prose prose-sm max-w-none mb-2">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  p: ({ children }) => <p className="text-sm text-gray-700 leading-relaxed mb-0">{children}</p>,
+                  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                  em: ({ children }) => <em className="italic">{children}</em>,
+                }}
+              >
+                {task.description}
+              </ReactMarkdown>
+            </div>
             <div className="text-xs text-gray-500">
               <span className="font-medium">Phase:</span> {task.phase_name} • 
               <span className="font-medium ml-1">Estimated Time:</span> {task.estimated_time}
@@ -127,10 +140,24 @@ const KickstartModal: React.FC<KickstartModalProps> = ({
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-3">📋 Detailed Action Plan</h3>
             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <div className="prose prose-sm max-w-none">
-                <pre className="whitespace-pre-wrap text-green-800 font-sans leading-relaxed">
+              <div className="prose prose-sm max-w-none text-green-900">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    h1: ({ children }) => <h1 className="text-2xl font-bold text-green-900 mb-4 mt-6 first:mt-0">{children}</h1>,
+                    h2: ({ children }) => <h2 className="text-xl font-bold text-green-800 mb-3 mt-5">{children}</h2>,
+                    h3: ({ children }) => <h3 className="text-lg font-semibold text-green-800 mb-2 mt-4">{children}</h3>,
+                    p: ({ children }) => <p className="text-green-900 mb-3 leading-relaxed">{children}</p>,
+                    ul: ({ children }) => <ul className="list-disc list-inside mb-3 space-y-1 text-green-900">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal list-inside mb-3 space-y-1 text-green-900">{children}</ol>,
+                    li: ({ children }) => <li className="text-green-900 leading-relaxed">{children}</li>,
+                    strong: ({ children }) => <strong className="font-semibold text-green-900">{children}</strong>,
+                    code: ({ children }) => <code className="bg-green-100 text-green-900 px-1.5 py-0.5 rounded text-sm">{children}</code>,
+                    blockquote: ({ children }) => <blockquote className="border-l-4 border-green-400 pl-4 italic text-green-800 my-3">{children}</blockquote>,
+                  }}
+                >
                   {kickstartPlan.plan}
-                </pre>
+                </ReactMarkdown>
               </div>
             </div>
           </div>

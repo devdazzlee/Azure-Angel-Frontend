@@ -1,4 +1,6 @@
 import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface ImplementationTask {
   id: string;
@@ -77,7 +79,18 @@ const HelpModal: React.FC<HelpModalProps> = ({
                 {task.priority} Priority
               </span>
             </div>
-            <p className="text-gray-700 text-sm mb-2">{task.description}</p>
+            <div className="prose prose-sm max-w-none mb-2">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  p: ({ children }) => <p className="text-sm text-gray-700 leading-relaxed mb-0">{children}</p>,
+                  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                  em: ({ children }) => <em className="italic">{children}</em>,
+                }}
+              >
+                {task.description}
+              </ReactMarkdown>
+            </div>
             <div className="text-xs text-gray-500">
               <span className="font-medium">Phase:</span> {task.phase_name} • 
               <span className="font-medium ml-1">Estimated Time:</span> {task.estimated_time} • 
@@ -89,10 +102,24 @@ const HelpModal: React.FC<HelpModalProps> = ({
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-3">📚 Detailed Guidance</h3>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="prose prose-sm max-w-none">
-                <div className="whitespace-pre-wrap text-blue-800 font-sans leading-relaxed">
+              <div className="prose prose-sm max-w-none text-blue-900">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    h1: ({ children }) => <h1 className="text-2xl font-bold text-blue-900 mb-4 mt-6 first:mt-0">{children}</h1>,
+                    h2: ({ children }) => <h2 className="text-xl font-bold text-blue-800 mb-3 mt-5">{children}</h2>,
+                    h3: ({ children }) => <h3 className="text-lg font-semibold text-blue-800 mb-2 mt-4">{children}</h3>,
+                    p: ({ children }) => <p className="text-blue-900 mb-3 leading-relaxed">{children}</p>,
+                    ul: ({ children }) => <ul className="list-disc list-inside mb-3 space-y-1 text-blue-900">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal list-inside mb-3 space-y-1 text-blue-900">{children}</ol>,
+                    li: ({ children }) => <li className="text-blue-900 leading-relaxed">{children}</li>,
+                    strong: ({ children }) => <strong className="font-semibold text-blue-900">{children}</strong>,
+                    code: ({ children }) => <code className="bg-blue-100 text-blue-900 px-1.5 py-0.5 rounded text-sm">{children}</code>,
+                    blockquote: ({ children }) => <blockquote className="border-l-4 border-blue-400 pl-4 italic text-blue-800 my-3">{children}</blockquote>,
+                  }}
+                >
                   {helpContent}
-                </div>
+                </ReactMarkdown>
               </div>
             </div>
           </div>

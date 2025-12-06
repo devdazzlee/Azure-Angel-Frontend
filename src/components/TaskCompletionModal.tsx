@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { toast } from 'react-toastify';
 
 interface ImplementationTask {
@@ -95,7 +97,18 @@ const TaskCompletionModal: React.FC<TaskCompletionModalProps> = ({
           {/* Task Summary */}
           <div className="bg-gray-50 rounded-lg p-4">
             <h3 className="font-semibold text-gray-900 mb-2">Task Summary</h3>
-            <p className="text-gray-700 text-sm">{task.description}</p>
+            <div className="prose prose-sm max-w-none">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  p: ({ children }) => <p className="text-sm text-gray-700 leading-relaxed mb-0">{children}</p>,
+                  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                  em: ({ children }) => <em className="italic">{children}</em>,
+                }}
+              >
+                {task.description}
+              </ReactMarkdown>
+            </div>
             <div className="mt-2 text-xs text-gray-500">
               <span className="font-medium">Phase:</span> {task.phase_name} • 
               <span className="font-medium ml-1">Priority:</span> {task.priority} • 

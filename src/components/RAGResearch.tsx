@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { toast } from 'react-toastify';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { 
   Loader2, 
   Search, 
@@ -12,8 +14,11 @@ import {
   FileText,
   Target,
   Shield,
+  Building2,
+  MapPin,
 } from 'lucide-react';
 import httpClient from '../api/httpClient';
+import BusinessContextDisplay from './BusinessContextDisplay';
 
 interface ResearchResult {
   query: string;
@@ -130,9 +135,9 @@ const RAGResearch: React.FC<RAGResearchProps> = ({
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center gap-2">
           <Search className="h-5 w-5 text-blue-600" />
-          <h2 className="text-lg font-semibold text-gray-900">RAG Research</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Research</h2>
           <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-            AI-Powered
+            Comprehensive
           </span>
         </div>
         <p className="text-sm text-gray-600 mt-1">
@@ -258,8 +263,24 @@ const RAGResearch: React.FC<RAGResearchProps> = ({
                 <Lightbulb className="h-5 w-5 text-blue-500" />
                 <h3 className="font-medium text-gray-900">Research Analysis</h3>
               </div>
-              <div className="bg-white p-3 rounded border">
-                <p className="text-sm text-gray-700 whitespace-pre-wrap">{result.analysis}</p>
+              <div className="bg-white p-3 rounded border prose prose-sm max-w-none">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    h1: ({ children }) => <h1 className="text-lg font-bold text-gray-900 mb-3 mt-4 first:mt-0">{children}</h1>,
+                    h2: ({ children }) => <h2 className="text-base font-semibold text-gray-900 mb-2 mt-3">{children}</h2>,
+                    h3: ({ children }) => <h3 className="text-sm font-semibold text-gray-800 mb-2 mt-3">{children}</h3>,
+                    p: ({ children }) => <p className="text-sm text-gray-700 leading-relaxed mb-2">{children}</p>,
+                    ul: ({ children }) => <ul className="list-disc ml-5 space-y-1 text-sm text-gray-700 mb-2">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal ml-5 space-y-1 text-sm text-gray-700 mb-2">{children}</ol>,
+                    li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                    strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+                    code: ({ children }) => <code className="bg-gray-100 text-gray-900 px-1.5 py-0.5 rounded text-xs">{children}</code>,
+                    blockquote: ({ children }) => <blockquote className="border-l-4 border-blue-400 pl-4 italic text-gray-700 my-2">{children}</blockquote>,
+                  }}
+                >
+                  {result.analysis}
+                </ReactMarkdown>
               </div>
             </div>
 
@@ -292,28 +313,7 @@ const RAGResearch: React.FC<RAGResearchProps> = ({
           </div>
         )}
 
-        {/* Business Context */}
-        <div className="pt-4 border-t border-gray-200">
-          <h3 className="font-semibold text-gray-900 mb-2">Business Context</h3>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-gray-600">Business:</span>
-              <span className="font-medium ml-2">{businessContext.business_name || 'Not specified'}</span>
-            </div>
-            <div>
-              <span className="text-gray-600">Industry:</span>
-              <span className="font-medium ml-2">{businessContext.industry || 'Not specified'}</span>
-            </div>
-            <div>
-              <span className="text-gray-600">Location:</span>
-              <span className="font-medium ml-2">{businessContext.location || 'Not specified'}</span>
-            </div>
-            <div>
-              <span className="text-gray-600">Type:</span>
-              <span className="font-medium ml-2">{businessContext.business_type || 'Not specified'}</span>
-            </div>
-          </div>
-        </div>
+        {/* Business Context - Removed to avoid duplication in FloatingComprehensiveSupport */}
       </div>
     </div>
   );
