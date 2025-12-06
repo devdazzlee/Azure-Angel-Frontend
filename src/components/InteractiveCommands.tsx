@@ -259,7 +259,7 @@ const InteractiveCommands: React.FC<InteractiveCommandsProps> = ({
           <button
             onClick={executeCommand}
             disabled={loading || !selectedCommand || !context.trim()}
-                  className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-700 hover:via-teal-700 hover:to-cyan-700 disabled:from-gray-300 disabled:via-gray-400 disabled:to-gray-500 text-white px-8 py-3 rounded-xl font-bold text-sm transition-all duration-300 flex items-center gap-2 shadow-xl hover:shadow-2xl hover:scale-[1.02] disabled:shadow-none disabled:cursor-not-allowed disabled:scale-100"
+                  className="bg-teal-600 hover:bg-teal-700 disabled:bg-gray-400 text-white px-8 py-3 rounded-xl font-bold text-sm transition-all duration-300 flex items-center gap-2 shadow-xl hover:shadow-2xl hover:scale-[1.02] disabled:shadow-none disabled:cursor-not-allowed disabled:scale-100"
           >
             {loading ? (
               <>

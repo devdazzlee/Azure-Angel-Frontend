@@ -378,7 +378,7 @@ const SpecializedAgents: React.FC<SpecializedAgentsProps> = ({
               <button
                 onClick={getAgentGuidance}
                 disabled={loading || !selectedAgent || !question.trim()}
-                  className="bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:via-indigo-700 hover:to-blue-700 disabled:from-gray-300 disabled:via-gray-400 disabled:to-gray-500 text-white px-8 py-3 rounded-xl font-bold text-sm transition-all duration-300 flex items-center gap-2 shadow-xl hover:shadow-2xl hover:scale-[1.02] disabled:shadow-none disabled:cursor-not-allowed disabled:scale-100"
+                  className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white px-8 py-3 rounded-xl font-bold text-sm transition-all duration-300 flex items-center gap-2 shadow-xl hover:shadow-2xl hover:scale-[1.02] disabled:shadow-none disabled:cursor-not-allowed disabled:scale-100"
               >
                 {loading ? (
                   <>

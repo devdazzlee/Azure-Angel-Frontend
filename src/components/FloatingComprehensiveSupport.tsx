@@ -35,7 +35,6 @@ import {
 } from 'lucide-react';
 import httpClient from '../api/httpClient';
 import ServiceProviderDetailModal from './ServiceProviderDetailModal';
-import BusinessContextDisplay from './BusinessContextDisplay';
 import AgentDetailModal from './AgentDetailModal';
 
 interface Message {
@@ -384,11 +383,6 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
             <span className="xs:hidden">{tab.label.split(' ')[0]}</span>
           </button>
         ))}
-      </div>
-
-      {/* Business Context - Show once for all tabs */}
-      <div className="px-4 pt-4 pb-2 border-b border-gray-200 bg-gray-50">
-        <BusinessContextDisplay businessContext={businessContext} />
       </div>
 
       {/* Content - Scrollable */}
