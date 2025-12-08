@@ -531,17 +531,22 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </div>
         )}
 
-        {/* Angel Actions */}
+        {/* Angel Actions as Decision Options */}
         <div>
           <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-blue-600" />
-            Angel Can Help You With
+            <Target className="h-4 w-4 text-blue-600" />
+            Decision Options
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {task.angel_actions.map((action, index) => (
-              <div key={index} className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg">
-                <CheckCircle className="h-4 w-4 text-blue-600" />
-                <span className="text-sm text-blue-800">{action}</span>
+              <div
+                key={index}
+                className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-all"
+              >
+                <div className="flex items-center justify-center h-9 w-9 rounded-full bg-blue-100 text-blue-700 font-semibold">
+                  {index + 1}
+                </div>
+                <span className="text-base font-medium text-gray-900">{action}</span>
               </div>
             ))}
           </div>

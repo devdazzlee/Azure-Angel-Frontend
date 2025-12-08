@@ -23,7 +23,9 @@ import {
   FileText,
   Download,
   Building2,
-  MapPin
+  MapPin,
+  Trophy,
+  AlertTriangle
 } from 'lucide-react';
 
 interface ImplementationSubstep {
@@ -928,6 +930,41 @@ const Implementation: React.FC<ImplementationProps> = ({
                       </>
                     )}
                   </button>
+                </div>
+              </div>
+
+              {/* Best Practices & Pitfalls */}
+              <div className="space-y-4">
+                <div className="bg-green-50 border border-green-200 rounded-xl p-5 shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-2 bg-green-100 rounded-lg">
+                      <Trophy className="h-5 w-5 text-green-700" />
+                    </div>
+                    <h4 className="text-base font-semibold text-green-900">Best Practices</h4>
+                  </div>
+                  <ul className="list-disc list-inside space-y-2 text-sm text-green-900">
+                    <li>Research each option thoroughly before making a decision</li>
+                    <li>Consider your business context and specific needs</li>
+                    <li>Consult with experts or advisors when needed</li>
+                    <li>Document your decision-making process</li>
+                    <li>Review and adjust your approach as needed</li>
+                  </ul>
+                </div>
+
+                <div className="bg-rose-50 border border-rose-200 rounded-xl p-5 shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-2 bg-rose-100 rounded-lg">
+                      <AlertTriangle className="h-5 w-5 text-rose-700" />
+                    </div>
+                    <h4 className="text-base font-semibold text-rose-900">Common Pitfalls to Avoid</h4>
+                  </div>
+                  <ul className="list-disc list-inside space-y-2 text-sm text-rose-900">
+                    <li>Rushing into decisions without proper research</li>
+                    <li>Choosing options based solely on cost</li>
+                    <li>Ignoring legal and compliance requirements</li>
+                    <li>Not considering long-term implications</li>
+                    <li>Failing to document decisions and rationale</li>
+                  </ul>
                 </div>
               </div>
 
