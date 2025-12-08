@@ -14,6 +14,16 @@ import {
   LearnMore,
   TermsAndConditions,
   PrivacyPolicy,
+  Businesses,
+  Startups,
+  Enterprise,
+  CaseStudies,
+  Partners,
+  Blog,
+  Documentation,
+  Guides,
+  Support,
+  Services,
 } from "../pages";
 import RoadmapPage from "../pages/Roadmap/RoadmapPage";
 import BusinessPlanView from "../pages/BusinessPlan/BusinessPlanView";
@@ -116,6 +126,56 @@ const router = createBrowserRouter([
             path: "/privacy-policy",
             element: <PrivacyPolicy />,
             errorElement: <PrivacyPolicy />,
+          },
+          {
+            path: "/businesses",
+            element: <Businesses />,
+            errorElement: <Businesses />,
+          },
+          {
+            path: "/startups",
+            element: <Startups />,
+            errorElement: <Startups />,
+          },
+          {
+            path: "/enterprise",
+            element: <Enterprise />,
+            errorElement: <Enterprise />,
+          },
+          {
+            path: "/case-studies",
+            element: <CaseStudies />,
+            errorElement: <CaseStudies />,
+          },
+          {
+            path: "/partners",
+            element: <Partners />,
+            errorElement: <Partners />,
+          },
+          {
+            path: "/blog",
+            element: <Blog />,
+            errorElement: <Blog />,
+          },
+          {
+            path: "/documentation",
+            element: <Documentation />,
+            errorElement: <Documentation />,
+          },
+          {
+            path: "/guides",
+            element: <Guides />,
+            errorElement: <Guides />,
+          },
+          {
+            path: "/support",
+            element: <Support />,
+            errorElement: <Support />,
+          },
+          {
+            path: "/services",
+            element: <Services />,
+            errorElement: <Services />,
           },
           {
             path: "/test-question-formatter",

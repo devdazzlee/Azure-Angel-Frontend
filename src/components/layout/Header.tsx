@@ -8,9 +8,9 @@ import LOGO from '../../assets/images/home/Founderport_Logo_Horizontal_Mariner_M
 
 interface NavItem { label: string; to: string; }
 const navItems: NavItem[] = [
-  { label: 'Businesses', to: '#businesses' },
-  { label: 'Who We Are', to: 'about' },
-  { label: 'Services', to: '#services' },
+  { label: 'Businesses', to: '/businesses' },
+  { label: 'Who We Are', to: '/about' },
+  { label: 'Services', to: '/services' },
 ];
 
 const headerVariants: Variants = {

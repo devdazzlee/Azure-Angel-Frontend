@@ -7,6 +7,16 @@ export { default as AboutUs } from './About';
 export { default as LearnMore } from './LearnMore';
 export { default as TermsAndConditions } from './TermsAndConditions';
 export { default as PrivacyPolicy } from './PrivacyPolicy';
+export { default as Businesses } from './Businesses';
+export { default as Startups } from './Startups';
+export { default as Enterprise } from './Enterprise';
+export { default as CaseStudies } from './CaseStudies';
+export { default as Partners } from './Partners';
+export { default as Blog } from './Blog';
+export { default as Documentation } from './Documentation';
+export { default as Guides } from './Guides';
+export { default as Support } from './Support';
+export { default as Services } from './Services';
 
 export { default as KnowYourCustomer } from './KYC';
 export { default as NewVenture } from './Venture/newVenture';
