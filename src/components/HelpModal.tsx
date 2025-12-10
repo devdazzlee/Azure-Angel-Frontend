@@ -168,18 +168,6 @@ const HelpModal: React.FC<HelpModalProps> = ({
             </div>
           </div>
 
-          {/* Common Pitfalls */}
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <h3 className="font-semibold text-red-900 mb-2">⚠️ Common Pitfalls to Avoid</h3>
-            <div className="text-sm text-red-800 space-y-1">
-              <p>• Rushing into decisions without proper research</p>
-              <p>• Choosing options based solely on cost</p>
-              <p>• Ignoring legal and compliance requirements</p>
-              <p>• Not considering long-term implications</p>
-              <p>• Failing to document decisions and rationale</p>
-            </div>
-          </div>
-
           {/* Additional Resources */}
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
             <h3 className="font-semibold text-purple-900 mb-2">📖 Additional Resources</h3>

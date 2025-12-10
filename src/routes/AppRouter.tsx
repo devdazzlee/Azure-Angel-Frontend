@@ -24,6 +24,8 @@ import {
   Guides,
   Support,
   Services,
+  NotFound,
+  ErrorBoundaryPage,
 } from "../pages";
 import RoadmapPage from "../pages/Roadmap/RoadmapPage";
 import BusinessPlanView from "../pages/BusinessPlan/BusinessPlanView";
@@ -48,6 +50,7 @@ const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) =>
 const router = createBrowserRouter([
   {
     path: "/",
+    errorElement: <ErrorBoundaryPage />,
     children: [
       {
         path: "auth/confirm",
@@ -181,7 +184,17 @@ const router = createBrowserRouter([
             path: "/test-question-formatter",
             element: <TestQuestionFormatter />,
           },
+          {
+            path: "*",
+            element: <NotFound />,
+            errorElement: <ErrorBoundaryPage />,
+          },
         ],
+      },
+      {
+        path: "*",
+        element: <NotFound />,
+        errorElement: <ErrorBoundaryPage />,
       },
     ],
   },

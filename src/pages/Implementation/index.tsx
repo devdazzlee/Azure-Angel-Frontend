@@ -101,7 +101,7 @@ const Implementation: React.FC<ImplementationProps> = ({
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'task' | 'support' | 'roadmap'>('task');
+  const [activeTab, setActiveTab] = useState<'task' | 'roadmap'>('task');
   const [mountedTabs, setMountedTabs] = useState<Record<string, boolean>>({ task: true });
   const [roadmapContent, setRoadmapContent] = useState<string>('');
   const [roadmapLoading, setRoadmapLoading] = useState(false);
@@ -205,7 +205,7 @@ const Implementation: React.FC<ImplementationProps> = ({
       }
   };
 
-  const handleTabChange = (tab: 'task' | 'support' | 'roadmap') => {
+  const handleTabChange = (tab: 'task' | 'roadmap') => {
     setActiveTab(tab);
     setMountedTabs((prev) => (prev[tab] ? prev : { ...prev, [tab]: true }));
   };
@@ -311,6 +311,14 @@ const Implementation: React.FC<ImplementationProps> = ({
     location: "United States",
     business_type: "Startup"
   };
+
+  // Computed progress fallback to ensure percent tracks completed tasks
+  const totalTasks = (progress as any)?.total ?? 25;
+  const completedMainTasks = (progress as any)?.main_tasks_completed ?? completedTasks.filter(t => !t.includes('_substep_')).length;
+  const completedCount = completedTasks.length;
+  const computedPercent = totalTasks > 0 ? Math.round((completedMainTasks / totalTasks) * 100) : 0;
+  const substepPercent = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
+  const progressPercent = Math.min(100, Math.max((progress as any)?.percent ?? 0, computedPercent, substepPercent));
 
   const loadImplementationData = async () => {
     try {
@@ -440,8 +448,9 @@ const Implementation: React.FC<ImplementationProps> = ({
   };
 
 
-  const handleGetHelp = async () => {
-    if (!currentTask || helpLoading) return;
+  const fetchHelpContent = async (options: { showModal?: boolean; force?: boolean } = {}) => {
+    if (!currentTask) return;
+    if (helpLoading && !options.force) return;
 
     try {
       setHelpLoading(true);
@@ -462,7 +471,9 @@ const Implementation: React.FC<ImplementationProps> = ({
       
       if (data.success) {
         setHelpContent(data.help_content);
-        setShowHelpModal(true);
+        if (options.showModal) {
+          setShowHelpModal(true);
+        }
       } else {
         toast.error(data.message || 'Failed to get help');
       }
@@ -473,6 +484,26 @@ const Implementation: React.FC<ImplementationProps> = ({
       setHelpLoading(false);
     }
   };
+
+  const handleGetHelp = async () => {
+    if (!currentTask) return;
+
+    // If we already have content ready and are currently loading, just show it
+    if (helpLoading && helpContent) {
+      setShowHelpModal(true);
+      return;
+    }
+
+    await fetchHelpContent({ showModal: true, force: true });
+  };
+
+  // Preload help content so it's instantly available in the Research-Backed section
+  useEffect(() => {
+    if (currentTask) {
+      fetchHelpContent({ showModal: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTask?.id]);
 
   const handleUploadDocument = async (file: File) => {
     if (!currentTask) return;
@@ -709,7 +740,7 @@ const Implementation: React.FC<ImplementationProps> = ({
                   </div>
                   <div className="text-right">
                     <div className="text-3xl font-bold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
-                      {Math.min(100, progress.percent)}%
+                      {progressPercent}%
                     </div>
                     <p className="text-xs text-gray-600">Complete</p>
                   </div>
@@ -720,7 +751,7 @@ const Implementation: React.FC<ImplementationProps> = ({
                   <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-gradient-to-r from-teal-500 to-blue-500 rounded-full transition-all duration-1000 ease-out shadow-sm relative overflow-hidden"
-                      style={{ width: `${Math.min(100, progress.percent)}%` }}
+                      style={{ width: `${progressPercent}%` }}
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
                     </div>
@@ -731,7 +762,7 @@ const Implementation: React.FC<ImplementationProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="bg-white/80 backdrop-blur-sm rounded-lg p-3 border border-gray-200 shadow-sm">
                     <div className="text-2xl font-bold text-gray-900">
-                      {(progress as any).main_tasks_completed ?? completedTasks.filter(t => !t.includes('_substep_')).length}
+                      {completedMainTasks}
                     </div>
                     <div className="text-xs text-gray-600 mt-1">Tasks Done</div>
                   </div>
@@ -749,7 +780,7 @@ const Implementation: React.FC<ImplementationProps> = ({
                   </div>
                   <div className="bg-white/80 backdrop-blur-sm rounded-lg p-3 border border-gray-200 shadow-sm">
                     <div className="text-2xl font-bold text-gray-900">
-                      {25 - ((progress as any).main_tasks_completed ?? completedTasks.filter(t => !t.includes('_substep_')).length)}
+                      {Math.max(0, totalTasks - completedMainTasks)}
                     </div>
                     <div className="text-xs text-gray-600 mt-1">Remaining</div>
                   </div>
@@ -789,19 +820,6 @@ const Implementation: React.FC<ImplementationProps> = ({
               </div>
             </button>
             <button
-              onClick={() => handleTabChange('support')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'support'
-                  ? 'border-teal-500 text-teal-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                Comprehensive Support
-              </div>
-            </button>
-            <button
               onClick={() => handleTabChange('roadmap')}
               className={`py-4 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'roadmap'
@@ -831,175 +849,16 @@ const Implementation: React.FC<ImplementationProps> = ({
                 onGetHelp={handleGetHelp}
                 onUploadDocument={handleUploadDocument}
                 sessionId={sessionId}
+                helpContent={helpContent}
+                helpLoading={helpLoading}
               />
             </div>
 
             {/* Sidebar */}
             <div className="space-y-6">
-              {/* Progress Overview - Simplified */}
-              <div className="bg-white/90 backdrop-blur-xl border border-white/30 rounded-xl p-6 shadow-sm">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Your Progress</h3>
-                
-                {/* Main Progress Bar */}
-                <div className="mb-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-medium text-gray-700">Tasks Completed</span>
-                    <span className="text-lg font-bold text-teal-600">
-                      {(progress as any).main_tasks_completed ?? completedTasks.filter(t => !t.includes('_substep_')).length}/25
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div
-                      className="bg-gradient-to-r from-teal-500 to-green-500 h-3 rounded-full transition-all duration-300"
-                      style={{ width: `${Math.min(100, progress.percent)}%` }}
-                    ></div>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1 text-center">
-                    {Math.min(100, progress.percent)}% Complete
-                  </p>
-                </div>
-
-                {/* Simple Stats */}
-                <div className="grid grid-cols-2 gap-3 pt-4 border-t border-gray-200">
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-teal-600">
-                      {progress.phases_completed || 0}
-                    </p>
-                    <p className="text-xs text-gray-600">Phases Done</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-blue-600">
-                      {(progress as any).substeps_completed ?? completedTasks.filter(t => t.includes('_substep_')).length}
-                    </p>
-                    <p className="text-xs text-gray-600">Steps Done</p>
-                  </div>
-                </div>
-
-                {/* Current Phase */}
-                {progress.milestone && (
-                  <div className="mt-4 p-3 bg-teal-50 rounded-lg border border-teal-200">
-                    <p className="text-xs text-teal-800 font-medium mb-1">Current Phase:</p>
-                    <p className="text-sm text-teal-900 font-semibold">{progress.milestone}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Quick Actions */}
-              <div className="bg-white/90 backdrop-blur-xl border border-white/30 rounded-xl p-6 shadow-sm">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-                <div className="space-y-3">
-                  <button
-                    onClick={handleGetHelp}
-                    disabled={helpLoading}
-                    className="relative w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-blue-400 disabled:to-blue-400 disabled:cursor-not-allowed text-white px-4 py-3 rounded-lg font-medium transition-all duration-300 flex items-center justify-center gap-2 shadow-md hover:shadow-lg overflow-hidden group"
-                  >
-                    {helpLoading ? (
-                      <>
-                        <div className="relative">
-                          <div className="absolute inset-0 rounded-full border-2 border-white/30"></div>
-                          <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                        </div>
-                        <span className="animate-pulse">Getting help for you...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Lightbulb className="h-5 w-5 group-hover:scale-110 transition-transform duration-300" />
-                        <span>Get Help</span>
-                        <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={handleGetServiceProviders}
-                    disabled={serviceProvidersLoading}
-                    className="relative w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 disabled:from-purple-400 disabled:to-purple-400 disabled:cursor-not-allowed text-white px-4 py-3 rounded-lg font-medium transition-all duration-300 flex items-center justify-center gap-2 shadow-md hover:shadow-lg overflow-hidden group"
-                  >
-                    {serviceProvidersLoading ? (
-                      <>
-                        <div className="relative">
-                          <div className="absolute inset-0 rounded-full border-2 border-white/30"></div>
-                          <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                        </div>
-                        <span className="animate-pulse">Finding providers...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Phone className="h-5 w-5 group-hover:scale-110 transition-transform duration-300" />
-                        <span>Find Providers</span>
-                        <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Best Practices & Pitfalls */}
-              <div className="space-y-4">
-                <div className="bg-green-50 border border-green-200 rounded-xl p-5 shadow-sm">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="p-2 bg-green-100 rounded-lg">
-                      <Trophy className="h-5 w-5 text-green-700" />
-                    </div>
-                    <h4 className="text-base font-semibold text-green-900">Best Practices</h4>
-                  </div>
-                  <ul className="list-disc list-inside space-y-2 text-sm text-green-900">
-                    <li>Research each option thoroughly before making a decision</li>
-                    <li>Consider your business context and specific needs</li>
-                    <li>Consult with experts or advisors when needed</li>
-                    <li>Document your decision-making process</li>
-                    <li>Review and adjust your approach as needed</li>
-                  </ul>
-                </div>
-
-                <div className="bg-rose-50 border border-rose-200 rounded-xl p-5 shadow-sm">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="p-2 bg-rose-100 rounded-lg">
-                      <AlertTriangle className="h-5 w-5 text-rose-700" />
-                    </div>
-                    <h4 className="text-base font-semibold text-rose-900">Common Pitfalls to Avoid</h4>
-                  </div>
-                  <ul className="list-disc list-inside space-y-2 text-sm text-rose-900">
-                    <li>Rushing into decisions without proper research</li>
-                    <li>Choosing options based solely on cost</li>
-                    <li>Ignoring legal and compliance requirements</li>
-                    <li>Not considering long-term implications</li>
-                    <li>Failing to document decisions and rationale</li>
-                  </ul>
-                </div>
-              </div>
-
                   </div>
           </div>
         </div>
-
-        {mountedTabs.support && (
-          <div className={activeTab === 'support' ? 'block' : 'hidden'}>
-            <ComprehensiveSupport
-              taskContext={currentTask?.id || 'general business support'}
-              businessContext={businessContext}
-              onProviderSelect={(provider) => {
-                console.log('Provider selected:', provider);
-                toast.success('Service provider selected!');
-              }}
-              onResearchComplete={(result) => {
-                console.log('Research completed:', result);
-                toast.success('Research completed successfully!');
-              }}
-              onAgentResponse={(agent, response) => {
-                console.log('Agent response:', agent, response);
-                toast.success('Agent guidance received!');
-              }}
-              onCommandComplete={(response) => {
-                console.log('Command completed:', response);
-                toast.success('Command executed successfully!');
-              }}
-              agentsCache={agentsCache}
-              providersCache={providersCache}
-              agentsLoading={agentsLoading}
-              providersLoading={providersLoading}
-            />
-          </div>
-        )}
 
         {mountedTabs.roadmap && (
           <div className={activeTab === 'roadmap' ? 'block' : 'hidden'}>
@@ -1094,6 +953,8 @@ const Implementation: React.FC<ImplementationProps> = ({
         angelCanHelp={currentTask?.angel_actions || []}
         sessionId={sessionId}
         currentTask={currentTask}
+        // Expanded width for easier reading now that the side tab is gone
+        className="max-w-5xl w-full"
       />
       
       {/* Custom Animations */}

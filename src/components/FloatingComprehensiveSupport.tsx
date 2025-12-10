@@ -6,7 +6,6 @@ import {
   Loader2, 
   Building2, 
   Search, 
-  Users, 
   MessageSquare,
   Copy,
   Check,
@@ -18,24 +17,12 @@ import {
   ChevronUp,
   Minimize2,
   Maximize2,
-  Scale,
-  DollarSign,
-  Megaphone,
-  Settings,
-  Shield,
-  FileText,
-  Target,
-  Plus,
   Lightbulb,
   CheckCircle,
-  HelpCircle,
-  Phone,
-  Edit3,
-  Rocket
+  HelpCircle
 } from 'lucide-react';
 import httpClient from '../api/httpClient';
 import ServiceProviderDetailModal from './ServiceProviderDetailModal';
-import AgentDetailModal from './AgentDetailModal';
 
 interface Message {
   id: string;
@@ -64,7 +51,7 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
   sessionId,
   currentTask
 }) => {
-  const [activeTab, setActiveTab] = useState<'providers' | 'research' | 'agents' | 'chat'>('providers');
+  const [activeTab, setActiveTab] = useState<'providers' | 'research' | 'chat'>('chat');
   const [isMinimized, setIsMinimized] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   
@@ -80,18 +67,8 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
   const [researchResult, setResearchResult] = useState<any>(null);
   const [researchLoading, setResearchLoading] = useState(false);
   const [customQuery, setCustomQuery] = useState('');
-  const [researchDepth, setResearchDepth] = useState<'basic' | 'standard' | 'deep'>('standard');
+  const researchDepth: 'standard' = 'standard';
   const [researchProgress, setResearchProgress] = useState(0);
-  
-  // Agents state
-  const [agents, setAgents] = useState<any[]>([]);
-  const [agentsLoading, setAgentsLoading] = useState(false);
-  const [showCreateAgent, setShowCreateAgent] = useState(false);
-  const [newAgentName, setNewAgentName] = useState('');
-  const [newAgentType, setNewAgentType] = useState('');
-  const [newAgentDescription, setNewAgentDescription] = useState('');
-  const [selectedAgent, setSelectedAgent] = useState<any | null>(null);
-  const [showAgentModal, setShowAgentModal] = useState(false);
   
   // Chat state
   const [messages, setMessages] = useState<Message[]>([]);
@@ -121,13 +98,6 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
     }
   }, [activeTab]);
 
-  // Fetch agents when tab is opened
-  useEffect(() => {
-    if (activeTab === 'agents' && agents.length === 0) {
-      fetchAgents();
-    }
-  }, [activeTab]);
-
   const fetchProviders = async () => {
     setProvidersLoading(true);
     try {
@@ -148,28 +118,6 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
       toast.error('Failed to load service providers');
     } finally {
       setProvidersLoading(false);
-    }
-  };
-
-  const fetchAgents = async () => {
-    setAgentsLoading(true);
-    try {
-      const token = localStorage.getItem('sb_access_token');
-      const response = await httpClient.post('/specialized-agents/get-agents', {
-        task_context: taskContext || currentTask?.title,
-        business_context: businessContext
-      }, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if ((response.data as any)?.success) {
-        setAgents((response.data as any).result?.agents || []);
-      }
-    } catch (error: any) {
-      console.error('Error fetching agents:', error);
-      toast.error('Failed to load specialized agents');
-    } finally {
-      setAgentsLoading(false);
     }
   };
 
@@ -309,22 +257,9 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
     setShowProviderModal(true);
   };
 
-  const getAgentIcon = (agentType: string) => {
-    const iconMap: Record<string, React.ReactNode> = {
-      'legal_compliance': <Scale className="h-5 w-5 text-blue-500" />,
-      'financial_planning': <DollarSign className="h-5 w-5 text-green-500" />,
-      'marketing_strategy': <Megaphone className="h-5 w-5 text-orange-500" />,
-      'operations_management': <Settings className="h-5 w-5 text-purple-500" />,
-      'technology_integration': <FileText className="h-5 w-5 text-indigo-500" />,
-      'risk_management': <Shield className="h-5 w-5 text-red-500" />,
-    };
-    return iconMap[agentType] || <Users className="h-5 w-5 text-gray-500" />;
-  };
-
   const tabs = [
     { id: 'providers', label: 'Providers', icon: <Building2 className="h-3.5 w-3.5" /> },
     { id: 'research', label: 'Research', icon: <Search className="h-3.5 w-3.5" /> },
-    { id: 'agents', label: 'Agents', icon: <Users className="h-3.5 w-3.5" /> },
     { id: 'chat', label: 'Chat With Angel', icon: <MessageSquare className="h-3.5 w-3.5" /> }
   ];
 
@@ -456,32 +391,6 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
                 rows={3}
                 disabled={researchLoading}
               />
-
-              {/* Research Depth Selection */}
-              <div className="mb-3">
-                <label className="text-xs font-semibold text-gray-700 mb-2 block">Research Depth</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { value: 'basic', label: 'Basic', desc: 'Quick overview', color: 'from-green-500 to-emerald-500' },
-                    { value: 'standard', label: 'Standard', desc: 'Comprehensive', color: 'from-blue-500 to-cyan-500' },
-                    { value: 'deep', label: 'Deep', desc: 'Extensive', color: 'from-purple-500 to-indigo-500' }
-                  ].map((depth) => (
-                    <button
-                      key={depth.value}
-                      onClick={() => setResearchDepth(depth.value as any)}
-                      disabled={researchLoading}
-                      className={`p-2.5 rounded-lg border-2 transition-all ${
-                        researchDepth === depth.value
-                          ? `bg-gradient-to-br ${depth.color} text-white border-transparent shadow-md scale-105`
-                          : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:shadow-sm'
-                      } disabled:opacity-50`}
-                    >
-                      <div className="text-xs font-semibold">{depth.label}</div>
-                      <div className="text-[10px] opacity-80 mt-0.5">{depth.desc}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
 
               <button
                 onClick={handleCustomResearch}
@@ -637,311 +546,6 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
           </div>
         )}
 
-        {/* AGENTS TAB */}
-        {activeTab === 'agents' && (
-          <div className="space-y-4">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-teal-500 via-blue-500 to-indigo-600 rounded-xl p-4 text-white relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-teal-400/20 to-blue-400/20"></div>
-              <div className="relative z-10 flex items-center justify-between">
-                <div>
-                  <h3 className="font-bold text-base mb-1 flex items-center gap-2">
-                    <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg">
-                      <Users className="h-4 w-4" />
-                    </div>
-                    Specialized Agents
-                  </h3>
-                  <p className="text-xs text-white/90">Expert guidance tailored to your business</p>
-                </div>
-                {!showCreateAgent && (
-                  <button
-                    onClick={() => setShowCreateAgent(true)}
-                    className="px-3 py-1.5 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-lg text-xs font-medium transition-all shadow-lg hover:shadow-xl flex items-center gap-1.5 border border-white/30"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Create Agent
-                  </button>
-                )}
-              </div>
-            </div>
-            
-            {/* Create Agent Form */}
-            {showCreateAgent && (
-              <div className="bg-gradient-to-br from-teal-50 via-blue-50 to-indigo-50 border border-teal-200/50 rounded-xl p-4 shadow-sm animate-fadeIn">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-semibold text-gray-900 text-sm">Create New Agent</h4>
-                  <button
-                    onClick={() => {
-                      setShowCreateAgent(false);
-                      setNewAgentName('');
-                      setNewAgentType('');
-                      setNewAgentDescription('');
-                    }}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs font-medium text-gray-700 mb-1 block">Agent Name</label>
-                    <input
-                      type="text"
-                      value={newAgentName}
-                      onChange={(e) => setNewAgentName(e.target.value)}
-                      placeholder="e.g., Marketing Specialist"
-                      className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-700 mb-1 block">Agent Type</label>
-                    <select
-                      value={newAgentType}
-                      onChange={(e) => setNewAgentType(e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                    >
-                      <option value="">Select type...</option>
-                      <option value="legal_compliance">Legal & Compliance</option>
-                      <option value="financial_planning">Financial Planning</option>
-                      <option value="marketing_strategy">Marketing Strategy</option>
-                      <option value="operations_management">Operations Management</option>
-                      <option value="technology_integration">Technology Integration</option>
-                      <option value="risk_management">Risk Management</option>
-                      <option value="custom">Custom</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-700 mb-1 block">Description</label>
-                    <textarea
-                      value={newAgentDescription}
-                      onChange={(e) => setNewAgentDescription(e.target.value)}
-                      placeholder="Describe what this agent specializes in..."
-                      rows={3}
-                      className="w-full p-2 border border-gray-300 rounded-lg text-sm resize-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={async () => {
-                        if (newAgentName && newAgentType) {
-                          const newAgent = {
-                            id: `custom_${Date.now()}`,
-                            agent_type: newAgentType,
-                            name: newAgentName,
-                            description: newAgentDescription || `Custom agent: ${newAgentName}`,
-                            expertise: newAgentDescription || `Specialized in ${newAgentName}`,
-                            capabilities: ['guidance', 'research', 'recommendations']
-                          };
-                          setAgents([...agents, newAgent]);
-                          setShowCreateAgent(false);
-                          setNewAgentName('');
-                          setNewAgentType('');
-                          setNewAgentDescription('');
-                          toast.success('Agent created successfully!');
-                        } else {
-                          toast.error('Please fill in agent name and type');
-                        }
-                      }}
-                      className="flex-1 px-3 py-2 bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white rounded-lg text-xs font-medium transition-all shadow-sm hover:shadow-md"
-                    >
-                      Create Agent
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowCreateAgent(false);
-                        setNewAgentName('');
-                        setNewAgentType('');
-                        setNewAgentDescription('');
-                      }}
-                      className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {/* Loading State */}
-            {agentsLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="text-center">
-                  <div className="relative inline-block mb-4">
-                    <div className="absolute inset-0 bg-gradient-to-r from-teal-400 to-blue-500 rounded-full blur-xl opacity-30 animate-pulse"></div>
-                    <div className="relative bg-gradient-to-br from-teal-500 to-blue-600 p-4 rounded-full shadow-lg">
-                      <Loader2 className="h-8 w-8 animate-spin text-white" />
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-600">Loading agents...</p>
-                </div>
-              </div>
-            ) : agents.length > 0 ? (
-              <div className="grid grid-cols-1 gap-4">
-                {agents.map((agent, index) => {
-                  const getAgentGradient = (type: string) => {
-                    const gradients: Record<string, string> = {
-                      'legal_compliance': 'from-blue-500 via-indigo-500 to-purple-600',
-                      'financial_planning': 'from-emerald-500 via-teal-500 to-cyan-600',
-                      'marketing_strategy': 'from-orange-500 via-amber-500 to-yellow-500',
-                      'operations_management': 'from-purple-500 via-pink-500 to-rose-600',
-                      'technology_integration': 'from-indigo-500 via-blue-500 to-cyan-600',
-                      'risk_management': 'from-red-500 via-rose-500 to-pink-600',
-                    };
-                    return gradients[type] || 'from-teal-500 via-blue-500 to-indigo-600';
-                  };
-
-                  const getAgentBg = (type: string) => {
-                    const bgs: Record<string, string> = {
-                      'legal_compliance': 'from-blue-50 via-indigo-50 to-purple-50',
-                      'financial_planning': 'from-emerald-50 via-teal-50 to-cyan-50',
-                      'marketing_strategy': 'from-orange-50 via-amber-50 to-yellow-50',
-                      'operations_management': 'from-purple-50 via-pink-50 to-rose-50',
-                      'technology_integration': 'from-indigo-50 via-blue-50 to-cyan-50',
-                      'risk_management': 'from-red-50 via-rose-50 to-pink-50',
-                    };
-                    return bgs[type] || 'from-teal-50 via-blue-50 to-indigo-50';
-                  };
-
-                  return (
-                    <div
-                      key={index}
-                      onClick={() => {
-                        setSelectedAgent(agent);
-                        setShowAgentModal(true);
-                      }}
-                      className="relative bg-gradient-to-br from-white to-gray-50 border border-gray-200/50 rounded-2xl p-5 hover:border-teal-400/50 hover:shadow-2xl transition-all duration-500 cursor-pointer group overflow-hidden animate-fadeIn backdrop-blur-sm"
-                      style={{ animationDelay: `${index * 80}ms` }}
-                    >
-                      {/* Animated Background Gradient */}
-                      <div className={`absolute inset-0 bg-gradient-to-br ${getAgentBg(agent.agent_type || 'custom')} opacity-0 group-hover:opacity-100 transition-opacity duration-500`}></div>
-                      
-                      {/* Shimmer Effect */}
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-                      
-                      {/* Content */}
-                      <div className="relative z-10">
-                        <div className="flex items-start gap-4">
-                          {/* Icon Container */}
-                          <div className={`relative p-4 rounded-2xl bg-gradient-to-br ${getAgentGradient(agent.agent_type || 'custom')} shadow-xl group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 flex-shrink-0`}>
-                            <div className="absolute inset-0 bg-white/20 rounded-2xl blur-sm"></div>
-                            <div className="relative text-white">
-                              {getAgentIcon(agent.agent_type || agent.id)}
-                            </div>
-                          </div>
-                          
-                          {/* Info Section */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <h4 className="font-bold text-gray-900 text-base group-hover:text-teal-600 transition-colors">
-                                    {agent.name}
-                                  </h4>
-                                  {agent.id?.startsWith('custom_') && (
-                                    <span className="inline-flex items-center px-2 py-0.5 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-full text-[10px] font-semibold shadow-sm">
-                                      Custom
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-xs text-gray-600 leading-relaxed mb-3 line-clamp-2">
-                                  {agent.expertise || agent.description}
-                                </p>
-                              </div>
-                            </div>
-                            
-                            {/* Capabilities */}
-                            {agent.capabilities && agent.capabilities.length > 0 && (
-                              <div className="flex flex-wrap gap-2 mb-4">
-                                {agent.capabilities.slice(0, 3).map((cap: string, idx: number) => (
-                                  <span
-                                    key={idx}
-                                    className="inline-flex items-center px-2.5 py-1 bg-white/80 backdrop-blur-sm text-gray-700 rounded-lg text-[10px] font-semibold shadow-sm border border-gray-200/50"
-                                  >
-                                    {cap}
-                                  </span>
-                                ))}
-                                {agent.capabilities.length > 3 && (
-                                  <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-500 rounded-lg text-[10px] font-medium">
-                                    +{agent.capabilities.length - 3} more
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                            
-                            {/* Action Buttons */}
-                            <div className="flex gap-2">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedAgent(agent);
-                                  setShowAgentModal(true);
-                                }}
-                                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 group/btn"
-                              >
-                                <MessageSquare className="h-4 w-4 group-hover/btn:scale-110 transition-transform" />
-                                View Details
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActiveTab('chat');
-                                  setChatInput(`I'd like to consult with ${agent.name} about ${agent.expertise || agent.description}. `);
-                                  setTimeout(() => {
-                                    const chatInput = document.querySelector('textarea[placeholder*="Angel"]') as HTMLTextAreaElement;
-                                    if (chatInput) {
-                                      chatInput.focus();
-                                      chatInput.setSelectionRange(chatInput.value.length, chatInput.value.length);
-                                    }
-                                  }, 100);
-                                }}
-                                className="px-4 py-2.5 bg-white border-2 border-teal-500 hover:bg-teal-50 text-teal-600 rounded-xl text-xs font-bold transition-all shadow-md hover:shadow-lg flex items-center justify-center"
-                              >
-                                <Send className="h-4 w-4" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-xl p-8 text-center">
-                <div className="mb-4">
-                  <Users className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                  <h4 className="font-semibold text-gray-900 mb-1">No Specialized Agents Available</h4>
-                  <p className="text-xs text-gray-600 mb-4">Create custom agents to get expert guidance for your specific needs</p>
-                </div>
-                <button
-                  onClick={() => setShowCreateAgent(true)}
-                  className="px-4 py-2 bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white rounded-lg text-sm font-medium transition-all shadow-md hover:shadow-lg flex items-center gap-2 mx-auto"
-                >
-                  <Plus className="h-4 w-4" />
-                  Create Your First Agent
-                </button>
-                <div className="mt-4 pt-4 border-t border-gray-200">
-                  <p className="text-xs text-gray-500 mb-2">Suggested agent types:</p>
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    {['Legal Advisor', 'Financial Planner', 'Marketing Expert', 'Operations Manager'].map((type) => (
-                      <button
-                        key={type}
-                        onClick={() => {
-                          setNewAgentName(type);
-                          setShowCreateAgent(true);
-                        }}
-                        className="text-xs px-2.5 py-1 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg text-gray-700 transition-colors"
-                      >
-                        {type}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* CHAT WITH ANGEL TAB */}
         {activeTab === 'chat' && (
           <div className="flex flex-col h-full">
@@ -980,7 +584,7 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
             </div>
 
             {/* Angel Can Help Suggestions (Clickable) */}
-            {angelCanHelp.length > 0 && messages.length === 0 && (
+            {angelCanHelp.length > 0 && (
               <div className="mb-3">
                 <h4 className="text-xs font-semibold text-gray-700 mb-2">Angel Can Help You With:</h4>
                 <div className="space-y-1.5">
@@ -1151,18 +755,6 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
         />
       )}
 
-      {/* Agent Detail Modal */}
-      {showAgentModal && selectedAgent && (
-        <AgentDetailModal
-          agent={selectedAgent}
-          isOpen={showAgentModal}
-          onClose={() => {
-            setShowAgentModal(false);
-            setSelectedAgent(null);
-          }}
-          businessContext={businessContext}
-        />
-      )}
     </div>
   );
 };

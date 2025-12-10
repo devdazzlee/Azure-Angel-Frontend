@@ -61,6 +61,8 @@ interface TaskCardProps {
   onGetHelp: () => void;
   onUploadDocument: (file: File) => void;
   sessionId?: string;  // Add sessionId prop
+  helpContent?: string;
+  helpLoading?: boolean;
 }
 
 export const TaskCard: React.FC<TaskCardProps> = ({
@@ -69,7 +71,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onGetServiceProviders,
   onGetHelp,
   onUploadDocument,
-  sessionId
+  sessionId,
+  helpContent,
+  helpLoading
 }) => {
   const [selectedOption, setSelectedOption] = useState<string>('');
   const [completionNotes, setCompletionNotes] = useState<string>('');
@@ -77,7 +81,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mentorInsights, setMentorInsights] = useState<string>('');
-  const [ragResearch, setRagResearch] = useState<any>(null);
   const [currentSubstepIndex, setCurrentSubstepIndex] = useState<number>(0);
   const [showSubstepModal, setShowSubstepModal] = useState(false);
   const [substepToComplete, setSubstepToComplete] = useState<ImplementationSubstep | null>(null);
@@ -110,7 +113,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       const token = localStorage.getItem('sb_access_token');
       if (!token) return;
 
-      // Load mentor insights and RAG research for this task
+      // Load mentor insights for this task
       const response = await httpClient.post('/specialized-agents/agent-guidance', {
         question: `Provide expert guidance for implementation task: ${task.title}`,
         agent_type: 'comprehensive',
@@ -123,21 +126,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
       if ((response.data as any).success) {
         setMentorInsights((response.data as any).result.guidance || 'Expert guidance will be provided as you work through this task.');
-      }
-
-      // Load RAG research
-      const ragResponse = await httpClient.post('/specialized-agents/rag-research', {
-        query: `implementation task ${task.id} ${task.business_context.industry} ${task.business_context.location}`,
-        business_context: task.business_context,
-        research_depth: 'standard'
-      }, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if ((ragResponse.data as any).success) {
-        setRagResearch((ragResponse.data as any).result);
       }
     } catch (err) {
       console.error('Error loading task insights:', err);
@@ -390,18 +378,18 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               <Target className="h-4 w-4 text-blue-600" />
               Implementation Steps ({task.substeps.length} steps)
             </h3>
-            <div className="space-y-4">
+            <div className="space-y-3">
               {task.substeps.map((substep, index) => (
                 <div
                   key={substep.step_number}
-                  className={`border-2 rounded-lg p-4 transition-all ${
+                  className={`rounded-xl p-3 sm:p-4 transition-all shadow-sm ${
                     substep.completed
-                      ? 'bg-green-50 border-green-300'
+                      ? 'bg-green-50 border border-green-200'
                       : index === currentSubstepIndex
-                      ? 'bg-blue-50 border-blue-400 shadow-md'
+                      ? 'bg-gradient-to-r from-blue-50 via-white to-blue-50 border border-blue-200 shadow-md'
                       : index < currentSubstepIndex
-                      ? 'bg-gray-50 border-gray-300'
-                      : 'bg-white border-gray-200 opacity-60'
+                      ? 'bg-gray-50 border border-gray-200'
+                      : 'bg-white border border-gray-100'
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -418,9 +406,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                         substep.step_number
                       )}
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className={`font-semibold ${
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className={`font-semibold leading-tight ${
                           substep.completed ? 'text-green-800' : index === currentSubstepIndex ? 'text-blue-800' : 'text-gray-700'
                         }`}>
                           {substep.title}
@@ -434,12 +422,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                             Click to Edit
                           </button>
                         ) : index === currentSubstepIndex ? (
-                          <span className="text-xs font-medium text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                          <span className="text-[11px] font-semibold text-blue-700 bg-blue-100 px-2 py-1 rounded">
                             Current Step
                           </span>
                         ) : null}
                       </div>
-                      <div className="prose prose-sm max-w-none mb-2">
+                      <div className="prose prose-sm max-w-none mb-1">
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
                           components={{
@@ -454,25 +442,25 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                           {substep.description}
                         </ReactMarkdown>
                       </div>
-                      <div className="bg-blue-50 rounded p-2 mb-2">
-                        <p className="text-xs font-medium text-blue-800 mb-1">Angel can help:</p>
-                        <div className="prose prose-sm max-w-none">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                              p: ({ children }) => <p className="text-xs text-blue-700 leading-relaxed mb-1">{children}</p>,
-                              ul: ({ children }) => <ul className="list-disc ml-4 space-y-0.5 text-xs text-blue-700">{children}</ul>,
-                              ol: ({ children }) => <ol className="list-decimal ml-4 space-y-0.5 text-xs text-blue-700">{children}</ol>,
-                              li: ({ children }) => <li className="text-xs leading-relaxed">{children}</li>,
-                              strong: ({ children }) => <strong className="font-semibold text-blue-800">{children}</strong>,
-                              code: ({ children }) => <code className="bg-blue-100 text-blue-900 px-1 py-0.5 rounded text-xs">{children}</code>,
-                            }}
-                          >
-                            {substep.angel_can_help}
-                          </ReactMarkdown>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg">
+                          <span className="text-[11px] font-semibold text-blue-800">Angel can help</span>
+                          <div className="text-[11px] text-blue-700 leading-snug">
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                p: ({ children }) => <p className="m-0 text-[11px]">{children}</p>,
+                                ul: ({ children }) => <ul className="list-disc ml-4 space-y-0.5">{children}</ul>,
+                                ol: ({ children }) => <ol className="list-decimal ml-4 space-y-0.5">{children}</ol>,
+                                li: ({ children }) => <li className="text-[11px] leading-snug">{children}</li>,
+                                strong: ({ children }) => <strong className="font-semibold text-blue-900">{children}</strong>,
+                                code: ({ children }) => <code className="bg-blue-100 text-blue-900 px-1 py-0.5 rounded text-[10px]">{children}</code>,
+                              }}
+                            >
+                              {substep.angel_can_help}
+                            </ReactMarkdown>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center justify-between">
                         <span className="text-xs text-gray-500 flex items-center gap-1">
                           <Clock className="h-3 w-3" />
                           {substep.estimated_time}
@@ -481,7 +469,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                           <button
                             onClick={() => handleSubstepClick(substep)}
                             disabled={loading}
-                            className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded font-medium transition-colors disabled:opacity-50 flex items-center gap-1"
+                            className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded font-semibold transition-colors disabled:opacity-50 flex items-center gap-1"
                           >
                             <CheckCircle className="h-3 w-3" />
                             Mark Complete
@@ -531,105 +519,62 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </div>
         )}
 
-        {/* Angel Actions as Decision Options */}
+
+        {/* Research / Help (preloaded Get Help content) */}
         <div>
           <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-            <Target className="h-4 w-4 text-blue-600" />
-            Decision Options
+            <span role="img" aria-label="detailed guidance" className="text-lg">
+              🗂️
+            </span>
+            Detailed Guidance
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {task.angel_actions.map((action, index) => (
-              <div
-                key={index}
-                className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-all"
-              >
-                <div className="flex items-center justify-center h-9 w-9 rounded-full bg-blue-100 text-blue-700 font-semibold">
-                  {index + 1}
-                </div>
-                <span className="text-base font-medium text-gray-900">{action}</span>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            {helpLoading ? (
+              <div className="flex items-center gap-2 text-sm text-blue-800">
+                <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                <span>Loading detailed guidance...</span>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Mentor Insights */}
-        {mentorInsights && (
-          <div>
-            <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              <Lightbulb className="h-4 w-4 text-yellow-600" />
-              Mentor Insights
-            </h3>
-            <div className="bg-yellow-50 p-4 rounded-lg">
-              <div className="prose prose-sm max-w-none text-yellow-900">
+            ) : helpContent ? (
+              <div className="prose prose-sm max-w-none text-blue-900">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
-                    h1: ({ children }) => <h1 className="text-lg font-bold text-yellow-900 mb-3 mt-4">{children}</h1>,
-                    h2: ({ children }) => <h2 className="text-base font-semibold text-yellow-900 mb-2 mt-3">{children}</h2>,
-                    h3: ({ children }) => <h3 className="text-sm font-semibold text-yellow-800 mb-2 mt-3">{children}</h3>,
-                    p: ({ children }) => <p className="text-sm text-yellow-800 leading-relaxed mb-2">{children}</p>,
-                    ul: ({ children }) => <ul className="list-disc ml-5 space-y-1 text-sm text-yellow-800 mb-2">{children}</ul>,
-                    ol: ({ children }) => <ol className="list-decimal ml-5 space-y-1 text-sm text-yellow-800 mb-2">{children}</ol>,
+                    h1: ({ children }) => <h1 className="text-lg font-bold text-blue-900 mb-3 mt-4">{children}</h1>,
+                    h2: ({ children }) => <h2 className="text-base font-semibold text-blue-900 mb-2 mt-3">{children}</h2>,
+                    h3: ({ children }) => <h3 className="text-sm font-semibold text-blue-800 mb-2 mt-3">{children}</h3>,
+                    h4: ({ children }) => <h4 className="text-sm font-medium text-blue-800 mb-1 mt-2">{children}</h4>,
+                    p: ({ children }) => <p className="text-sm text-blue-800 leading-relaxed mb-2">{children}</p>,
+                    ul: ({ children }) => <ul className="list-disc ml-5 space-y-1 text-sm text-blue-800 mb-2">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal ml-5 space-y-1 text-sm text-blue-800 mb-2">{children}</ol>,
                     li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-                    strong: ({ children }) => <strong className="font-semibold text-yellow-900">{children}</strong>,
-                    code: ({ children }) => <code className="bg-yellow-100 text-yellow-900 px-1.5 py-0.5 rounded text-xs">{children}</code>,
-                    blockquote: ({ children }) => <blockquote className="border-l-4 border-yellow-400 pl-4 italic text-yellow-800 my-2">{children}</blockquote>,
-                  }}
-                >
-                  {mentorInsights}
-                </ReactMarkdown>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Research */}
-        {ragResearch && (
-          <div>
-            <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-green-600" />
-              Research-Backed Guidance
-            </h3>
-            <div className="bg-green-50 p-4 rounded-lg">
-              <p className="text-sm text-green-800 mb-3">
-                Sources consulted: {ragResearch.sources_consulted} authoritative sources
-              </p>
-              <div className="prose prose-sm max-w-none text-green-900">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    h1: ({ children }) => <h1 className="text-lg font-bold text-green-900 mb-3 mt-4">{children}</h1>,
-                    h2: ({ children }) => <h2 className="text-base font-semibold text-green-900 mb-2 mt-3">{children}</h2>,
-                    h3: ({ children }) => <h3 className="text-sm font-semibold text-green-800 mb-2 mt-3">{children}</h3>,
-                    h4: ({ children }) => <h4 className="text-sm font-medium text-green-800 mb-1 mt-2">{children}</h4>,
-                    p: ({ children }) => <p className="text-sm text-green-800 leading-relaxed mb-2">{children}</p>,
-                    ul: ({ children }) => <ul className="list-disc ml-5 space-y-1 text-sm text-green-800 mb-2">{children}</ul>,
-                    ol: ({ children }) => <ol className="list-decimal ml-5 space-y-1 text-sm text-green-800 mb-2">{children}</ol>,
-                    li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-                    strong: ({ children }) => <strong className="font-semibold text-green-900">{children}</strong>,
+                    strong: ({ children }) => <strong className="font-semibold text-blue-900">{children}</strong>,
                     em: ({ children }) => <em className="italic">{children}</em>,
                     code: ({ children, ...props }: any) => {
                       const isInline = props.inline !== false;
                       return isInline ? (
-                        <code className="bg-green-100 text-green-900 px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>
+                        <code className="bg-blue-100 text-blue-900 px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>
                       ) : (
-                        <pre className="bg-green-100 text-green-900 p-2 rounded text-xs font-mono overflow-x-auto mb-2"><code>{children}</code></pre>
+                        <pre className="bg-blue-100 text-blue-900 p-2 rounded text-xs font-mono overflow-x-auto mb-2"><code>{children}</code></pre>
                       );
                     },
                     blockquote: ({ children }) => (
-                      <blockquote className="border-l-4 border-green-400 bg-green-100 p-2 italic rounded my-2 text-sm text-green-800">
+                      <blockquote className="border-l-4 border-blue-400 bg-blue-100 p-2 italic rounded my-2 text-sm text-blue-800">
                         {children}
                       </blockquote>
                     ),
-                    hr: () => <hr className="my-3 border-green-300" />,
+                    hr: () => <hr className="my-3 border-blue-300" />,
                   }}
                 >
-                  {ragResearch.analysis}
+                  {helpContent}
                 </ReactMarkdown>
               </div>
-            </div>
+            ) : (
+              <p className="text-sm text-blue-800">
+                Detailed guidance will appear here as soon as it finishes loading.
+              </p>
+            )}
           </div>
-        )}
+        </div>
 
         {/* Completion Notes */}
         <div>

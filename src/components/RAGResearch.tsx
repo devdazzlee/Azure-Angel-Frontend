@@ -54,17 +54,11 @@ const RAGResearch: React.FC<RAGResearchProps> = ({
   className = ""
 }) => {
   const [query, setQuery] = useState<string>('');
-  const [researchDepth, setResearchDepth] = useState<string>('standard');
+  const researchDepth = 'standard';
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ResearchResult | null>(null);
-
-  const researchDepths = [
-    { value: 'basic', label: 'Basic Research', description: 'Quick overview and key insights' },
-    { value: 'standard', label: 'Standard Research', description: 'Comprehensive analysis with multiple sources' },
-    { value: 'deep', label: 'Deep Research', description: 'Extensive research with academic and industry sources' }
-  ];
 
   const conductResearch = async () => {
     if (!query.trim()) {
@@ -157,27 +151,6 @@ const RAGResearch: React.FC<RAGResearchProps> = ({
             rows={3}
             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
-        </div>
-
-        {/* Research Depth */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Research Depth</label>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {researchDepths.map((depth) => (
-              <button
-                key={depth.value}
-                onClick={() => setResearchDepth(depth.value)}
-                className={`p-3 rounded-lg border-2 text-left transition-all ${
-                  researchDepth === depth.value
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <div className="font-medium text-gray-900">{depth.label}</div>
-                <div className="text-xs text-gray-600 mt-1">{depth.description}</div>
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Conduct Research Button */}
