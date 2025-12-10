@@ -280,7 +280,7 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
   }
 
   return (
-    <div className="fixed right-0 sm:right-4 top-0 sm:top-20 bottom-0 sm:bottom-4 w-full sm:w-[420px] bg-white rounded-none sm:rounded-xl shadow-2xl border-0 sm:border border-gray-200 flex flex-col overflow-hidden z-40 animate-slideIn">
+    <div className="fixed right-0 sm:right-4 top-0 sm:top-20 bottom-0 sm:bottom-4 w-full sm:w-full sm:max-w-5xl bg-white rounded-none sm:rounded-xl shadow-2xl border-0 sm:border border-gray-200 flex flex-col overflow-hidden z-40 animate-slideIn">
       {/* Header */}
       <div className="bg-gradient-to-r from-teal-500 via-blue-500 to-indigo-600 p-3 sm:p-4 text-white flex items-center justify-between relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-teal-400/50 via-blue-400/50 to-indigo-500/50 animate-pulse"></div>

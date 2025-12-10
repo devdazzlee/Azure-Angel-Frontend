@@ -234,11 +234,7 @@ const Implementation: React.FC<ImplementationProps> = ({
     setSupportLoaded(false);
   }, [currentTask?.id]);
 
-  useEffect(() => {
-    if (activeTab === 'support' && !supportLoaded) {
-      fetchComprehensiveSupportData();
-    }
-  }, [activeTab, supportLoaded, currentTask?.id]);
+  // Removed support tab - no longer needed
 
   useEffect(() => {
     if (activeTab === 'roadmap' && !roadmapLoaded) {
@@ -953,8 +949,6 @@ const Implementation: React.FC<ImplementationProps> = ({
         angelCanHelp={currentTask?.angel_actions || []}
         sessionId={sessionId}
         currentTask={currentTask}
-        // Expanded width for easier reading now that the side tab is gone
-        className="max-w-5xl w-full"
       />
       
       {/* Custom Animations */}
