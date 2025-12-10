@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FaEye, FaEyeSlash, FaEnvelope, FaLock, FaArrowRight, FaMagic, FaUser } from 'react-icons/fa';
+import { FaEye, FaEyeSlash, FaEnvelope, FaLock, FaArrowRight, FaMagic, FaUser, FaTimes, FaInfoCircle } from 'react-icons/fa';
 import { signUp } from '../../services/authService';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -10,6 +10,50 @@ interface SignupFormData {
   password: string;
   confirmPassword: string;
 }
+
+// Beta Tester Email List - Only these emails can sign up
+const BETA_TESTER_EMAILS = [
+  'muhammadkonain98@gmail.com',
+  'liz.mitros@gmail.com',
+  'khadijashah15@gmail.com',
+  's_hamza_h@hotmail.com',
+  'nzehranaz@gmail.com',
+  'sgc.143@gmail.com',
+  'yasirshasan@gmail.com',
+  'kevin@founderport.ai',
+  'm.minhal.kanani@gmail.com',
+  'ryansummersmail@gmail.com',
+  'tharper1124@gmail.com',
+  'ayocum02@yahoo.com',
+  'thomas.corey33@gmail.com',
+  'mappelman@kpmg.com',
+  'michelle.igoshi.harner@gmail.com',
+  'adam.harner@gmail.com',
+  'aaron_zelt@hotmail.com',
+  'walid@vikk.ai',
+  'kylemwalk@gmail.com',
+  'nam.isaac@gmail.com',
+  'arcane.psr22@gmail.com',
+  'sarastuart@ucla.edu',
+  'ryan@hyperdrivelab.com',
+  'mrsnicoleramos@gmail.com',
+  'josh@thepromethean.ai',
+  'phanley09@gmail.com',
+  'lindsaykray@gmail.com',
+  'akvinikadze1@gmail.com',
+  'calderoni23619@gmail.com',
+  'taniadelatorre1@gmail.com',
+  'kristinbraden@hotmail.com',
+  'juancvieyra@icloud.com',
+  'gutierrez6dany@gmail.com',
+  'kweybright3910@icloud.com',
+  'ufa.asu@gmail.com',
+  'williamrigby@pm.me',
+  'nora.romaya@gmail.com',
+  's.farwa.f@gmail.com',
+  'nafisa.jassani@gmail.com',
+  'ahmedrazagithub@gmail.com'
+].map(email => email.toLowerCase()); // Normalize to lowercase for case-insensitive comparison
 
 const SignupPage: React.FC = () => {
   const navigate = useNavigate();
@@ -22,6 +66,7 @@ const SignupPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState({ pass: false, confirm: false });
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [showBetaModal, setShowBetaModal] = useState(false);
   console.log('Focused Field 1:', focusedField);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -34,6 +79,13 @@ const SignupPage: React.FC = () => {
 
     if (formData.password !== formData.confirmPassword) {
       toast.error('Passwords do not match.');
+      return;
+    }
+
+    // Check if email is in beta tester list
+    const emailLower = formData.email.toLowerCase().trim();
+    if (!BETA_TESTER_EMAILS.includes(emailLower)) {
+      setShowBetaModal(true);
       return;
     }
 
@@ -52,10 +104,13 @@ const SignupPage: React.FC = () => {
       navigate('/verify-email', {
         state: { email: formData.email }, 
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Signup error:', err);
+      const errorMessage = err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+        : undefined;
       toast.error(
-        err?.response?.data?.message || 'Signup failed. Please try again.'
+        errorMessage || 'Signup failed. Please try again.'
       );
     } finally {
       setIsLoading(false);
@@ -204,6 +259,119 @@ const SignupPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Beta Access Modal */}
+      {showBetaModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          style={{ animation: 'fadeIn 0.3s ease-out' }}
+        >
+          <div 
+            className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
+            style={{ animation: 'slideUp 0.4s ease-out' }}
+          >
+            {/* Gradient Header */}
+            <div className="relative bg-gradient-to-r from-teal-500 via-blue-500 to-indigo-600 p-6">
+              <div className="absolute inset-0 bg-gradient-to-r from-teal-400/20 via-blue-400/20 to-indigo-400/20"></div>
+              <div className="relative flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl">
+                    <FaInfoCircle className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">Beta Access Only</h2>
+                    <p className="text-teal-100 text-sm mt-1">Limited Access Program</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowBetaModal(false)}
+                  className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                >
+                  <FaTimes className="w-5 h-5 text-white" />
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-gradient-to-br from-yellow-100 to-orange-100 rounded-xl flex-shrink-0">
+                  <FaInfoCircle className="w-6 h-6 text-yellow-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    We're Currently in Beta
+                  </h3>
+                  <p className="text-gray-600 leading-relaxed">
+                    We are currently in beta version and only available for testing participants. 
+                    If you believe you should have access, please contact our support team.
+                  </p>
+                </div>
+              </div>
+
+              {/* Features List */}
+              <div className="bg-gradient-to-br from-teal-50 to-blue-50 rounded-xl p-4 border border-teal-100">
+                <p className="text-sm font-semibold text-gray-700 mb-2">What's Next?</p>
+                <ul className="space-y-2 text-sm text-gray-600">
+                  <li className="flex items-start gap-2">
+                    <span className="text-teal-500 mt-0.5">•</span>
+                    <span>We'll notify you when we open to the public</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-teal-500 mt-0.5">•</span>
+                    <span>Join our waitlist for early access</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-teal-500 mt-0.5">•</span>
+                    <span>Contact support if you're a beta tester</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setShowBetaModal(false)}
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-teal-500 to-teal-600 text-white font-semibold rounded-lg hover:from-teal-600 hover:to-teal-700 transition-all shadow-md hover:shadow-lg"
+                >
+                  Got It
+                </button>
+                <button
+                  onClick={() => {
+                    setShowBetaModal(false);
+                    window.location.href = 'mailto:support@founderport.ai?subject=Beta Access Request';
+                  }}
+                  className="px-4 py-3 bg-white border-2 border-teal-500 text-teal-600 font-semibold rounded-lg hover:bg-teal-50 transition-all"
+                >
+                  Contact Support
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Animations */}
+      <style>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px) scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+      `}</style>
     </div>
   );
 };

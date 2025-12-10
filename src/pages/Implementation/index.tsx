@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
+import { motion, AnimatePresence } from 'framer-motion';
 import TaskCard from '../../components/TaskCard';
 import TaskCompletionModal from '../../components/TaskCompletionModal';
 import ServiceProviderModal from '../../components/ServiceProviderModal';
@@ -618,9 +619,9 @@ const Implementation: React.FC<ImplementationProps> = ({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 pb-20 sm:pb-0">
-      {/* Header */}
-      <div className="bg-white/90 backdrop-blur-xl border-b border-white/30 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-6">
+      {/* Header - Better Spacing */}
+      <div className="bg-gradient-to-b from-white via-white to-gray-50/30 backdrop-blur-xl border-b border-gray-200/50 shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
           {/* Row 1: Implementation Phase */}
           <div className="flex flex-col gap-6 mb-4">
             {/* Top Row - Title */}
@@ -798,46 +799,72 @@ const Implementation: React.FC<ImplementationProps> = ({
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="bg-white/90 backdrop-blur-xl border-b border-white/30">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex space-x-8">
-            <button
+      {/* Tab Navigation - Redesigned */}
+      <div className="bg-gradient-to-b from-white via-white to-gray-50/50 border-b border-gray-200/50 sticky top-0 z-30 backdrop-blur-sm">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex gap-1">
+            <motion.button
               onClick={() => handleTabChange('task')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              className={`relative py-4 px-6 font-medium text-sm rounded-t-lg transition-all ${
                 activeTab === 'task'
-                  ? 'border-teal-500 text-teal-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'text-teal-700'
+                  : 'text-gray-600 hover:text-gray-900'
               }`}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
               <div className="flex items-center gap-2">
-                <Target className="h-4 w-4" />
-                Current Task
+                <Target className={`h-4 w-4 ${activeTab === 'task' ? 'text-teal-600' : 'text-gray-500'}`} />
+                <span>Current Task</span>
               </div>
-            </button>
-            <button
+              {activeTab === 'task' && (
+                <motion.div
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-teal-500 to-blue-500"
+                  layoutId="activeTab"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
+              )}
+            </motion.button>
+            <motion.button
               onClick={() => handleTabChange('roadmap')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              className={`relative py-4 px-6 font-medium text-sm rounded-t-lg transition-all ${
                 activeTab === 'roadmap'
-                  ? 'border-teal-500 text-teal-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'text-teal-700'
+                  : 'text-gray-600 hover:text-gray-900'
               }`}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
               <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Full Roadmap
+                <FileText className={`h-4 w-4 ${activeTab === 'roadmap' ? 'text-teal-600' : 'text-gray-500'}`} />
+                <span>Full Roadmap</span>
               </div>
-            </button>
+              {activeTab === 'roadmap' && (
+                <motion.div
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-teal-500 to-blue-500"
+                  layoutId="activeTab"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
+              )}
+            </motion.button>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className={activeTab === 'task' ? 'block' : 'hidden'}>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Current Task */}
-            <div className="lg:col-span-2">
+      {/* Main Content - Better Spacing */}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <AnimatePresence mode="wait">
+          {activeTab === 'task' && (
+            <motion.div
+              key="task"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className="w-full"
+            >
               <TaskCard
                 task={currentTask}
                 onComplete={handleSubstepCompletion}
@@ -848,17 +875,21 @@ const Implementation: React.FC<ImplementationProps> = ({
                 helpContent={helpContent}
                 helpLoading={helpLoading}
               />
-            </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-            {/* Sidebar */}
-            <div className="space-y-6">
-                  </div>
-          </div>
-        </div>
-
-        {mountedTabs.roadmap && (
-          <div className={activeTab === 'roadmap' ? 'block' : 'hidden'}>
-            <div className="bg-white/90 backdrop-blur-xl border border-white/30 rounded-xl p-4 sm:p-6 shadow-sm">
+        <AnimatePresence mode="wait">
+          {activeTab === 'roadmap' && mountedTabs.roadmap && (
+            <motion.div
+              key="roadmap"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className="w-full"
+            >
+              <div className="bg-white/90 backdrop-blur-xl border border-gray-200/50 rounded-xl p-4 sm:p-6 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
               <div>
                 <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Full Launch Roadmap</h2>
@@ -904,9 +935,10 @@ const Implementation: React.FC<ImplementationProps> = ({
                 </button>
               </div>
             )}
-          </div>
-          </div>
-        )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Modals */}
