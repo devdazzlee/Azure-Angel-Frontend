@@ -315,14 +315,6 @@ const SignupPage: React.FC = () => {
                 <ul className="space-y-2 text-sm text-gray-600">
                   <li className="flex items-start gap-2">
                     <span className="text-teal-500 mt-0.5">•</span>
-                    <span>We'll notify you when we open to the public</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-teal-500 mt-0.5">•</span>
-                    <span>Join our waitlist for early access</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-teal-500 mt-0.5">•</span>
                     <span>Contact support if you're a beta tester</span>
                   </li>
                 </ul>

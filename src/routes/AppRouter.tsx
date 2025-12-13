@@ -27,6 +27,8 @@ import {
   NotFound,
   ErrorBoundaryPage,
 } from "../pages";
+import ForgotPasswordPage from "../pages/ForgotPassword";
+import ResetPasswordPage from "../pages/ResetPassword";
 import RoadmapPage from "../pages/Roadmap/RoadmapPage";
 import BusinessPlanView from "../pages/BusinessPlan/BusinessPlanView";
 import Layout from "../features/Dashboard";
@@ -71,6 +73,16 @@ const router = createBrowserRouter([
         path: "login",
         element: redirectIfAuth(<Login />),
         errorElement: <Login />,
+      },
+      {
+        path: "forgot-password",
+        element: redirectIfAuth(<ForgotPasswordPage />),
+        errorElement: <ForgotPasswordPage />,
+      },
+      {
+        path: "reset-password",
+        element: redirectIfAuth(<ResetPasswordPage />),
+        errorElement: <ResetPasswordPage />,
       },
       {
         path: "/",

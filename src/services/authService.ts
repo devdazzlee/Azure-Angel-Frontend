@@ -96,7 +96,34 @@ export async function resetPassword({
         await axios.post<void>(`${BASE}/auth/reset-password`, { email });
     } catch (err) {
         const message = (err as ErrorResponse).response?.data.error ||
+            (err as ErrorResponse).response?.data.detail ||
             'Reset password failed';
+        throw new Error(message);
+    }
+}
+
+export async function updatePassword({
+    email,
+    token,
+    password,
+    confirmPassword,
+}: {
+    email: string;
+    token: string;
+    password: string;
+    confirmPassword: string;
+}): Promise<void> {
+    try {
+        await axios.post<void>(`${BASE}/auth/update-password`, {
+            email,
+            token,
+            password,
+            confirm_password: confirmPassword,
+        });
+    } catch (err) {
+        const message = (err as ErrorResponse).response?.data.error ||
+            (err as ErrorResponse).response?.data.detail ||
+            'Failed to update password';
         throw new Error(message);
     }
 }
