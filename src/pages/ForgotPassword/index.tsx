@@ -21,14 +21,16 @@ const ForgotPasswordPage: React.FC = () => {
 
     try {
       await resetPassword({ email });
-      toast.success('If an account exists with this email, a password reset link has been sent.');
+      toast.success('A password reset link has been sent to your email.');
       // Optionally navigate back to login after a delay
       setTimeout(() => {
         navigate('/login');
       }, 2000);
     } catch (err: any) {
       console.error('Reset password error:', err);
-      toast.error(err.message || 'Failed to send reset email. Please try again.');
+      // Extract error message from Error object (thrown by authService)
+      const errorMessage = err?.message || 'Failed to send reset email. Please try again.';
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }

@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { motion, useAnimation } from 'framer-motion';
 import type { Variants } from 'framer-motion';
 import { useInView } from 'react-intersection-observer';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { FaBolt, FaUsers, FaChartBar } from 'react-icons/fa';
 
 import businessPlanningImg from '../../assets/images/home/business-planning.jpg'
@@ -131,9 +131,28 @@ const Section: React.FC<SectionProps> = ({ id, bg, title, children }) => {
 };
 
 const FounderportHome: React.FC = () => {
+  const navigate = useNavigate();
   const heroControls = useAnimation();
   const [heroRef, heroInView] = useInView({ triggerOnce: true, threshold: 0.2 });
   useEffect(() => { if (heroInView) heroControls.start('visible'); }, [heroControls, heroInView]);
+
+  // Handle Supabase auth redirects that land on root URL
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash) {
+      const hashParams = new URLSearchParams(hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const type = hashParams.get('type');
+      const error = hashParams.get('error');
+      const errorCode = hashParams.get('error_code');
+      
+      // If it's a recovery token or has recovery-related errors, redirect to reset-password page
+      if ((accessToken && type === 'recovery') || error || errorCode) {
+        // Preserve the hash when redirecting
+        navigate(`/reset-password${hash}`, { replace: true });
+      }
+    }
+  }, [navigate]);
 
   return (
     <div className="relative overflow-hidden bg-gray-50 pt-32">

@@ -43,7 +43,8 @@ const handleError = (error: any): never => {
 
     switch (status) {
       case 400:
-        toast.error(response?.data?.error || ErrorMessages[ErrorCodes.INVALID_INPUT]);
+        // FastAPI standard: check detail field first, then error/message for backward compatibility
+        toast.error(response?.data?.detail || response?.data?.error || response?.data?.message || ErrorMessages[ErrorCodes.INVALID_INPUT]);
         break;
       case 429:
         toast.error(ErrorMessages[ErrorCodes.RATE_LIMIT]);

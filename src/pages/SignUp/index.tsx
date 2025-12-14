@@ -52,7 +52,11 @@ const BETA_TESTER_EMAILS = [
   'nora.romaya@gmail.com',
   's.farwa.f@gmail.com',
   'nafisa.jassani@gmail.com',
-  'ahmedrazagithub@gmail.com'
+  'ahmedrazagithub@gmail.com',
+  'rawsonleavitt@gmail.com',
+  'mkarpen@msn.com',
+  'minhal.webcloners@gmail.com',
+  'muhammadkonain8@gmail.com'
 ].map(email => email.toLowerCase()); // Normalize to lowercase for case-insensitive comparison
 
 const SignupPage: React.FC = () => {

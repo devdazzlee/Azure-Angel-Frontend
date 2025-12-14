@@ -8,7 +8,6 @@ const ResetPasswordPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [formData, setFormData] = useState({
-    email: '',
     password: '',
     confirmPassword: '',
   });
@@ -22,34 +21,52 @@ const ResetPasswordPage: React.FC = () => {
     const hash = window.location.hash;
     const urlParams = new URLSearchParams(window.location.search);
     
-    // Check hash first (Supabase default)
+    // Check for errors in hash first (Supabase error redirects)
     if (hash) {
       const hashParams = new URLSearchParams(hash.substring(1));
+      
+      // Check for error cases
+      const error = hashParams.get('error');
+      const errorCode = hashParams.get('error_code');
+      const errorDescription = hashParams.get('error_description');
+      
+      if (error || errorCode) {
+        // Handle error cases
+        let errorMessage = 'Invalid or expired reset link.';
+        
+        if (errorCode === 'otp_expired' || errorCode === 'token_expired') {
+          errorMessage = 'This password reset link has expired. Please request a new one.';
+        } else if (errorCode === 'invalid_token') {
+          errorMessage = 'This password reset link is invalid. Please request a new one.';
+        } else if (errorDescription) {
+          errorMessage = decodeURIComponent(errorDescription.replace(/\+/g, ' '));
+        } else if (error) {
+          errorMessage = `Error: ${error}`;
+        }
+        
+        toast.error(errorMessage);
+        setTimeout(() => navigate('/forgot-password'), 3000);
+        return;
+      }
+      
+      // Check for success case with access_token
       const accessToken = hashParams.get('access_token');
       const type = hashParams.get('type');
       
       if (accessToken && type === 'recovery') {
         setToken(accessToken);
-        // Extract email from hash if available
-        const emailFromHash = hashParams.get('email');
-        if (emailFromHash) {
-          setFormData(prev => ({ ...prev, email: emailFromHash }));
-        }
+        return;
       }
     }
     
     // Check query params as fallback
     const tokenFromQuery = urlParams.get('token') || urlParams.get('access_token');
-    const emailFromQuery = urlParams.get('email');
     
     if (tokenFromQuery) {
       setToken(tokenFromQuery);
     }
-    if (emailFromQuery) {
-      setFormData(prev => ({ ...prev, email: emailFromQuery }));
-    }
     
-    // If no token found, show error
+    // If no token found and no error, show error
     if (!tokenFromQuery && !hash) {
       toast.error('Invalid or missing reset token. Please request a new password reset link.');
       setTimeout(() => navigate('/forgot-password'), 2000);
@@ -63,11 +80,6 @@ const ResetPasswordPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!formData.email) {
-      toast.error('Email is required');
-      return;
-    }
 
     if (formData.password !== formData.confirmPassword) {
       toast.error('Passwords do not match');
@@ -89,7 +101,6 @@ const ResetPasswordPage: React.FC = () => {
 
     try {
       await updatePassword({
-        email: formData.email,
         token: token,
         password: formData.password,
         confirmPassword: formData.confirmPassword,
@@ -134,21 +145,6 @@ const ResetPasswordPage: React.FC = () => {
             {/* Form Fields */}
             <form className="p-8 pt-2" onSubmit={handleSubmit}>
               <div className="space-y-6">
-                {/* Email */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Email Address</label>
-                  <input
-                    name="email"
-                    type="email"
-                    required
-                    autoComplete="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="Enter your email"
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-teal-600 transition"
-                  />
-                </div>
-
                 {/* New Password */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700">New Password</label>

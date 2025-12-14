@@ -94,36 +94,40 @@ export async function resetPassword({
 }): Promise<void> {
     try {
         await axios.post<void>(`${BASE}/auth/reset-password`, { email });
-    } catch (err) {
-        const message = (err as ErrorResponse).response?.data.error ||
-            (err as ErrorResponse).response?.data.detail ||
-            'Reset password failed';
+    } catch (err: any) {
+        // FastAPI standard: errors in response.data.detail
+        // Also check message field for backward compatibility
+        const errorData = err?.response?.data;
+        const message = errorData?.detail || 
+            errorData?.message || 
+            errorData?.error || 
+            err?.message || 
+            'Failed to send reset email. Please try again.';
         throw new Error(message);
     }
 }
 
 export async function updatePassword({
-    email,
     token,
     password,
     confirmPassword,
 }: {
-    email: string;
     token: string;
     password: string;
     confirmPassword: string;
 }): Promise<void> {
     try {
         await axios.post<void>(`${BASE}/auth/update-password`, {
-            email,
             token,
             password,
             confirm_password: confirmPassword,
         });
-    } catch (err) {
-        const message = (err as ErrorResponse).response?.data.error ||
-            (err as ErrorResponse).response?.data.detail ||
-            'Failed to update password';
+    } catch (err: any) {
+        const errorData = err?.response?.data;
+        const message = errorData?.detail || 
+            errorData?.error || 
+            err?.message || 
+            'Failed to update password. Please try again.';
         throw new Error(message);
     }
 }

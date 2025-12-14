@@ -5,12 +5,41 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Founder Port</title>
-    <script type="module" crossorigin src="/assets/index-CXXxAZF4.js"></script>
+    <script>
+      // Handle Supabase auth redirects before React loads
+      (function() {
+        const hash = window.location.hash;
+        if (hash) {
+          try {
+            const hashParams = new URLSearchParams(hash.substring(1));
+            const accessToken = hashParams.get('access_token');
+            const type = hashParams.get('type');
+            const error = hashParams.get('error');
+            const errorCode = hashParams.get('error_code');
+            
+            // If it's a recovery token or has recovery-related errors, redirect to reset-password page
+            if ((accessToken && type === 'recovery') || error || errorCode) {
+              const currentPath = window.location.pathname;
+              
+              // Only redirect if we're not already on the reset-password page
+              if (currentPath !== '/reset-password' && currentPath !== '/reset-password/') {
+                // Preserve the hash when redirecting
+                window.location.replace('/reset-password' + hash);
+              }
+            }
+          } catch (e) {
+            // Silently fail if there's an error parsing
+            console.error('Error handling auth redirect:', e);
+          }
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-Chno-ktg.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/vendor-C_YFlNAw.js">
     <link rel="modulepreload" crossorigin href="/assets/ui-BHg2d8YT.js">
     <link rel="stylesheet" crossorigin href="/assets/index-DuEuTVJx.css">
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"></div>
   </body>
 </html>
