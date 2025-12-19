@@ -93,9 +93,7 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
   const [editSections, setEditSections] = useState<EditSection[]>([]);
   const [editingSection, setEditingSection] = useState<EditSection | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [hasPaid, setHasPaid] = useState(() => 
-    sessionId ? checkPaymentStatus(sessionId, 'roadmap') : false
-  ); // Track payment status
+  const [hasPaid, setHasPaid] = useState(false); // Track payment status
   const [quoteState, setQuoteState] = useState<MotivationalQuote>(() => pickFallbackQuote());
   
   const TRANSITION_QUOTE_STORAGE_PREFIX = "angel_roadmap_quote_";
@@ -103,6 +101,36 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
     () => `${TRANSITION_QUOTE_STORAGE_PREFIX}${sessionId ?? 'anonymous'}`,
     [sessionId]
   );
+
+  // Check subscription status from backend on mount
+  useEffect(() => {
+    const checkSubscriptionStatus = async () => {
+      try {
+        const response = await fetch(
+          `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
+            },
+          }
+        );
+
+        const data = await response.json();
+        if (data.success && data.has_active_subscription) {
+          setHasPaid(true);
+          console.log('✅ User has active subscription - download access granted');
+        } else {
+          setHasPaid(false);
+          console.log('ℹ️ No active subscription found');
+        }
+      } catch (error) {
+        console.error('Failed to check subscription status:', error);
+        setHasPaid(false);
+      }
+    };
+
+    checkSubscriptionStatus();
+  }, []);
 
   useEffect(() => {
     // Get last quote from storage to avoid repetition
@@ -861,18 +889,51 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
     }
   };
 
-  const handlePaymentSuccess = () => {
+  const handlePaymentSuccess = async () => {
     setShowPaymentModal(false);
-    setHasPaid(true);
     
-    // Mark as paid in storage
-    if (sessionId) {
-      markAsPaid(sessionId, 'roadmap');
+    // Re-check subscription status from backend after payment
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+      if (data.success && data.has_active_subscription) {
+        setHasPaid(true);
+        toast.success('Payment successful! You can now download your Roadmap.');
+        // Open export modal after successful payment
+        setShowExportModal(true);
+      } else {
+        // Payment might be processing, wait a moment and check again
+        setTimeout(async () => {
+          const retryResponse = await fetch(
+            `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
+            {
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
+              },
+            }
+          );
+          const retryData = await retryResponse.json();
+          if (retryData.success && retryData.has_active_subscription) {
+            setHasPaid(true);
+            toast.success('Payment successful! You can now download your Roadmap.');
+            setShowExportModal(true);
+          } else {
+            toast.info('Payment is processing. Please wait a moment and try again.');
+          }
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Failed to verify subscription after payment:', error);
+      toast.error('Payment successful, but failed to verify subscription. Please refresh the page.');
     }
-    
-    toast.success('Payment successful! You can now download your Roadmap.');
-    // Open export modal after successful payment
-    setShowExportModal(true);
   };
 
   return (

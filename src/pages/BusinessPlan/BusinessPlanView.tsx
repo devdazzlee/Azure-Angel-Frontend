@@ -27,9 +27,40 @@ const BusinessPlanView: React.FC = () => {
   const [viewMode, setViewMode] = useState<'summary' | 'full'>('full');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
-  const [hasPaid, setHasPaid] = useState(() => 
-    sessionId ? checkPaymentStatus(sessionId, 'business_plan') : false
-  ); // Track payment status
+  const [hasPaid, setHasPaid] = useState(false); // Track payment status
+  const [checkingSubscription, setCheckingSubscription] = useState(true);
+
+  // Check subscription status from backend on mount
+  useEffect(() => {
+    const checkSubscriptionStatus = async () => {
+      try {
+        const response = await fetch(
+          `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
+            },
+          }
+        );
+
+        const data = await response.json();
+        if (data.success && data.has_active_subscription) {
+          setHasPaid(true);
+          console.log('✅ User has active subscription - download access granted');
+        } else {
+          setHasPaid(false);
+          console.log('ℹ️ No active subscription found');
+        }
+      } catch (error) {
+        console.error('Failed to check subscription status:', error);
+        setHasPaid(false);
+      } finally {
+        setCheckingSubscription(false);
+      }
+    };
+
+    checkSubscriptionStatus();
+  }, []);
 
   useEffect(() => {
     // Only fetch if data wasn't passed via navigation state
@@ -131,18 +162,51 @@ const BusinessPlanView: React.FC = () => {
     }
   };
 
-  const handlePaymentSuccess = () => {
+  const handlePaymentSuccess = async () => {
     setShowPaymentModal(false);
-    setHasPaid(true);
     
-    // Mark as paid in storage
-    if (sessionId) {
-      markAsPaid(sessionId, 'business_plan');
+    // Re-check subscription status from backend after payment
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+      if (data.success && data.has_active_subscription) {
+        setHasPaid(true);
+        toast.success('Payment successful! You can now download your Business Plan.');
+        // Open export modal after successful payment
+        setShowExportModal(true);
+      } else {
+        // Payment might be processing, wait a moment and check again
+        setTimeout(async () => {
+          const retryResponse = await fetch(
+            `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
+            {
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
+              },
+            }
+          );
+          const retryData = await retryResponse.json();
+          if (retryData.success && retryData.has_active_subscription) {
+            setHasPaid(true);
+            toast.success('Payment successful! You can now download your Business Plan.');
+            setShowExportModal(true);
+          } else {
+            toast.info('Payment is processing. Please wait a moment and try again.');
+          }
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Failed to verify subscription after payment:', error);
+      toast.error('Payment successful, but failed to verify subscription. Please refresh the page.');
     }
-    
-    toast.success('Payment successful! You can now download your Business Plan.');
-    // Open export modal after successful payment
-    setShowExportModal(true);
   };
 
   const handlePrint = () => {
