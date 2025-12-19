@@ -165,48 +165,67 @@ const BusinessPlanView: React.FC = () => {
   const handlePaymentSuccess = async () => {
     setShowPaymentModal(false);
     
-    // Re-check subscription status from backend after payment
-    try {
-      const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
-          },
-        }
-      );
-
-      const data = await response.json();
-      if (data.success && data.has_active_subscription) {
-        setHasPaid(true);
-        toast.success('Payment successful! You can now download your Business Plan.');
-        // Open export modal after successful payment
-        setShowExportModal(true);
-      } else {
-        // Payment might be processing, wait a moment and check again
-        setTimeout(async () => {
-          const retryResponse = await fetch(
-            `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
-            {
-              headers: {
-                Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
-              },
-            }
-          );
-          const retryData = await retryResponse.json();
-          if (retryData.success && retryData.has_active_subscription) {
-            setHasPaid(true);
-            toast.success('Payment successful! You can now download your Business Plan.');
-            setShowExportModal(true);
-          } else {
-            toast.info('Payment is processing. Please wait a moment and try again.');
+    // Show loading toast while checking subscription
+    const loadingToast = toast.loading('Verifying your subscription...');
+    
+    // Poll for subscription status (webhooks can take a few seconds)
+    let attempts = 0;
+    const maxAttempts = 10; // Try for up to 20 seconds (10 attempts * 2 seconds)
+    
+    const checkSubscription = async (): Promise<boolean> => {
+      try {
+        const response = await fetch(
+          `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
+            },
           }
-        }, 2000);
+        );
+
+        if (!response.ok) {
+          console.error('Subscription check failed:', response.status, response.statusText);
+          return false;
+        }
+
+        const data = await response.json();
+        console.log('Subscription check response:', data);
+        
+        if (data.success && data.has_active_subscription) {
+          setHasPaid(true);
+          toast.dismiss(loadingToast);
+          toast.success('Payment successful! You can now download your Business Plan.');
+          setShowExportModal(true);
+          return true;
+        }
+        
+        return false;
+      } catch (error) {
+        console.error('Failed to verify subscription after payment:', error);
+        return false;
       }
-    } catch (error) {
-      console.error('Failed to verify subscription after payment:', error);
-      toast.error('Payment successful, but failed to verify subscription. Please refresh the page.');
-    }
+    };
+    
+    // Try immediately first
+    const immediateSuccess = await checkSubscription();
+    if (immediateSuccess) return;
+    
+    // Poll every 2 seconds if not immediately successful
+    const pollInterval = setInterval(async () => {
+      attempts++;
+      console.log(`Polling for subscription status (attempt ${attempts}/${maxAttempts})...`);
+      
+      const success = await checkSubscription();
+      
+      if (success) {
+        clearInterval(pollInterval);
+      } else if (attempts >= maxAttempts) {
+        clearInterval(pollInterval);
+        toast.dismiss(loadingToast);
+        toast.warning('Payment is processing. Please refresh the page in a moment to verify your subscription.');
+        console.warn('Subscription verification timeout after', maxAttempts, 'attempts');
+      }
+    }, 2000);
   };
 
   const handlePrint = () => {
