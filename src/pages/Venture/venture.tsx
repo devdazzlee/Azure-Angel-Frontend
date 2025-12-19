@@ -57,6 +57,7 @@ interface ProgressState {
   phase_answered?: number;  // Phase-specific step count
   total: number;
   percent: number;
+  asked_q?: string;  // Current question tag (e.g., "BUSINESS_PLAN.44")
   combined?: boolean;  // Flag for combined progress
   overall_progress?: {  // Combined progress for KYC + Business Plan (65 total)
     answered: number;

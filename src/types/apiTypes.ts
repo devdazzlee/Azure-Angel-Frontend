@@ -57,6 +57,7 @@ export interface AngelResponse {
             answered: number
             total: number
             percent: number
+            asked_q?: string;  // Current question tag (e.g., "BUSINESS_PLAN.44")
         };
         web_search_status?: {
             is_searching: boolean;

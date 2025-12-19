@@ -10,6 +10,12 @@ interface PaymentFormProps {
   itemName: string;
 }
 
+interface StripeCheckoutResponse {
+  success: boolean;
+  checkout_url?: string;
+  message?: string;
+}
+
 const PaymentForm: React.FC<PaymentFormProps> = ({
   isOpen,
   onClose,
@@ -29,7 +35,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
       const cancelUrl = `${currentUrl}?payment=canceled`;
       
       // Call backend to create Stripe Checkout session
-      const response = await httpClient.post('/stripe/create-subscription', {
+      const response = await httpClient.post<StripeCheckoutResponse>('/stripe/create-subscription', {
         success_url: successUrl,
         cancel_url: cancelUrl,
         amount: Math.round(amount * 100), // Convert to cents
