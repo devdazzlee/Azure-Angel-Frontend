@@ -3854,49 +3854,6 @@ export default function ChatPage() {
               currentPhase={progress.phase}
             />
 
-            {/* TEST MODE: Skip to Question 44 Button - Only shows on Question 2 */}
-            {progress.phase === "BUSINESS_PLAN" && currentQuestionNumber === 2 && (
-              <div className="mt-3 flex justify-center">
-                <button
-                  onClick={async () => {
-                    if (!sessionId) return;
-                    setLoading(true);
-                    try {
-                      const {
-                        result: { reply, progress: updatedProgress, question_number },
-                      } = await fetchQuestion("test jump", sessionId);
-                      
-                      const formatted = formatAngelMessage(reply);
-                      const questionNumber = deriveQuestionNumber(question_number, reply, updatedProgress);
-                      
-                      setCurrentQuestion(formatted);
-                      setCurrentQuestionNumber(questionNumber);
-                      updateQuestionTracker(updatedProgress.phase, questionNumber);
-                      applyProgressUpdate(updatedProgress);
-                      
-                      // Sync session progress
-                      await syncSessionProgress(sessionId, {
-                        phase: updatedProgress.phase,
-                        answered_count: updatedProgress.answered || 0,
-                        asked_q: updatedProgress.asked_q || "BUSINESS_PLAN.44",
-                      });
-                      
-                      toast.success("🧪 TEST MODE: Jumped to Question 44");
-                    } catch (error) {
-                      console.error("Test jump failed:", error);
-                      toast.error("Failed to jump to question 44");
-                    } finally {
-                      setLoading(false);
-                    }
-                  }}
-                  disabled={loading}
-                  className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white text-sm font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                >
-                  🧪 TEST: Skip to Question 44
-                </button>
-              </div>
-            )}
-
             {/* Quick Actions Row - show during IMPLEMENTATION and BUSINESS_PLAN phases */}
             {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
               progress.phase === ("BUSINESS_PLAN" as ProgressState['phase'])) && (
