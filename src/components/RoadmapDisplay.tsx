@@ -116,12 +116,17 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
         );
 
         const data = await response.json();
-        if (data.success && data.has_active_subscription) {
+        if (data.success && data.has_active_subscription && !data.payment_failed) {
           setHasPaid(true);
           console.log('✅ User has active subscription - download access granted');
         } else {
           setHasPaid(false);
-          console.log('ℹ️ No active subscription found');
+          if (data.payment_failed) {
+            console.log('⚠️ Payment failed - premium features disabled');
+            toast.warning('Payment failed. Please update your payment method to restore premium access.');
+          } else {
+            console.log('ℹ️ No active subscription found');
+          }
         }
       } catch (error) {
         console.error('Failed to check subscription status:', error);
@@ -919,12 +924,18 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
         const data = await response.json();
         console.log('Subscription check response:', data);
         
-        if (data.success && data.has_active_subscription) {
+        if (data.success && data.has_active_subscription && !data.payment_failed) {
           setHasPaid(true);
           toast.dismiss(loadingToast);
           toast.success('Payment successful! You can now download your Roadmap.');
           setShowExportModal(true);
           return true;
+        }
+        
+        if (data.payment_failed) {
+          toast.dismiss(loadingToast);
+          toast.error('Payment failed. Please update your payment method in your profile.');
+          return false;
         }
         
         return false;

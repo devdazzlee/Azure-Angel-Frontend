@@ -30,41 +30,68 @@ const handleAction = () => {
 };
 
 interface NavBarContentProps { scrolled: boolean; toggleMenu: () => void; isOpen: boolean; isSessionActive: boolean; }
-const NavBarContent: React.FC<NavBarContentProps> = ({ scrolled, toggleMenu, isOpen, isSessionActive }) => (
-  <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-    {/* Logo */}
-    <Link to="/" className="flex items-center">
-      <img
-        src={LOGO}
-        alt="Founderport Logo"
-        className={`transition-all duration-300 ${scrolled ? 'h-14' : 'h-14'} w-auto`}
-      />
-    </Link>
+const NavBarContent: React.FC<NavBarContentProps> = ({ scrolled, toggleMenu, isOpen, isSessionActive }) => {
 
-    {/* Desktop Nav */}
-    <nav className="hidden md:flex items-center space-x-8">
-      {navItems.map(item => (
-        <motion.div key={item.to} whileHover={{ scale: 1.1 }} transition={{ duration: 0.2 }}>
-          <Link to={item.to} className="font-medium text-black hover:text-teal-600 transition-colors">
-            {item.label}
-          </Link>
-        </motion.div>
-      ))}
-      <motion.button
-        whileHover={{ scale: 1.05 }}
-        onClick={toggleMenu}
-        className="ml-4 bg-teal-600 text-white px-5 py-2 rounded-full font-semibold shadow-lg transition-all"
-      >
-        {isSessionActive ? 'Logout' : 'Get Started'}
-      </motion.button>
-    </nav>
+  return (
+    <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+      {/* Logo */}
+      <Link to="/" className="flex items-center">
+        <img
+          src={LOGO}
+          alt="Founderport Logo"
+          className={`transition-all duration-300 ${scrolled ? 'h-14' : 'h-14'} w-auto`}
+        />
+      </Link>
 
-    {/* Mobile Toggle */}
-    <button onClick={toggleMenu} className="md:hidden text-black focus:outline-none transition-colors" aria-label="Toggle menu">
-      {isOpen ? <FaTimes className="w-6 h-6" /> : <FaBars className="w-6 h-6" />}
-    </button>
-  </div>
-);
+      {/* Desktop Nav */}
+      <nav className="hidden md:flex items-center space-x-8">
+        {navItems.map(item => (
+          <motion.div key={item.to} whileHover={{ scale: 1.1 }} transition={{ duration: 0.2 }}>
+            <Link to={item.to} className="font-medium text-black hover:text-teal-600 transition-colors">
+              {item.label}
+            </Link>
+          </motion.div>
+        ))}
+        {isSessionActive && (
+          <>
+            <motion.div whileHover={{ scale: 1.05 }} transition={{ duration: 0.2 }}>
+              <Link
+                to="/profile"
+                className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-5 py-2 rounded-full font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                My Profile
+              </Link>
+            </motion.div>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              onClick={toggleMenu}
+              className="ml-2 bg-teal-600 text-white px-5 py-2 rounded-full font-semibold shadow-lg transition-all"
+            >
+              Logout
+            </motion.button>
+          </>
+        )}
+        {!isSessionActive && (
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            onClick={toggleMenu}
+            className="bg-teal-600 text-white px-5 py-2 rounded-full font-semibold shadow-lg transition-all"
+          >
+            Get Started
+          </motion.button>
+        )}
+      </nav>
+
+      {/* Mobile Toggle */}
+      <button onClick={toggleMenu} className="md:hidden text-black focus:outline-none transition-colors" aria-label="Toggle menu">
+        {isOpen ? <FaTimes className="w-6 h-6" /> : <FaBars className="w-6 h-6" />}
+      </button>
+    </div>
+  );
+};
 
 const Header: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -117,9 +144,28 @@ const Header: React.FC = () => {
                       {i.label}
                     </Link>
                   ))}
-                  <button onClick={handleAction} className="mt-2 bg-teal-600 text-white px-4 py-2 rounded-full font-medium shadow-sm transition-all w-full">
-                    {isSessionActive ? 'Logout' : 'Get Started'}
-                  </button>
+                  {isSessionActive && (
+                    <>
+                      <Link
+                        to="/profile"
+                        onClick={() => setIsOpen(false)}
+                        className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-4 py-2 rounded-full font-semibold shadow-md transition-all flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        My Profile
+                      </Link>
+                      <button onClick={handleAction} className="bg-teal-600 text-white px-4 py-2 rounded-full font-medium shadow-sm transition-all w-full">
+                        Logout
+                      </button>
+                    </>
+                  )}
+                  {!isSessionActive && (
+                    <button onClick={handleAction} className="mt-2 bg-teal-600 text-white px-4 py-2 rounded-full font-medium shadow-sm transition-all w-full">
+                      Get Started
+                    </button>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -155,9 +201,28 @@ const Header: React.FC = () => {
                       {i.label}
                     </Link>
                   ))}
-                  <button onClick={handleAction} className="mt-2 bg-teal-600 text-white px-4 py-2 rounded-full font-medium shadow-sm transition-all w-full">
-                    {isSessionActive ? 'Logout' : 'Get Started'}
-                  </button>
+                  {isSessionActive && (
+                    <>
+                      <Link
+                        to="/profile"
+                        onClick={() => setIsOpen(false)}
+                        className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-4 py-2 rounded-full font-semibold shadow-md transition-all flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        My Profile
+                      </Link>
+                      <button onClick={handleAction} className="bg-teal-600 text-white px-4 py-2 rounded-full font-medium shadow-sm transition-all w-full">
+                        Logout
+                      </button>
+                    </>
+                  )}
+                  {!isSessionActive && (
+                    <button onClick={handleAction} className="mt-2 bg-teal-600 text-white px-4 py-2 rounded-full font-medium shadow-sm transition-all w-full">
+                      Get Started
+                    </button>
+                  )}
                 </div>
               </motion.div>
             )}

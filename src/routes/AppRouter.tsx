@@ -24,6 +24,7 @@ import {
   Guides,
   Support,
   Services,
+  Profile,
   NotFound,
   ErrorBoundaryPage,
 } from "../pages";
@@ -191,6 +192,15 @@ const router = createBrowserRouter([
             path: "/services",
             element: <Services />,
             errorElement: <Services />,
+          },
+          {
+            path: "/profile",
+            element: (
+              <PrivateRoute>
+                <Profile />
+              </PrivateRoute>
+            ),
+            errorElement: <Profile />,
           },
           {
             path: "/test-question-formatter",

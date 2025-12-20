@@ -186,6 +186,109 @@ export default function ChatPage() {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const isInitialIntroShown = useRef(false);
   const [sessionBusinessContext, setSessionBusinessContext] = useState<BusinessContextInfo>({});
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [subscriptionDetails, setSubscriptionDetails] = useState<any>(null);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [cancellingSubscription, setCancellingSubscription] = useState(false);
+
+  // Load user profile and subscription details
+  const loadProfileData = useCallback(async () => {
+    setLoadingProfile(true);
+    try {
+      const token = localStorage.getItem('sb_access_token');
+      if (!token) {
+        toast.error('Please sign in to view your profile');
+        return;
+      }
+
+      // Fetch subscription status
+      const subscriptionResponse = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      const subscriptionData = await subscriptionResponse.json();
+      setSubscriptionDetails(subscriptionData);
+
+      // Get user info from token or localStorage
+      try {
+        // Try to decode JWT token
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          const payload = JSON.parse(atob(parts[1]));
+          setUserProfile({
+            email: payload.email || payload.user?.email || 'N/A',
+            id: payload.sub || payload.user_id || payload.user?.id || 'N/A',
+          });
+        } else {
+          // Fallback: try to get from localStorage session
+          const sessionStr = localStorage.getItem('sb_session');
+          if (sessionStr) {
+            const session = JSON.parse(sessionStr);
+            setUserProfile({
+              email: session.user?.email || 'N/A',
+              id: session.user?.id || 'N/A',
+            });
+          } else {
+            setUserProfile({
+              email: 'N/A',
+              id: 'N/A',
+            });
+          }
+        }
+      } catch (decodeError) {
+        console.error('Failed to decode token:', decodeError);
+        // Get from subscription response if available
+        setUserProfile({
+          email: subscriptionData.user_email || 'N/A',
+          id: 'N/A',
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load profile data:', error);
+      toast.error('Failed to load profile information');
+    } finally {
+      setLoadingProfile(false);
+    }
+  }, []);
+
+  // Cancel subscription
+  const handleCancelSubscription = async () => {
+    if (!window.confirm('Are you sure you want to cancel your subscription? It will remain active until the end of your current billing period.')) {
+      return;
+    }
+
+    setCancellingSubscription(true);
+    try {
+      const token = localStorage.getItem('sb_access_token');
+      const response = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/stripe/cancel-subscription`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+      if (data.success) {
+        toast.success('Subscription will be canceled at the end of your billing period');
+        await loadProfileData(); // Refresh subscription details
+      } else {
+        toast.error(data.message || 'Failed to cancel subscription');
+      }
+    } catch (error) {
+      console.error('Failed to cancel subscription:', error);
+      toast.error('Failed to cancel subscription');
+    } finally {
+      setCancellingSubscription(false);
+    }
+  };
 
   const loadBusinessContext = useCallback(async () => {
     if (!sessionId) return;
@@ -953,9 +1056,15 @@ export default function ChatPage() {
         //   className: "bg-blue-50 border border-blue-200 text-blue-800"
         // });
       }
-    } catch (error) {
-      console.error("Failed to fetch question:", error);
-      toast.error("Something went wrong.");
+    } catch (error: any) {
+      console.error("❌ Failed to fetch question (Accept):", error);
+      const errorMessage = 
+        error?.message ||
+        error?.response?.data?.detail ||
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        "Failed to proceed. Please try again.";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -989,9 +1098,15 @@ export default function ChatPage() {
       applyProgressUpdate(progress);
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
       setShowVerificationButtons(show_accept_modify || false);
-    } catch (error) {
-      console.error("Failed to handle Yes:", error);
-      toast.error("Something went wrong.");
+    } catch (error: any) {
+      console.error("❌ Failed to handle Yes:", error);
+      const errorMessage = 
+        error?.message ||
+        error?.response?.data?.detail ||
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        "Failed to proceed. Please try again.";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -1013,9 +1128,15 @@ export default function ChatPage() {
       applyProgressUpdate(progress);
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
       setShowVerificationButtons(show_accept_modify || false);
-    } catch (error) {
-      console.error("Failed to handle No:", error);
-      toast.error("Something went wrong.");
+    } catch (error: any) {
+      console.error("❌ Failed to handle No:", error);
+      const errorMessage = 
+        error?.message ||
+        error?.response?.data?.detail ||
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        "Failed to proceed. Please try again.";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -1048,9 +1169,15 @@ export default function ChatPage() {
         //   className: "bg-blue-50 border border-blue-200 text-blue-800"
         // });
       }
-    } catch (error) {
-      console.error("Failed to fetch question:", error);
-      toast.error("Something went wrong.");
+    } catch (error: any) {
+      console.error("❌ Failed to fetch question (Draft More):", error);
+      const errorMessage = 
+        error?.message ||
+        error?.response?.data?.detail ||
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        "Failed to generate draft. Please try again.";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -1104,9 +1231,15 @@ export default function ChatPage() {
       } else {
         toast.error(data.message || "Failed to prepare implementation transition");
       }
-    } catch (error) {
-      console.error("Error preparing implementation transition:", error);
-      toast.error("Something went wrong.");
+    } catch (error: any) {
+      console.error("❌ Error preparing implementation transition:", error);
+      const errorMessage = 
+        error?.message ||
+        error?.response?.data?.detail ||
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        "Failed to prepare implementation. Please try again.";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -1212,9 +1345,15 @@ export default function ChatPage() {
       } else {
         toast.error(data.message || "Failed to start implementation");
       }
-    } catch (error) {
-      console.error("Error starting implementation:", error);
-      toast.error("Something went wrong.");
+    } catch (error: any) {
+      console.error("❌ Error starting implementation:", error);
+      const errorMessage = 
+        error?.message ||
+        error?.response?.data?.detail ||
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        "Failed to start implementation. Please try again.";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -2732,9 +2871,43 @@ export default function ChatPage() {
 
         setNeedsInitialQuestion(true);
         setBackendTotals({ answered: answeredPhase, total: totalPhase, overallAnswered, overallTotal });
-      } catch (error) {
-        console.error("Failed to restore venture session:", error);
+      } catch (error: any) {
+        console.error("❌ Failed to restore venture session:", error);
+        
+        // Extract meaningful error message
+        const errorResponse = error?.response?.data;
+        const errorMessage = 
+          error?.message ||
+          errorResponse?.detail ||
+          errorResponse?.error ||
+          errorResponse?.message ||
+          "Failed to load venture session";
+        
+        console.error("Session restoration error details:", {
+          message: errorMessage,
+          status: error?.response?.status,
+          data: errorResponse,
+          sessionId: sessionId
+        });
+        
+        // Only navigate away if it's a 404 (session not found) or 401 (unauthorized)
+        // For other errors, try to continue (might be temporary network issue)
         if (!cancelled) {
+          if (error?.response?.status === 404) {
+            toast.error("This venture could not be found. Redirecting to your ventures list.");
+            navigate('/ventures');
+            setLoading(false);
+            return;
+          } else if (error?.response?.status === 401) {
+            // Don't navigate away immediately - let httpClient handle token refresh
+            // Only show error if refresh also fails
+            console.warn("⚠️ 401 error during session restoration - httpClient should handle refresh");
+          }
+          
+          // For other errors, allow user to continue (they might be able to proceed)
+          toast.warning(`Unable to restore session history: ${errorMessage}. Starting fresh.`, {
+            autoClose: 4000,
+          });
           setHistory([]);
           setNeedsInitialQuestion(true);
           setBackendTotals({ answered: 0, total: QUESTION_COUNTS.KYC, overallAnswered: 0, overallTotal: QUESTION_COUNTS.KYC });
@@ -2880,9 +3053,46 @@ export default function ChatPage() {
         //   className: "bg-blue-50 border border-blue-200 text-blue-800"
         // });
       }
-    } catch (error) {
-      console.error("Failed to fetch question:", error);
-      toast.error("Something went wrong.");
+    } catch (error: any) {
+      console.error("❌ Failed to fetch question:", error);
+      
+      // Extract meaningful error message
+      let errorMessage = "Something went wrong. Please try again.";
+      const errorResponse = error?.response?.data;
+      
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (errorResponse?.detail) {
+        errorMessage = errorResponse.detail;
+      } else if (errorResponse?.error) {
+        errorMessage = errorResponse.error;
+      } else if (errorResponse?.message) {
+        errorMessage = errorResponse.message;
+      } else if (error?.code === 'ERR_NETWORK') {
+        errorMessage = "Network error. Please check your internet connection and try again.";
+      } else if (error?.response?.status === 401) {
+        errorMessage = "Your session has expired. Please refresh the page to continue.";
+      } else if (error?.response?.status === 500) {
+        errorMessage = "Server error. Our team has been notified. Please try again in a moment.";
+      } else if (error?.response?.status === 429) {
+        errorMessage = "Too many requests. Please wait a moment before trying again.";
+      }
+      
+      // Log full error details for debugging
+      console.error("Error details:", {
+        message: error?.message,
+        status: error?.response?.status,
+        data: errorResponse,
+        input: input.substring(0, 100),
+        sessionId: sessionId,
+        phase: progress.phase,
+        questionNumber: currentQuestionNumber
+      });
+      
+      toast.error(errorMessage, {
+        autoClose: 5000,
+      });
+      
       // Remove optimistic update on error - restore input
       setHistory((prev) => prev.slice(0, -1));
       setCurrentInput(input);
@@ -3217,9 +3427,15 @@ export default function ChatPage() {
       } else {
         toast.error(data.message || "Failed to approve plan");
       }
-    } catch (error) {
-      console.error("Failed to approve plan:", error);
-      toast.error("Something went wrong.");
+    } catch (error: any) {
+      console.error("❌ Failed to approve plan:", error);
+      const errorMessage = 
+        error?.message ||
+        error?.response?.data?.detail ||
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        "Failed to approve plan. Please try again.";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -3252,8 +3468,14 @@ export default function ChatPage() {
         toast.error(data.message || "Failed to activate review mode");
       }
     } catch (error) {
-      console.error("Failed to revisit plan:", error);
-      toast.error("Something went wrong.");
+      console.error("❌ Failed to revisit plan:", error);
+      const errorMessage = 
+        (error as any)?.message ||
+        (error as any)?.response?.data?.detail ||
+        (error as any)?.response?.data?.error ||
+        (error as any)?.response?.data?.message ||
+        "Failed to revisit plan. Please try again.";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -3620,6 +3842,30 @@ export default function ChatPage() {
                 </div>
               </div>
 
+              {/* Profile Button */}
+              <button
+                onClick={() => {
+                  setShowProfileModal(true);
+                  loadProfileData();
+                }}
+                className="p-2 rounded-lg bg-white/80 backdrop-blur-sm border border-gray-200 hover:bg-white transition-colors"
+                title="View Profile"
+              >
+                <svg
+                  className="w-5 h-5 text-gray-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                  />
+                </svg>
+              </button>
+
               {/* Mobile Navigation Toggle */}
               <button
                 onClick={() => setShowMobileNav(!showMobileNav)}
@@ -3688,6 +3934,170 @@ export default function ChatPage() {
             error={planState.error}
             onEditPlan={handleEditPlan}
           />
+
+          {/* Profile Modal */}
+          {showProfileModal && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                {/* Header */}
+                <div className="bg-gradient-to-r from-teal-500 to-blue-500 p-6 text-white sticky top-0 z-10">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-2xl font-bold mb-1">👤 My Profile</h2>
+                      <p className="text-sm opacity-90">Manage your account and subscription</p>
+                    </div>
+                    <button
+                      onClick={() => setShowProfileModal(false)}
+                      className="text-white/80 hover:text-white transition-colors"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className="p-6 space-y-6">
+                  {loadingProfile ? (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500"></div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* User Information */}
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-5 border border-blue-200">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                          <span className="mr-2">📧</span>
+                          Account Information
+                        </h3>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-600">Email:</span>
+                            <span className="text-sm font-medium text-gray-900">{userProfile?.email || 'N/A'}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-600">User ID:</span>
+                            <span className="text-sm font-mono text-gray-700 text-xs">{userProfile?.id || 'N/A'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Subscription Details */}
+                      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg p-5 border border-emerald-200">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                          <span className="mr-2">💳</span>
+                          Subscription Details
+                        </h3>
+                        {subscriptionDetails?.has_active_subscription ? (
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-gray-600">Status:</span>
+                              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                                {subscriptionDetails.subscription?.subscription_status?.toUpperCase() || 'ACTIVE'}
+                              </span>
+                            </div>
+                            {subscriptionDetails.subscription && (
+                              <>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-gray-600">Amount:</span>
+                                  <span className="text-sm font-semibold text-gray-900">
+                                    ${subscriptionDetails.subscription.amount || 0} {subscriptionDetails.subscription.currency?.toUpperCase() || 'USD'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-gray-600">Current Period Start:</span>
+                                  <span className="text-sm text-gray-900">
+                                    {subscriptionDetails.subscription.current_period_start 
+                                      ? new Date(subscriptionDetails.subscription.current_period_start).toLocaleDateString()
+                                      : 'N/A'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-gray-600">Current Period End:</span>
+                                  <span className="text-sm font-medium text-gray-900">
+                                    {subscriptionDetails.subscription.current_period_end 
+                                      ? new Date(subscriptionDetails.subscription.current_period_end).toLocaleDateString()
+                                      : 'N/A'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-gray-600">Cancel at Period End:</span>
+                                  <span className="text-sm text-gray-900">
+                                    {subscriptionDetails.subscription.cancel_at_period_end ? 'Yes' : 'No'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-gray-600">Stripe Subscription ID:</span>
+                                  <span className="text-sm font-mono text-gray-700 text-xs">
+                                    {subscriptionDetails.subscription.stripe_subscription_id || 'N/A'}
+                                  </span>
+                                </div>
+                              </>
+                            )}
+                            {!subscriptionDetails.subscription?.cancel_at_period_end && (
+                              <div className="pt-4 border-t border-emerald-200">
+                                <button
+                                  onClick={handleCancelSubscription}
+                                  disabled={cancellingSubscription}
+                                  className="w-full px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                  {cancellingSubscription ? (
+                                    <>
+                                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                      <span>Cancelling...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                      <span>Cancel Subscription</span>
+                                    </>
+                                  )}
+                                </button>
+                                <p className="text-xs text-gray-500 mt-2 text-center">
+                                  Your subscription will remain active until the end of your current billing period
+                                </p>
+                              </div>
+                            )}
+                            {subscriptionDetails.subscription?.cancel_at_period_end && (
+                              <div className="pt-4 border-t border-emerald-200">
+                                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                                  <p className="text-sm text-yellow-800">
+                                    ⚠️ Your subscription is scheduled to cancel at the end of your current billing period.
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-center py-4">
+                            <p className="text-gray-600 mb-4">No active subscription found</p>
+                            <p className="text-sm text-gray-500">Subscribe to access premium features and download your documents</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Additional Information */}
+                      <div className="bg-gray-50 rounded-lg p-5 border border-gray-200">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                          <span className="mr-2">ℹ️</span>
+                          Account Details
+                        </h3>
+                        <div className="space-y-2 text-sm text-gray-600">
+                          <p>• Access to all premium features</p>
+                          <p>• Download business plans and roadmaps</p>
+                          <p>• Priority support</p>
+                          <p>• Regular updates and new features</p>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Roadmap is now shown as a full page, not a modal */}
         </div>

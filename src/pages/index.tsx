@@ -17,6 +17,7 @@ export { default as Documentation } from './Documentation';
 export { default as Guides } from './Guides';
 export { default as Support } from './Support';
 export { default as Services } from './Services';
+export { default as Profile } from './Profile';
 export { default as NotFound } from './NotFound';
 export { default as ErrorBoundaryPage } from './ErrorBoundaryPage';
 
