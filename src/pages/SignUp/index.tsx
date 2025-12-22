@@ -111,12 +111,11 @@ const SignupPage: React.FC = () => {
       });
     } catch (err: unknown) {
       console.error('Signup error:', err);
-      const errorMessage = err && typeof err === 'object' && 'response' in err
-        ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
-        : undefined;
-      toast.error(
-        errorMessage || 'Signup failed. Please try again.'
-      );
+      // Extract error message from Error object (thrown by authService)
+      const errorMessage = err instanceof Error 
+        ? err.message 
+        : 'Signup failed. Please try again.';
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }

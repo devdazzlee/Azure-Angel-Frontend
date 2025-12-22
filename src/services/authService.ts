@@ -58,12 +58,24 @@ export async function signUp({
     password: string;
     confirmPassword: string;
 }): Promise<void> {
-    await axios.post<void>(`${BASE}/auth/signup`, {
-        full_name: fullName,
-        email,
-        password,
-        confirm_password: confirmPassword,
-    });
+    try {
+        await axios.post<void>(`${BASE}/auth/signup`, {
+            full_name: fullName,
+            email,
+            password,
+            confirm_password: confirmPassword,
+        });
+    } catch (err: any) {
+        // FastAPI standard: errors in response.data.detail
+        // Also check message field for backward compatibility
+        const errorData = err?.response?.data;
+        const message = errorData?.detail || 
+            errorData?.message || 
+            errorData?.error || 
+            err?.message || 
+            'Signup failed. Please try again.';
+        throw new Error(message);
+    }
 }
 
 export async function signIn({
