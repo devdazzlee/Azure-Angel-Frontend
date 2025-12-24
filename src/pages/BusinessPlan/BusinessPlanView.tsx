@@ -158,13 +158,9 @@ const BusinessPlanView: React.FC = () => {
   };
 
   const handleDownload = () => {
-    // Check if user has already paid for this document
-    if (hasPaid) {
-      setShowExportModal(true);
-    } else {
-      // Show payment modal first
-      setShowPaymentModal(true);
-    }
+    // Download is now free - no payment required
+    // Payment is required only when generating the business plan, not for downloading
+    setShowExportModal(true);
   };
 
   const handlePaymentSuccess = async () => {

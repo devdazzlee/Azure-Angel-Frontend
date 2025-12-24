@@ -6,7 +6,7 @@ import { toast } from 'react-toastify';
 import BusinessPlanPaywall from './BusinessPlanPaywall';
 import DocumentExportModal from './DocumentExportModal';
 import PaymentForm from './PaymentForm';
-import { PRICING, checkPaymentStatus, markAsPaid } from '../config/pricing';
+import { PRICING } from '../config/pricing';
 
 interface PlanToRoadmapTransitionProps {
   businessPlanSummary: string;
@@ -352,9 +352,76 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
     [sessionId]
   );
 
+  const [actualSummary, setActualSummary] = useState<string>(businessPlanSummary);
+  const [isLoadingSummary, setIsLoadingSummary] = useState(false);
+  const hasFetchedSummary = useRef(false); // Track if we've already attempted to fetch
+
+  // Fetch actual summary if we only have the fallback message (only once)
+  useEffect(() => {
+    const fallbackMessage = "Your business plan has been completed successfully!";
+    
+    // If we have a valid summary, use it immediately
+    if (businessPlanSummary && businessPlanSummary.trim() !== fallbackMessage && businessPlanSummary.trim() !== "") {
+      setActualSummary(businessPlanSummary);
+      hasFetchedSummary.current = true; // Mark as handled
+      return;
+    }
+    
+    // If summary is empty or is the fallback message, try to fetch the actual summary (only once)
+    if ((!businessPlanSummary || businessPlanSummary.trim() === fallbackMessage) && sessionId && !hasFetchedSummary.current) {
+      hasFetchedSummary.current = true; // Mark as fetching to prevent multiple calls
+      setIsLoadingSummary(true);
+      
+      const fetchSummary = async () => {
+        try {
+          const response = await fetch(
+            `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/business-plan-summary`,
+            {
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
+              },
+            }
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.result) {
+              // Handle both old format (string) and new format (object with summary field)
+              const summary = typeof data.result === 'string' 
+                ? data.result 
+                : data.result.summary || data.result.full_summary || '';
+              
+              if (summary && summary.trim() && summary.trim() !== fallbackMessage) {
+                console.log('✅ Fetched actual business plan summary from backend');
+                setActualSummary(summary);
+              } else {
+                // If fetched summary is still fallback or empty, use the original
+                setActualSummary(businessPlanSummary || "");
+              }
+            } else {
+              // No valid result, use original
+              setActualSummary(businessPlanSummary || "");
+            }
+          } else {
+            // Fetch failed, use original
+            setActualSummary(businessPlanSummary || "");
+          }
+        } catch (error) {
+          console.error('Failed to fetch business plan summary:', error);
+          // On error, use original
+          setActualSummary(businessPlanSummary || "");
+        } finally {
+          setIsLoadingSummary(false);
+        }
+      };
+
+      fetchSummary();
+    }
+  }, [businessPlanSummary, sessionId]); // Removed isLoadingSummary from dependencies
+
   const normalizedSummary = useMemo(
-    () => normalizeBusinessPlanSummary(businessPlanSummary),
-    [businessPlanSummary]
+    () => normalizeBusinessPlanSummary(actualSummary),
+    [actualSummary]
   );
 
   const persistQuote = useCallback((quote: MotivationalQuote) => {
@@ -401,9 +468,27 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
 
   // ✅ PROPER ARCHITECTURE: Generate artifact on-demand when user clicks button
   // No polling, no race conditions - just reliable synchronous generation
+  // ⚠️ PAYMENT REQUIRED: Check subscription before generating
   const handleGenerateArtifact = async () => {
     if (!sessionId || isGeneratingArtifact || businessPlanArtifact) {
       return; // Already generating or already have artifact
+    }
+
+    // Check if user has active subscription - payment required to generate
+    if (!hasPaid) {
+      console.log('⚠️ Payment required - showing payment modal');
+      setShowPaymentModal(true);
+      return;
+    }
+
+    // User has paid - proceed with generation
+    await generateArtifactAfterPayment();
+  };
+
+  // Generate artifact after payment verification
+  const generateArtifactAfterPayment = async () => {
+    if (!sessionId || isGeneratingArtifact) {
+      return;
     }
 
     setIsGeneratingArtifact(true);
@@ -628,8 +713,10 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
         if (data.success && data.has_active_subscription && !data.payment_failed) {
           setHasPaid(true);
           toast.dismiss(loadingToast);
-          toast.success('Payment successful! You can now download your Business Plan Summary.');
-          setShowExportModal(true);
+          toast.success('Payment successful! Generating your Full Business Plan...');
+          
+          // Automatically generate artifact after successful payment
+          await generateArtifactAfterPayment();
           return true;
         }
         
@@ -751,7 +838,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
               <div>
                 <h3 className="font-semibold text-blue-900 mb-1">📄 Full Business Plan Available</h3>
                 <p className="text-sm text-blue-800">
-                  This is a high-level summary. Click the <strong>"Generate Full Business Plan"</strong> button above to create your complete, detailed business plan document (typically takes 30-60 seconds).
+                  This is a high-level summary. Click the <strong>"Generate Full Business Plan"</strong> button above to create your complete, detailed business plan document. <strong>Payment is required</strong> to generate the full business plan (typically takes 30-60 seconds).
                 </p>
               </div>
             </div>
@@ -806,7 +893,19 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
           </div>
           
           {/* Full Viewable Business Plan Summary - No Height Restriction */}
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden relative">
+            {/* Loading indicator - positioned at top, visible immediately */}
+            {isLoadingSummary && (
+              <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-gray-200 py-8 flex items-center justify-center">
+                <div className="text-center">
+                  <svg className="animate-spin h-8 w-8 text-teal-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <p className="text-gray-600 font-medium">Loading your business plan summary...</p>
+                </div>
+              </div>
+            )}
             <div className="p-8 prose prose-lg max-w-none">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
@@ -906,7 +1005,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
                   ),
                 }}
               >
-                {normalizedSummary}
+                {normalizedSummary && normalizedSummary.trim() ? normalizedSummary : "Business plan summary is being generated. Please wait a moment and refresh the page."}
               </ReactMarkdown>
             </div>
           </div>
