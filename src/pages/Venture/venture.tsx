@@ -4027,12 +4027,6 @@ export default function ChatPage() {
                                     {subscriptionDetails.subscription.cancel_at_period_end ? 'Yes' : 'No'}
                                   </span>
                                 </div>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-sm text-gray-600">Stripe Subscription ID:</span>
-                                  <span className="text-sm font-mono text-gray-700 text-xs">
-                                    {subscriptionDetails.subscription.stripe_subscription_id || 'N/A'}
-                                  </span>
-                                </div>
                               </>
                             )}
                             {!subscriptionDetails.subscription?.cancel_at_period_end && (

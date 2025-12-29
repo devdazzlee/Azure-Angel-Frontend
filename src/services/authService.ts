@@ -369,3 +369,76 @@ export async function fetchNextQuestion(
         throw new Error(message);
     }
 }
+
+interface AcceptanceStatus {
+    terms_accepted: boolean;
+    privacy_accepted: boolean;
+    both_accepted: boolean;
+}
+
+export async function acceptTerms(name: string, date: string): Promise<{ both_accepted: boolean }> {
+    const token = localStorage.getItem('sb_access_token');
+    if (!token) throw new Error('Not authenticated');
+
+    try {
+        const { data } = await httpClient.post<{ success: boolean; result: { both_accepted: boolean } }>(
+            `${BASE}/auth/accept-terms`,
+            { name, date },
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
+        console.log('Terms acceptance response:', data);
+        return data.result;
+    } catch (err: any) {
+        console.error('Terms acceptance error:', err);
+        const errorData = err?.response?.data;
+        const message = errorData?.detail || 
+            errorData?.message || 
+            errorData?.error || 
+            err?.message || 
+            'Failed to accept Terms and Conditions. Please try again.';
+        throw new Error(message);
+    }
+}
+
+export async function acceptPrivacy(name: string, date: string): Promise<{ both_accepted: boolean }> {
+    const token = localStorage.getItem('sb_access_token');
+    if (!token) throw new Error('Not authenticated');
+
+    try {
+        const { data } = await httpClient.post<{ success: boolean; result: { both_accepted: boolean } }>(
+            `${BASE}/auth/accept-privacy`,
+            { name, date },
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
+        return data.result;
+    } catch (err: any) {
+        const errorData = err?.response?.data;
+        const message = errorData?.detail || 
+            errorData?.message || 
+            errorData?.error || 
+            err?.message || 
+            'Failed to accept Privacy Policy. Please try again.';
+        throw new Error(message);
+    }
+}
+
+export async function checkAcceptanceStatus(): Promise<AcceptanceStatus> {
+    const token = localStorage.getItem('sb_access_token');
+    if (!token) throw new Error('Not authenticated');
+
+    try {
+        const { data } = await httpClient.get<{ success: boolean; result: AcceptanceStatus }>(
+            `${BASE}/auth/acceptance-status`,
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
+        return data.result;
+    } catch (err: any) {
+        const errorData = err?.response?.data;
+        const message = errorData?.detail || 
+            errorData?.message || 
+            errorData?.error || 
+            err?.message || 
+            'Failed to check acceptance status. Please try again.';
+        throw new Error(message);
+    }
+}

@@ -524,12 +524,6 @@ const ProfilePage = () => {
                         </label>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between py-3">
-                      <span className="text-gray-600 font-medium">Stripe Subscription ID:</span>
-                      <span className="text-sm font-mono text-gray-700">
-                        {subscriptionDetails.subscription.stripe_subscription_id || 'N/A'}
-                      </span>
-                    </div>
                   </>
                 )}
                 {!subscriptionDetails.subscription?.cancel_at_period_end && (

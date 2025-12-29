@@ -163,19 +163,6 @@ const BackButton: React.FC<BackButtonProps> = ({
                   <span className="text-xs md:text-sm font-bold text-gray-900 leading-tight">
                     Previous Question
                   </span>
-                  {previousQuestionNumber && (
-                    <motion.div 
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.1 }}
-                      className="flex items-center gap-1 md:gap-1.5 mt-0.5"
-                    >
-                      <span className="text-xs text-teal-600 font-semibold">
-                        Q{previousQuestionNumber}
-                      </span>
-                      <span className="text-xs text-gray-400 hidden md:inline">of {totalQuestions}</span>
-                    </motion.div>
-                  )}
                 </div>
               </motion.div>
             )}

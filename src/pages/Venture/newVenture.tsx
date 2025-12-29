@@ -226,9 +226,6 @@ const NewVenture = () => {
                     </>
                   )}
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  {remainingIdeas.length > 0 ? `${remainingIdeas.length} unique ideas available` : 'Refresh page for more ideas'}
-                </p>
               </button>
             </div>
 
