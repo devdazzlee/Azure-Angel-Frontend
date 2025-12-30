@@ -3377,6 +3377,31 @@ export default function ChatPage() {
   };
 
   const handleApprovePlan = async () => {
+    // Check subscription status before allowing roadmap transition
+    try {
+      const subscriptionCheck = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
+          },
+        }
+      );
+
+      const subscriptionData = await subscriptionCheck.json();
+      
+      if (!subscriptionData.success || !subscriptionData.has_active_subscription || subscriptionData.payment_failed) {
+        toast.error('Subscription required to proceed to Roadmap phase. Please subscribe to continue.');
+        // Show payment modal or redirect to payment
+        // The PlanToRoadmapTransition component will handle showing the payment modal
+        return;
+      }
+    } catch (error) {
+      console.error('Failed to check subscription status:', error);
+      toast.error('Unable to verify subscription. Please try again.');
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/transition-decision`, {
@@ -3391,7 +3416,6 @@ export default function ChatPage() {
       const data = await response.json();
       
       if (data.success) {
-        toast.success("Plan approved! Generating roadmap...");
         setTransitionData(null);
         if (data.result?.progress) {
           applyProgressUpdate(data.result.progress);
@@ -3422,10 +3446,16 @@ export default function ChatPage() {
             error: ""
           });
           
+          toast.success("Roadmap Generated");
           console.log("✅ Roadmap generated and modal opened:", roadmapContent.substring(0, 200));
         }
       } else {
+        if (data.requires_subscription) {
+          toast.error(data.message || "Subscription required to proceed to Roadmap phase");
+          // The PlanToRoadmapTransition component will handle showing the payment modal
+      } else {
         toast.error(data.message || "Failed to approve plan");
+        }
       }
     } catch (error: any) {
       console.error("❌ Failed to approve plan:", error);
@@ -3763,15 +3793,98 @@ export default function ChatPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 text-sm flex flex-col lg:flex-row">
-      {/* Back Button - Always Visible */}
+      {/* Left Sidebar - Quick Actions (Support, Draft, Scrapping, Previous Question) */}
+      {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
+        progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) ||
+        (progress.phase === 'KYC' && history.length > 0)) && (
+        <div className="hidden lg:flex flex-col gap-3 w-24 flex-shrink-0 border-r border-gray-200 bg-white/50 backdrop-blur-sm p-4 sticky top-0 h-screen overflow-y-auto">
+          {/* Support Button */}
+          {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
+            progress.phase === ("BUSINESS_PLAN" as ProgressState['phase'])) && (
+            <button
+              onClick={() => handleNext("Support")}
+              disabled={loading}
+              className="group relative bg-gradient-to-br from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border border-blue-200 hover:border-blue-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex flex-col items-center space-y-2"
+              title="Support - Get guided help"
+            >
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white text-xl group-hover:scale-110 transition-transform duration-300">
+                💬
+              </div>
+              <div className="text-center">
+                <div className="text-xs font-semibold text-blue-800 group-hover:text-blue-900">Support</div>
+                <div className="text-[10px] text-blue-600 group-hover:text-blue-700">Get help</div>
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            </button>
+          )}
+
+          {/* Draft Button */}
+          {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
+            progress.phase === ("BUSINESS_PLAN" as ProgressState['phase'])) && (
+            <button
+              onClick={() => handleNext("Draft")}
+              disabled={loading}
+              className="group relative bg-gradient-to-br from-emerald-50 to-green-50 hover:from-emerald-100 hover:to-green-100 border border-emerald-200 hover:border-emerald-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex flex-col items-center space-y-2"
+              title="Draft - Generate content"
+            >
+              <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-green-600 rounded-full flex items-center justify-center text-white text-xl group-hover:scale-110 transition-transform duration-300">
+                ✍️
+              </div>
+              <div className="text-center">
+                <div className="text-xs font-semibold text-emerald-800 group-hover:text-emerald-900">Draft</div>
+                <div className="text-[10px] text-emerald-600 group-hover:text-emerald-700">Generate</div>
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-green-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            </button>
+          )}
+
+          {/* Scrapping Button */}
+          {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
+            progress.phase === ("BUSINESS_PLAN" as ProgressState['phase'])) && (
+            <button
+              onClick={() => handleNext(currentInput.trim() ? `Scrapping: ${currentInput}` : "Scrapping")}
+              disabled={loading}
+              className="group relative bg-gradient-to-br from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 border border-orange-200 hover:border-orange-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex flex-col items-center space-y-2"
+              title="Scrapping - Polish existing text"
+            >
+              <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-amber-600 rounded-full flex items-center justify-center text-white text-xl group-hover:scale-110 transition-transform duration-300">
+                🔧
+              </div>
+              <div className="text-center">
+                <div className="text-xs font-semibold text-orange-800 group-hover:text-orange-900">Scrapping</div>
+                <div className="text-[10px] text-orange-600 group-hover:text-orange-700">Polish text</div>
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-amber-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            </button>
+          )}
+
+          {/* Previous Question Button - At bottom of list */}
       {history.length > 0 && (progress.phase === 'KYC' || progress.phase === 'BUSINESS_PLAN') && (
-        <BackButton 
+            <button
           onClick={handleGoBack} 
-          disabled={history.length === 0 || loading}
-          loading={backButtonLoading}
-          currentQuestionNumber={currentQuestionNumber}
-          totalQuestions={progress.total}
-        />
+              disabled={history.length === 0 || loading || backButtonLoading}
+              className="group relative bg-gradient-to-br from-teal-50 to-blue-50 hover:from-teal-100 hover:to-blue-100 border border-teal-200 hover:border-teal-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex flex-col items-center space-y-2 mt-auto"
+              title={currentQuestionNumber ? `Go back to Question ${currentQuestionNumber - 1}` : "Go back to previous question"}
+            >
+              {backButtonLoading ? (
+                <div className="w-12 h-12 bg-gradient-to-br from-teal-500 to-blue-600 rounded-full flex items-center justify-center">
+                  <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : (
+                <>
+                  <div className="w-12 h-12 bg-gradient-to-br from-teal-500 to-blue-600 rounded-full flex items-center justify-center text-white text-xl group-hover:scale-110 transition-transform duration-300">
+                    ←
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xs font-semibold text-teal-800 group-hover:text-teal-900">Previous</div>
+                    <div className="text-[10px] text-teal-600 group-hover:text-teal-700">Question</div>
+                  </div>
+                </>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-br from-teal-500/10 to-blue-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            </button>
+          )}
+        </div>
       )}
       
       {/* Main Content */}
@@ -4105,7 +4218,7 @@ export default function ChatPage() {
             minHeight: "calc(100vh - 320px)"
           }}
         >
-          <div className="max-w-4xl mx-auto space-y-4">
+          <div className={`max-w-4xl mx-auto space-y-4 ${(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) || progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) || (progress.phase === 'KYC' && history.length > 0)) ? 'lg:ml-0' : ''}`}>
             {/* Chat History */}
             {history.map((pair, index) => (
               <div
@@ -4272,75 +4385,63 @@ export default function ChatPage() {
               currentPhase={progress.phase}
             />
 
-            {/* Quick Actions Row - show during IMPLEMENTATION and BUSINESS_PLAN phases */}
+            {/* Quick Actions Row - Mobile only (desktop shows in left sidebar) */}
             {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
               progress.phase === ("BUSINESS_PLAN" as ProgressState['phase'])) && (
-              <div className="mt-4">
+              <div className="mt-4 lg:hidden">
                 <div className="text-center mb-3">
                   <p className="text-gray-500 text-sm font-medium">🚀 Quick Actions</p>
                   <p className="text-gray-400 text-xs">Choose a tool to help with your response</p>
                 </div>
                 
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   {/* Support Button */}
                   <button
                     onClick={() => handleNext("Support")}
                     disabled={loading}
-                    className="group relative bg-gradient-to-br from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border border-blue-200 hover:border-blue-300 rounded-xl p-4 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    className="group relative bg-gradient-to-br from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border border-blue-200 hover:border-blue-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                   >
-                    <div className="flex flex-col items-center space-y-2">
-                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white text-lg group-hover:scale-110 transition-transform duration-300">
+                    <div className="flex flex-col items-center space-y-1">
+                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white text-sm group-hover:scale-110 transition-transform duration-300">
                         💬
                       </div>
                       <div className="text-center">
-                        <div className="text-sm font-semibold text-blue-800 group-hover:text-blue-900">Support</div>
-                        <div className="text-xs text-blue-600 group-hover:text-blue-700">Get guided help</div>
+                        <div className="text-xs font-semibold text-blue-800 group-hover:text-blue-900">Support</div>
                       </div>
                 </div>
-                    <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                   </button>
 
                   {/* Draft Button */}
                 <button
                     onClick={() => handleNext("Draft")}
                     disabled={loading}
-                    className="group relative bg-gradient-to-br from-emerald-50 to-green-50 hover:from-emerald-100 hover:to-green-100 border border-emerald-200 hover:border-emerald-300 rounded-xl p-4 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    className="group relative bg-gradient-to-br from-emerald-50 to-green-50 hover:from-emerald-100 hover:to-green-100 border border-emerald-200 hover:border-emerald-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                   >
-                    <div className="flex flex-col items-center space-y-2">
-                      <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-green-600 rounded-full flex items-center justify-center text-white text-lg group-hover:scale-110 transition-transform duration-300">
+                    <div className="flex flex-col items-center space-y-1">
+                      <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-green-600 rounded-full flex items-center justify-center text-white text-sm group-hover:scale-110 transition-transform duration-300">
                         ✍️
                       </div>
                       <div className="text-center">
-                        <div className="text-sm font-semibold text-emerald-800 group-hover:text-emerald-900">Draft</div>
-                        <div className="text-xs text-emerald-600 group-hover:text-emerald-700">Generate content</div>
+                        <div className="text-xs font-semibold text-emerald-800 group-hover:text-emerald-900">Draft</div>
                       </div>
                     </div>
-                    <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-green-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                   </button>
 
                   {/* Scrapping Button */}
                   <button
                     onClick={() => handleNext(currentInput.trim() ? `Scrapping: ${currentInput}` : "Scrapping")}
                     disabled={loading}
-                    className="group relative bg-gradient-to-br from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 border border-orange-200 hover:border-orange-300 rounded-xl p-4 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    className="group relative bg-gradient-to-br from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 border border-orange-200 hover:border-orange-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                   >
-                    <div className="flex flex-col items-center space-y-2">
-                      <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-amber-600 rounded-full flex items-center justify-center text-white text-lg group-hover:scale-110 transition-transform duration-300">
+                    <div className="flex flex-col items-center space-y-1">
+                      <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-amber-600 rounded-full flex items-center justify-center text-white text-sm group-hover:scale-110 transition-transform duration-300">
                         🔧
                       </div>
                       <div className="text-center">
-                        <div className="text-sm font-semibold text-orange-800 group-hover:text-orange-900">Scrapping</div>
-                        <div className="text-xs text-orange-600 group-hover:text-orange-700">Polish existing text</div>
+                        <div className="text-xs font-semibold text-orange-800 group-hover:text-orange-900">Scrapping</div>
                       </div>
                     </div>
-                    <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-amber-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 </button>
-                  </div>
-
-                <div className="mt-3 text-center">
-                  <p className="text-gray-400 text-xs">
-                    💡 Or type your detailed response below
-                  </p>
                 </div>
                 </div>
               )}

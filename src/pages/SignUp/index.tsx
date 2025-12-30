@@ -56,6 +56,8 @@ const BETA_TESTER_EMAILS = [
   'nafisa.jassani@gmail.com',
   'ahmedrazagithub@gmail.com',
   'rawsonleavitt@gmail.com',
+  'cifotis172@dubokutv.com',
+  'niraseg404@dubokutv.com',
   'mkarpen@msn.com',
   'minhal.webcloners@gmail.com',
   'muhammadkonain8@gmail.com',

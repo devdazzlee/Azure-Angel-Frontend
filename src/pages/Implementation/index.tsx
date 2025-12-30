@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import TaskCard from '../../components/TaskCard';
 import TaskCompletionModal from '../../components/TaskCompletionModal';
 import ServiceProviderModal from '../../components/ServiceProviderModal';
@@ -26,7 +27,9 @@ import {
   Building2,
   MapPin,
   Trophy,
-  AlertTriangle
+  AlertTriangle,
+  Home,
+  ArrowLeft
 } from 'lucide-react';
 
 interface ImplementationSubstep {
@@ -92,6 +95,7 @@ const Implementation: React.FC<ImplementationProps> = ({
   sessionData,
   onPhaseChange
 }) => {
+  const navigate = useNavigate();
   const [currentTask, setCurrentTask] = useState<ImplementationTask | null>(null);
   const [completedTasks, setCompletedTasks] = useState<string[]>([]);
   const [progress, setProgress] = useState<ImplementationProgress>({
@@ -621,7 +625,26 @@ const Implementation: React.FC<ImplementationProps> = ({
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 pb-20 sm:pb-0">
       {/* Header - Better Spacing */}
       <div className="bg-gradient-to-b from-white via-white to-gray-50/30 backdrop-blur-xl border-b border-gray-200/50 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 sm:pr-[440px] lg:pr-[500px]">
+          {/* Navigation Buttons */}
+          <div className="flex items-center gap-3 mb-6">
+            <button
+              onClick={() => navigate('/')}
+              className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg text-gray-700 font-medium transition-all duration-200 hover:shadow-md"
+            >
+              <Home className="h-4 w-4" />
+              <span className="hidden sm:inline">Home</span>
+            </button>
+            <button
+              onClick={() => navigate(`/ventures/${sessionId}`)}
+              className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg text-gray-700 font-medium transition-all duration-200 hover:shadow-md"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span className="hidden sm:inline">Back to Roadmap</span>
+              <span className="sm:hidden">Back</span>
+            </button>
+          </div>
+          
           {/* Row 1: Implementation Phase */}
           <div className="flex flex-col gap-6 mb-4">
             {/* Top Row - Title */}
@@ -801,7 +824,7 @@ const Implementation: React.FC<ImplementationProps> = ({
 
       {/* Tab Navigation - Redesigned */}
       <div className="bg-gradient-to-b from-white via-white to-gray-50/50 border-b border-gray-200/50 sticky top-0 z-30 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 sm:pr-[440px] lg:pr-[500px]">
           <div className="flex gap-1">
             <motion.button
               onClick={() => handleTabChange('task')}
@@ -853,8 +876,8 @@ const Implementation: React.FC<ImplementationProps> = ({
         </div>
       </div>
 
-      {/* Main Content - Better Spacing */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      {/* Main Content - Better Spacing with Right Padding for Floating Support */}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 sm:pr-[440px] lg:pr-[500px]">
         <AnimatePresence mode="wait">
           {activeTab === 'task' && (
             <motion.div

@@ -103,11 +103,12 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
         <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 mb-1">Total Amount</p>
-              <p className="text-3xl font-bold text-gray-900">${amount.toFixed(2)}</p>
+              <p className="text-sm text-gray-600 mb-1">Monthly Subscription</p>
+              <p className="text-3xl font-bold text-gray-900">${amount.toFixed(2)}<span className="text-lg font-normal text-gray-600">/month</span></p>
+              <p className="text-xs text-gray-500 mt-1">Cancel anytime</p>
             </div>
             <div className="text-right">
-              <p className="text-sm text-gray-600 mb-1">Item</p>
+              <p className="text-sm text-gray-600 mb-1">Subscription</p>
               <p className="text-lg font-semibold text-gray-900">{itemName}</p>
             </div>
           </div>

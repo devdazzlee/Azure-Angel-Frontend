@@ -452,6 +452,24 @@ const RoadmapPage: React.FC = () => {
                   if (!sessionId) return;
                   
                   try {
+                    // Check subscription before allowing implementation transition
+                    const subscriptionCheck = await fetch(
+                      `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
+                      {
+                        headers: {
+                          Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
+                        },
+                      }
+                    );
+
+                    const subscriptionData = await subscriptionCheck.json();
+                    
+                    if (!subscriptionData.success || !subscriptionData.has_active_subscription || subscriptionData.payment_failed) {
+                      toast.error('Subscription required to proceed to Implementation phase. Please subscribe to continue.');
+                      // TODO: Show payment modal
+                      return;
+                    }
+
                     setIsTransitioning(true);
                     toast.info("Preparing implementation transition...");
                     
@@ -472,7 +490,11 @@ const RoadmapPage: React.FC = () => {
                       // The backend has already updated the session phase in the database
                       navigate(`/ventures/${sessionId}`);
                     } else {
-                      toast.error(data.message || "Failed to prepare implementation transition");
+                      if (data.requires_subscription) {
+                        toast.error(data.message || "Subscription required to proceed to Implementation phase");
+                      } else {
+                        toast.error(data.message || "Failed to prepare implementation transition");
+                      }
                       setIsTransitioning(false);
                     }
                   } catch (error) {

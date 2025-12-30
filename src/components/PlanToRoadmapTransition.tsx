@@ -431,7 +431,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
     }
   }, [storageKey]);
 
-  // Check subscription status from backend on mount
+  // Check subscription status from backend on mount and show payment modal if needed
   useEffect(() => {
     const checkSubscriptionStatus = async () => {
       try {
@@ -454,12 +454,16 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
             console.log('⚠️ Payment failed - premium features disabled');
             toast.warning('Payment failed. Please update your payment method to restore premium access.');
           } else {
-            console.log('ℹ️ No active subscription found');
+            console.log('ℹ️ No active subscription found - showing payment modal');
+            // Show payment modal after transition is served
+            setShowPaymentModal(true);
           }
         }
       } catch (error) {
         console.error('Failed to check subscription status:', error);
         setHasPaid(false);
+        // Show payment modal on error as well
+        setShowPaymentModal(true);
       }
     };
 
@@ -713,10 +717,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
         if (data.success && data.has_active_subscription && !data.payment_failed) {
           setHasPaid(true);
           toast.dismiss(loadingToast);
-          toast.success('Payment successful! Generating your Full Business Plan...');
-          
-          // Automatically generate artifact after successful payment
-          await generateArtifactAfterPayment();
+          toast.success('✅ Subscription activated! You can now proceed to Roadmap phase.');
           return true;
         }
         
@@ -1202,8 +1203,16 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
-              onClick={onApprove}
-              disabled={loading}
+              onClick={() => {
+                // Check subscription before allowing roadmap transition
+                if (!hasPaid) {
+                  setShowPaymentModal(true);
+                  toast.info('Subscription required to proceed to Roadmap phase');
+                  return;
+                }
+                onApprove();
+              }}
+              disabled={loading || !hasPaid}
               className="group relative bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white px-10 py-5 rounded-xl text-xl font-bold shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border-2 border-green-400"
             >
               {loading ? (
@@ -1381,13 +1390,13 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
         }
       `}</style>
 
-      {/* Payment Modal */}
+      {/* Payment Modal - $20/month subscription for Roadmap and Implementation */}
       <PaymentForm
         isOpen={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}
         onPaymentSuccess={handlePaymentSuccess}
-        amount={PRICING.BUSINESS_PLAN_SUMMARY.amount}
-        itemName={PRICING.BUSINESS_PLAN_SUMMARY.itemName}
+        amount={20} // $20/month subscription
+        itemName="Founderport Premium Subscription"
       />
 
       {/* Export Modal */}

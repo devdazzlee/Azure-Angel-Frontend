@@ -67,7 +67,14 @@ const BusinessQuestionFormatter: React.FC<BusinessQuestionFormatterProps> = ({ t
 
     let processedText = inputText;
 
-    // Step 1: Fix broken questions first (question mark on new line)
+    // Step 1: Fix broken questions first (question mark on new line) - Comprehensive fix
+    // Generic pattern to fix any question where question mark is on a separate line
+    processedText = processedText.replace(/([^?\n]+)\s*\n\s*\?/g, '$1?');
+    
+    // Also fix cases where question mark appears alone on a line after text
+    processedText = processedText.replace(/([^?\n]+)\s*\n+\s*\?\s*\n+/g, '$1?\n\n');
+    
+    // Fix specific broken question patterns
     const brokenQuestionFixes = [
       { pattern: /What is your business name\s*\n\s*\?/gi, replacement: 'What is your business name?' },
       { pattern: /What is your business tagline or mission statement\s*\n\s*\?/gi, replacement: 'What is your business tagline or mission statement?' },
@@ -79,7 +86,9 @@ const BusinessQuestionFormatter: React.FC<BusinessQuestionFormatterProps> = ({ t
       { pattern: /Do you have a working prototype or MVP\s*\n\s*\?/gi, replacement: 'Do you have a working prototype or MVP?' },
       { pattern: /Who is your target market\s*\n\s*\?/gi, replacement: 'Who is your target market?' },
       { pattern: /What is the size of your target market\s*\n\s*\?/gi, replacement: 'What is the size of your target market?' },
-      { pattern: /How many potential customers exist\s*\n\s*\?/gi, replacement: 'How many potential customers exist?' }
+      { pattern: /How many potential customers exist\s*\n\s*\?/gi, replacement: 'How many potential customers exist?' },
+      { pattern: /Where will your business be located\s*\n\s*\?/gi, replacement: 'Where will your business be located?' },
+      { pattern: /Why did you choose this location\s*\n\s*\?/gi, replacement: 'Why did you choose this location?' }
     ];
 
     brokenQuestionFixes.forEach(({ pattern, replacement }) => {
