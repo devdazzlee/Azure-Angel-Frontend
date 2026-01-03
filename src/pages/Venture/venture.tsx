@@ -35,6 +35,9 @@ import BusinessQuestionFormatter from "../../components/BusinessQuestionFormatte
 import BackButton from "../../components/BackButton";
 import AngelThinkingLoader from "../../components/AngelThinkingLoader";
 import QuestionFormatter from "../../components/QuestionFormatter";
+import type { Budget, BudgetItem, APIResponse } from "../../types/apiTypes";
+import BudgetSetupModal from "../../components/Budget/BudgetSetupModal";
+import { budgetService } from "../../services/budgetService";
 
 interface ConversationPair {
   question: string;
@@ -787,6 +790,13 @@ export default function ChatPage() {
   const [hasSeenUploadPrompt, setHasSeenUploadPrompt] = useState(false);
   const [hasUploadedPlan, setHasUploadedPlan] = useState(false);
   const [uploadPromptInitialized, setUploadPromptInitialized] = useState(false);
+  const [budgetSetupModal, setBudgetSetupModal] = useState<{
+    isOpen: boolean;
+    businessPlanCompleted: boolean;
+  }>({
+    isOpen: false,
+    businessPlanCompleted: false
+  });
 
   const markUploadPromptAsSeen = useCallback(() => {
     if (hasSeenUploadPrompt) {
@@ -824,6 +834,44 @@ export default function ChatPage() {
   const handleUploadModalClose = useCallback(() => {
     setUploadPlanModal({ isOpen: false });
   }, []);
+
+  const handleBudgetSetupComplete = useCallback(async (budgetData: {
+    initialInvestment: number;
+    estimatedExpenses: any[];
+    estimatedRevenue: any[];
+  }) => {
+    try {
+      // Create budget object
+      const budgetPayload = {
+        session_id: sessionId!,
+        initial_investment: budgetData.initialInvestment,
+        total_estimated_expenses: budgetData.estimatedExpenses.reduce((sum, item) => sum + item.estimated_amount, 0),
+        total_estimated_revenue: budgetData.estimatedRevenue.reduce((sum, item) => sum + item.estimated_amount, 0),
+        items: [...budgetData.estimatedExpenses, ...budgetData.estimatedRevenue]
+      };
+
+      // Save budget to backend
+      const response = await budgetService.saveBudget(sessionId!, budgetPayload);
+      
+      if (response.success) {
+        toast.success('Budget setup completed successfully!');
+        
+        // Add budget setup completion message to history
+        setHistory(prev => [...prev, {
+          question: "Budget Setup",
+          answer: `Great! I've set up your budget with an initial investment of $${budgetData.initialInvestment.toLocaleString()}, estimated expenses of $${budgetPayload.total_estimated_expenses.toLocaleString()}, and estimated revenue of $${budgetPayload.total_estimated_revenue.toLocaleString()}. You can view and manage your budget anytime by clicking the Budget tab.`,
+          phase: 'BUSINESS_PLAN'
+        }]);
+      } else {
+        toast.error('Failed to save budget setup');
+      }
+    } catch (error) {
+      console.error('Error saving budget:', error);
+      toast.error('Failed to save budget setup');
+    }
+    
+    setBudgetSetupModal({ isOpen: false, businessPlanCompleted: false });
+  }, [sessionId]);
 
   useEffect(() => {
     fetchTransitionQuote();
@@ -2981,6 +3029,8 @@ export default function ChatPage() {
           businessPlanSummary: summary,
           transitionPhase: "PLAN_TO_ROADMAP"
         });
+        // Trigger budget setup modal
+        setBudgetSetupModal({ isOpen: true, businessPlanCompleted: true });
         // Remove optimistic update - show modal instead
         setHistory((prev) => prev.slice(0, -1));
         setLoading(false);
@@ -2995,6 +3045,8 @@ export default function ChatPage() {
           businessPlanArtifact: business_plan_artifact || null,  // Include artifact if available
           transitionPhase: transition_phase
         });
+        // Trigger budget setup modal
+        setBudgetSetupModal({ isOpen: true, businessPlanCompleted: true });
         if (business_plan_artifact) {
           console.log("✅ Business Plan Artifact received in transition response");
           toast.success("Full Business Plan Artifact has been generated and is available for download!");
@@ -4906,6 +4958,14 @@ export default function ChatPage() {
               setLoading(false);
             }
         }}
+      />
+
+      {/* Budget Setup Modal */}
+      <BudgetSetupModal
+        isOpen={budgetSetupModal.isOpen}
+        onClose={() => setBudgetSetupModal({ isOpen: false, businessPlanCompleted: false })}
+        onComplete={handleBudgetSetupComplete}
+        businessContext={mergedBusinessContext}
       />
     </div>
   );

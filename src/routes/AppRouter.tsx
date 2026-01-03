@@ -28,6 +28,7 @@ import {
   NotFound,
   ErrorBoundaryPage,
 } from "../pages";
+import BudgetPage from "../pages/Budget/BudgetPage";
 import ForgotPasswordPage from "../pages/ForgotPassword";
 import ResetPasswordPage from "../pages/ResetPassword";
 import RoadmapPage from "../pages/Roadmap/RoadmapPage";
@@ -123,6 +124,10 @@ const router = createBrowserRouter([
               {
                 path: ":id/business-plan",
                 element: <BusinessPlanView />,
+              },
+              {
+                path: ":id/budget",
+                element: <BudgetPage />,
               },
             ],
           },

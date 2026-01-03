@@ -125,3 +125,48 @@ export interface AgentGuidanceResponse {
   };
   message?: string;
 }
+
+// Budget Tracking Types
+export interface BudgetItem {
+  id: string;
+  name: string;
+  category: 'expense' | 'revenue';
+  amount: number;
+  estimated_amount: number;
+  actual_amount?: number;
+  description?: string;
+  is_custom?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Budget {
+  id: string;
+  session_id: string;
+  initial_investment: number;
+  total_estimated_expenses: number;
+  total_estimated_revenue: number;
+  total_actual_expenses?: number;
+  total_actual_revenue?: number;
+  items: BudgetItem[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BudgetSummary {
+  total_estimated: number;
+  total_actual: number;
+  estimated_expenses: number;
+  estimated_revenue: number;
+  actual_expenses: number;
+  actual_revenue: number;
+  variance: number;
+}
+
+export interface BudgetCategory {
+  name: string;
+  estimated_total: number;
+  actual_total: number;
+  items: BudgetItem[];
+  color: string;
+}

@@ -12,6 +12,9 @@ import RoadmapDisplay from '../../components/RoadmapDisplay';
 import ImplementationCompletionModal from '../../components/ImplementationCompletionModal';
 import httpClient from '../../api/httpClient';
 import { fetchRoadmapPlan } from '../../services/authService';
+import { BudgetDashboard } from '../../components/Budget';
+import { budgetService } from '../../services/budgetService';
+import type { Budget, BudgetItem } from '../../types/apiTypes';
 import { 
   Target, 
   Users, 
@@ -106,12 +109,16 @@ const Implementation: React.FC<ImplementationProps> = ({
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'task' | 'roadmap'>('task');
+  const [activeTab, setActiveTab] = useState<'task' | 'roadmap' | 'budget'>('task');
   const [mountedTabs, setMountedTabs] = useState<Record<string, boolean>>({ task: true });
   const [roadmapContent, setRoadmapContent] = useState<string>('');
   const [roadmapLoading, setRoadmapLoading] = useState(false);
   const [supportLoaded, setSupportLoaded] = useState(false);
   const [roadmapLoaded, setRoadmapLoaded] = useState(false);
+  
+  // Budget state
+  const [budget, setBudget] = useState<Budget | null>(null);
+  const [budgetLoading, setBudgetLoading] = useState(false);
   
   // Local business context that can be updated independently
   const [localBusinessContext, setLocalBusinessContext] = useState<any>(null);
@@ -210,7 +217,7 @@ const Implementation: React.FC<ImplementationProps> = ({
       }
   };
 
-  const handleTabChange = (tab: 'task' | 'roadmap') => {
+  const handleTabChange = (tab: 'task' | 'roadmap' | 'budget') => {
     setActiveTab(tab);
     setMountedTabs((prev) => (prev[tab] ? prev : { ...prev, [tab]: true }));
   };
@@ -222,14 +229,94 @@ const Implementation: React.FC<ImplementationProps> = ({
       const response = await fetchRoadmapPlan(sessionId);
       if (response?.result?.plan) {
         setRoadmapContent(response.result.plan);
+        setRoadmapLoaded(true);
       }
-    } catch (err) {
-      console.error('Error loading roadmap:', err);
-      toast.error('Failed to load roadmap content');
+    } catch (error) {
+      console.error('Error loading roadmap:', error);
+      toast.error('Failed to load roadmap');
     } finally {
       setRoadmapLoading(false);
-      setRoadmapLoaded(true);
     }
+  };
+
+  const loadBudget = async () => {
+    if (budgetLoading || budget) return;
+    try {
+      setBudgetLoading(true);
+      const response = await budgetService.getBudget(sessionId);
+      if (response.success) {
+        setBudget(response.result);
+      } else {
+        // Create default budget if none exists
+        const defaultBudget: Budget = {
+          id: '',
+          session_id: sessionId,
+          initial_investment: 0,
+          total_estimated_expenses: 0,
+          total_estimated_revenue: 0,
+          items: [],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        setBudget(defaultBudget);
+      }
+    } catch (error) {
+      console.error('Error loading budget:', error);
+      toast.error('Failed to load budget');
+    } finally {
+      setBudgetLoading(false);
+    }
+  };
+
+  const handleUpdateBudget = (updates: Partial<Budget>) => {
+    if (!budget) return;
+    
+    const updatedBudget = { ...budget, ...updates, updated_at: new Date().toISOString() };
+    
+    // Recalculate totals
+    const expenses = updatedBudget.items.filter(item => item.category === 'expense');
+    const revenues = updatedBudget.items.filter(item => item.category === 'revenue');
+    
+    updatedBudget.total_estimated_expenses = expenses.reduce((sum, item) => sum + item.estimated_amount, 0);
+    updatedBudget.total_estimated_revenue = revenues.reduce((sum, item) => sum + item.estimated_amount, 0);
+    updatedBudget.total_actual_expenses = expenses.reduce((sum, item) => sum + (item.actual_amount || 0), 0);
+    updatedBudget.total_actual_revenue = revenues.reduce((sum, item) => sum + (item.actual_amount || 0), 0);
+    
+    setBudget(updatedBudget);
+  };
+
+  const handleAddItem = (item: Omit<BudgetItem, 'id' | 'created_at' | 'updated_at'>) => {
+    if (!budget) return;
+    
+    const newItem: BudgetItem = {
+      ...item,
+      id: Date.now().toString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    handleUpdateBudget({
+      items: [...budget.items, newItem]
+    });
+  };
+
+  const handleUpdateItem = (itemId: string, updates: Partial<BudgetItem>) => {
+    if (!budget) return;
+    
+    const updatedItems = budget.items.map(item =>
+      item.id === itemId
+        ? { ...item, ...updates, updated_at: new Date().toISOString() }
+        : item
+    );
+    
+    handleUpdateBudget({ items: updatedItems });
+  };
+
+  const handleDeleteItem = (itemId: string) => {
+    if (!budget) return;
+    
+    const updatedItems = budget.items.filter(item => item.id !== itemId);
+    handleUpdateBudget({ items: updatedItems });
   };
 
   useEffect(() => {
@@ -238,6 +325,13 @@ const Implementation: React.FC<ImplementationProps> = ({
     setProvidersCache(null);
     setSupportLoaded(false);
   }, [currentTask?.id]);
+
+  // Load budget when budget tab is accessed
+  useEffect(() => {
+    if (activeTab === 'budget' && mountedTabs.budget) {
+      loadBudget();
+    }
+  }, [activeTab, mountedTabs.budget]);
 
   // Removed support tab - no longer needed
 
@@ -872,6 +966,29 @@ const Implementation: React.FC<ImplementationProps> = ({
                 />
               )}
             </motion.button>
+            <motion.button
+              onClick={() => handleTabChange('budget')}
+              className={`relative py-4 px-6 font-medium text-sm rounded-t-lg transition-all ${
+                activeTab === 'budget'
+                  ? 'text-teal-700'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <div className="flex items-center gap-2">
+                <DollarSign className={`h-4 w-4 ${activeTab === 'budget' ? 'text-teal-600' : 'text-gray-500'}`} />
+                <span>Budget</span>
+              </div>
+              {activeTab === 'budget' && (
+                <motion.div
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-teal-500 to-blue-500"
+                  layoutId="activeTab"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
+              )}
+            </motion.button>
           </div>
         </div>
       </div>
@@ -958,6 +1075,45 @@ const Implementation: React.FC<ImplementationProps> = ({
                 </button>
               </div>
             )}
+              </div>
+            </motion.div>
+          )}
+          
+          {activeTab === 'budget' && mountedTabs.budget && (
+            <motion.div
+              key="budget"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className="w-full"
+            >
+              <div className="bg-white/90 backdrop-blur-xl border border-gray-200/50 rounded-xl p-4 sm:p-6 shadow-sm">
+                {budgetLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500"></div>
+                    <span className="ml-4 text-gray-600">Loading budget...</span>
+                  </div>
+                ) : budget ? (
+                  <BudgetDashboard
+                    budget={budget}
+                    onUpdateBudget={handleUpdateBudget}
+                    onAddItem={handleAddItem}
+                    onUpdateItem={handleUpdateItem}
+                    onDeleteItem={handleDeleteItem}
+                    showActuals={true}
+                  />
+                ) : (
+                  <div className="text-center py-12">
+                    <p className="text-gray-600">No budget data available</p>
+                    <button
+                      onClick={loadBudget}
+                      className="mt-4 bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                    >
+                      Load Budget
+                    </button>
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
