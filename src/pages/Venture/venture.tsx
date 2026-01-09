@@ -3849,7 +3849,7 @@ export default function ChatPage() {
       {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
         progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) ||
         (progress.phase === 'KYC' && history.length > 0)) && (
-        <div className="hidden lg:flex flex-col gap-3 w-24 flex-shrink-0 border-r border-gray-200 bg-white/50 backdrop-blur-sm p-4 sticky top-0 h-screen overflow-y-auto">
+        <div className="hidden lg:flex flex-col gap-3 w-32 flex-shrink-0 border-r border-gray-200 bg-white/50 backdrop-blur-sm p-4 sticky top-0 h-screen overflow-y-auto">
           {/* Support Button */}
           {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
             progress.phase === ("BUSINESS_PLAN" as ProgressState['phase'])) && (
@@ -4270,7 +4270,7 @@ export default function ChatPage() {
             minHeight: "calc(100vh - 320px)"
           }}
         >
-          <div className={`max-w-4xl mx-auto space-y-4 ${(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) || progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) || (progress.phase === 'KYC' && history.length > 0)) ? 'lg:ml-0' : ''}`}>
+          <div className="max-w-4xl mx-auto space-y-4">
             {/* Chat History */}
             {history.map((pair, index) => (
               <div

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import SkillRatingForm from './SkillRatingForm';
 import QuestionDropdown from './QuestionDropdown';
+import FounderportFavicon from '../assets/images/home/Founderport_Favicon_Mariner.svg';
 
 interface SmartInputProps {
   value: string;
@@ -260,20 +261,26 @@ const SmartInput: React.FC<SmartInputProps> = ({
 
   if (showDropdown && dropdownOptions.length > 0) {
     return (
-      <QuestionDropdown
-        options={dropdownOptions}
-        onSubmit={handleDropdownSubmit}
-        placeholder={`Select ${dropdownType === 'yesno' ? 'Yes or No' : 'an option'}...`}
-        disabled={disabled}
-      />
+      <div className="w-full">
+        <QuestionDropdown
+          options={dropdownOptions}
+          onSubmit={handleDropdownSubmit}
+          placeholder={`Select ${dropdownType === 'yesno' ? 'Yes or No' : 'an option'}...`}
+          disabled={disabled}
+        />
+      </div>
     );
   }
 
   return (
     <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-white/50 p-3">
       <div className="flex items-center gap-2 sm:gap-3">
-        <div className="w-6 h-6 sm:w-7 sm:h-7 bg-gray-300 rounded-full flex items-center justify-center text-xs flex-shrink-0">
-          👤
+        <div className="w-8 h-8 sm:w-9 sm:h-9 bg-gray-300 rounded-full flex items-center justify-center text-xs flex-shrink-0 overflow-hidden">
+          <img 
+            src={FounderportFavicon} 
+            alt="User" 
+            className="w-[120%] h-[120%] object-contain"
+          />
         </div>
         <div className="flex-1 min-w-0">
           <textarea

@@ -40,7 +40,7 @@ const QuestionDropdown: React.FC<QuestionDropdownProps> = ({
     options.some(opt => opt.toLowerCase().includes('no'));
 
   return (
-    <div className="bg-gradient-to-br from-slate-50 to-teal-50 rounded-xl p-6 shadow-lg border border-white/50">
+    <div className="w-full bg-gradient-to-br from-slate-50 to-teal-50 rounded-xl p-6 shadow-lg border border-white/50">
       {/* Header */}
       <div className="text-center mb-4">
         <h3 className="text-lg font-bold text-gray-900 mb-2">
