@@ -71,8 +71,8 @@ const RecentVenturePage = () => {
   };
 
   const QUESTION_COUNTS: Record<string, number> = {
-    KYC: 19,
-    BUSINESS_PLAN: 46,
+    KYC: 6,
+    BUSINESS_PLAN: 45,
     ROADMAP: 1,
     IMPLEMENTATION: 10,
   };

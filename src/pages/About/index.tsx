@@ -198,15 +198,26 @@ export default function AboutUs() {
               variants={itemVariants}
               className="text-6xl md:text-7xl font-black bg-gradient-to-r from-teal-600 via-blue-600 to-indigo-600 bg-clip-text text-transparent mb-6 leading-tight"
             >
-              About Us
+              Who We Are
             </motion.h1>
             <motion.p
               variants={itemVariants}
               className="text-xl md:text-2xl text-gray-600 max-w-4xl mx-auto leading-relaxed font-light"
             >
-              Empowering entrepreneurs with intelligent, personalized guidance to transform 
+              We're Founderport — a platform dedicated to empowering entrepreneurs with intelligent, personalized guidance to transform 
               <span className="font-semibold text-teal-600"> ideas into successful ventures</span>
             </motion.p>
+            <motion.div
+              variants={itemVariants}
+              className="mt-8 max-w-3xl mx-auto text-gray-700 leading-relaxed"
+            >
+              <p className="text-lg mb-4">
+                At Founderport, we believe that starting a business shouldn't be overwhelming. That's why we've created Angel — your AI-powered mentor and assistant that guides you through every step of your entrepreneurial journey.
+              </p>
+              <p className="text-lg">
+                Whether you're testing an idea for the first time or ready to launch, Angel provides the structure, guidance, and expertise you need to build a successful business.
+              </p>
+            </motion.div>
           </motion.div>
 
           {/* Enhanced Interactive Sections */}

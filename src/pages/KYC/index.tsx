@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchNextQuestion } from '../../services/authService';
 import { toast } from 'react-toastify';
+import QuestionDropdown from '../../components/QuestionDropdown';
 
 interface ConversationPair {
   question: string;
@@ -48,6 +49,57 @@ export default function KycForm() {
     // If we have history, the next question number is history.length + 1
     // If no history, it's question 1
     return history.length + 1;
+  };
+
+  // 🎯 Helper to detect if current question is a choice-based question
+  const isChoiceQuestion = (questionText: string, questionNumber: number | null): boolean => {
+    // KYC choice questions: KYC.03, KYC.14, KYC.15, KYC.17
+    // Note: KYC.07 is a skill rating question (handled separately)
+    const choiceQuestionNumbers = [3, 14, 15, 17];
+    if (questionNumber && choiceQuestionNumbers.includes(questionNumber)) {
+      return true;
+    }
+    
+    // Also check question text for bullet points or choice indicators
+    const lowerText = questionText.toLowerCase();
+    const hasBulletPoints = questionText.includes('•') || questionText.includes('-');
+    const hasYesNo = (lowerText.includes('yes') && lowerText.includes('no')) || 
+                     (lowerText.includes('have you started a business before')) ||
+                     (lowerText.includes('are you planning to seek outside funding'));
+    const hasSelectAll = lowerText.includes('select all that apply') || 
+                         lowerText.includes('how do you plan to generate revenue') ||
+                         lowerText.includes('how do you prefer to learn');
+    
+    return hasBulletPoints || hasYesNo || hasSelectAll;
+  };
+
+  // 📋 Helper to extract options from question text
+  const extractOptions = (questionText: string): string[] => {
+    const options: string[] = [];
+    
+    // Extract bullet points (• or -)
+    const bulletPattern = /[•\-]\s*([^\n]+)/g;
+    let match;
+    while ((match = bulletPattern.exec(questionText)) !== null) {
+      const option = match[1].trim();
+      if (option && option.length > 0) {
+        options.push(option);
+      }
+    }
+    
+    // If no bullet points found, check for Yes/No pattern
+    if (options.length === 0) {
+      const lowerText = questionText.toLowerCase();
+      if (lowerText.includes('have you started a business before') || 
+          lowerText.includes('are you planning to seek outside funding')) {
+        // Extract Yes/No/Unsure from text
+        if (lowerText.includes('yes')) options.push('Yes');
+        if (lowerText.includes('no')) options.push('No');
+        if (lowerText.includes('unsure')) options.push('Unsure');
+      }
+    }
+    
+    return options;
   };
 
   useEffect(() => {
@@ -238,65 +290,95 @@ export default function KycForm() {
                 </div>
               </div>
               <div className="p-6">
-                <div className="space-y-4">
-                  <textarea
-                    className="w-full border-2 border-gray-200 rounded-lg p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none"
-                    rows={4}
-                    placeholder="Share your thoughts here..."
-                    value={currentInput}
-                    onChange={(e) => setCurrentInput(e.currentTarget.value)}
-                    onKeyDown={(e) => {
-                      if (e.shiftKey && e.key === 'Enter') {
-                        e.preventDefault();
-                        handleNext();
-                      }
-                    }}
-                    disabled={loading}
-                  />
-                  {/* Quick Commands */}
-                  <div className="flex flex-wrap gap-2">
-                    {['Support', 'Draft', 'Scrapping'].map((cmd) => (
-                      <button
-                        key={cmd}
-                        className="px-3 py-1 bg-gray-100 text-sm text-gray-700 rounded-full hover:bg-blue-100 transition"
-                        onClick={async () => {
-                          if (loading) return;
-                          const command = cmd;
-                          setCurrentInput(command);
-                          await handleNext(command, true); // Pass skipStep = true
+                {(() => {
+                  const isChoice = isChoiceQuestion(currentQuestion, currentQuestionNumber);
+                  const options = isChoice ? extractOptions(currentQuestion) : [];
+                  
+                  // Show QuestionDropdown for choice questions
+                  if (isChoice && options.length > 0) {
+                    return (
+                      <div className="space-y-4">
+                        <QuestionDropdown
+                          options={options}
+                          onSubmit={(value) => {
+                            // User must click "Submit" button - this is called only after submit
+                            handleNext(value);
+                          }}
+                          placeholder="Select an option..."
+                          disabled={loading}
+                        />
+                        {loading && (
+                          <div className="flex items-center justify-center py-4">
+                            <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                            <span className="ml-2 text-gray-600">Processing...</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+                  
+                  // Show textarea for text-based questions
+                  return (
+                    <div className="space-y-4">
+                      <textarea
+                        className="w-full border-2 border-gray-200 rounded-lg p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none"
+                        rows={4}
+                        placeholder="Share your thoughts here..."
+                        value={currentInput}
+                        onChange={(e) => setCurrentInput(e.currentTarget.value)}
+                        onKeyDown={(e) => {
+                          if (e.shiftKey && e.key === 'Enter') {
+                            e.preventDefault();
+                            handleNext();
+                          }
                         }}
-                      >
-                        {cmd}
-                      </button>
-                    ))}
+                        disabled={loading}
+                      />
+                      {/* Quick Commands */}
+                      <div className="flex flex-wrap gap-2">
+                        {['Support', 'Draft', 'Scrapping'].map((cmd) => (
+                          <button
+                            key={cmd}
+                            className="px-3 py-1 bg-gray-100 text-sm text-gray-700 rounded-full hover:bg-blue-100 transition"
+                            onClick={async () => {
+                              if (loading) return;
+                              const command = cmd;
+                              setCurrentInput(command);
+                              await handleNext(command, true); // Pass skipStep = true
+                            }}
+                          >
+                            {cmd}
+                          </button>
+                        ))}
+                      </div>
 
-                  </div>
-
-                  <div className="flex justify-between items-center">
-                    <p className="text-sm text-gray-500">
-                      {currentInput.length} characters
-                    </p>
-                    <button
-                      className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 disabled:hover:scale-100 flex items-center space-x-2"
-                      onClick={() => handleNext(currentInput)}
-                      disabled={!currentInput.trim() || loading}
-                    >
-                      {loading ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          <span>Processing...</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>Reply</span>
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                          </svg>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
+                      <div className="flex justify-between items-center">
+                        <p className="text-sm text-gray-500">
+                          {currentInput.length} characters
+                        </p>
+                        <button
+                          className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 disabled:hover:scale-100 flex items-center space-x-2"
+                          onClick={() => handleNext(currentInput)}
+                          disabled={!currentInput.trim() || loading}
+                        >
+                          {loading ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              <span>Processing...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Reply</span>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                              </svg>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>

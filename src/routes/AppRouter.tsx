@@ -197,6 +197,16 @@ const router = createBrowserRouter([
             errorElement: <Support />,
           },
           {
+            path: "/faq",
+            element: <Support />,
+            errorElement: <Support />,
+          },
+          {
+            path: "/contact",
+            element: <Support />,
+            errorElement: <Support />,
+          },
+          {
             path: "/services",
             element: <Services />,
             errorElement: <Services />,

@@ -98,8 +98,8 @@ const DISPLAY_FALLBACK_CONTEXT: Required<BusinessContextInfo> = {
 // Updated to include PLAN_TO_ROADMAP_TRANSITION phase
 
 const QUESTION_COUNTS = {
-  KYC: 19,  // Now 19 questions (removed privacy question)
-  BUSINESS_PLAN: 46,  // Restored to full 46 questions
+  KYC: 6,  // Updated to 6 questions (kept only: 1, 3, 7, 14, 15, 17)
+  BUSINESS_PLAN: 45,  // Updated to 45 questions (9 sections restructured)
   ROADMAP: 1,
   IMPLEMENTATION: 10,
 };

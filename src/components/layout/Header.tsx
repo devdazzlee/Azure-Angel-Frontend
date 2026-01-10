@@ -56,6 +56,14 @@ const NavBarContent: React.FC<NavBarContentProps> = ({ scrolled, toggleMenu, isO
           <>
             <motion.div whileHover={{ scale: 1.05 }} transition={{ duration: 0.2 }}>
               <Link
+                to="/ventures"
+                className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-5 py-2 rounded-full font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+              >
+                Your Business
+              </Link>
+            </motion.div>
+            <motion.div whileHover={{ scale: 1.05 }} transition={{ duration: 0.2 }}>
+              <Link
                 to="/profile"
                 className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-5 py-2 rounded-full font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2"
               >
@@ -147,6 +155,13 @@ const Header: React.FC = () => {
                   {isSessionActive && (
                     <>
                       <Link
+                        to="/ventures"
+                        onClick={() => setIsOpen(false)}
+                        className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-4 py-2 rounded-full font-semibold shadow-md transition-all flex items-center justify-center gap-2"
+                      >
+                        Your Business
+                      </Link>
+                      <Link
                         to="/profile"
                         onClick={() => setIsOpen(false)}
                         className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-4 py-2 rounded-full font-semibold shadow-md transition-all flex items-center justify-center gap-2"
@@ -203,6 +218,13 @@ const Header: React.FC = () => {
                   ))}
                   {isSessionActive && (
                     <>
+                      <Link
+                        to="/ventures"
+                        onClick={() => setIsOpen(false)}
+                        className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-4 py-2 rounded-full font-semibold shadow-md transition-all flex items-center justify-center gap-2"
+                      >
+                        Your Business
+                      </Link>
                       <Link
                         to="/profile"
                         onClick={() => setIsOpen(false)}

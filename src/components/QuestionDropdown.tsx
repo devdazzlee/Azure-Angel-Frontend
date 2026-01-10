@@ -19,7 +19,7 @@ const QuestionDropdown: React.FC<QuestionDropdownProps> = ({
   const handleOptionSelect = (value: string) => {
     setSelectedValue(value);
     setIsOpen(false);
-    onSubmit(value);
+    // Do NOT call onSubmit here - user must click "Submit" button to confirm selection
   };
 
   const getOptionIcon = (option: string) => {
@@ -59,17 +59,20 @@ const QuestionDropdown: React.FC<QuestionDropdownProps> = ({
         {options.map((option, index) => (
           <button
             key={index}
+            type="button"
             onClick={() => handleOptionSelect(option)}
             disabled={disabled}
+            tabIndex={-1}
             className={`
               group relative p-4 rounded-xl border-2 transition-all duration-200 text-left
               ${selectedValue === option
                 ? 'border-teal-500 bg-gradient-to-r from-teal-50 to-blue-50 shadow-md transform scale-[1.02]'
-                : 'border-gray-200 bg-white hover:border-teal-300 hover:shadow-md hover:transform hover:scale-[1.01]'
+                : 'border-gray-200 bg-white hover:border-teal-300 hover:shadow-md hover:transform hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-teal-300 focus:ring-offset-2'
               }
               ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
               ${isYesNoQuestion ? 'text-center' : ''}
             `}
+            aria-label={`Select option: ${option}`}
           >
             <div className={`flex items-center gap-3 ${isYesNoQuestion ? 'flex-col' : ''}`}>
               {/* Icon */}
@@ -115,7 +118,7 @@ const QuestionDropdown: React.FC<QuestionDropdownProps> = ({
 
       {/* Submit Button */}
       {selectedValue && (
-        <div className="flex justify-center">
+        <div className="flex justify-center mt-4">
           <button
             onClick={() => onSubmit(selectedValue)}
             disabled={disabled}
@@ -127,7 +130,7 @@ const QuestionDropdown: React.FC<QuestionDropdownProps> = ({
             "
           >
             <div className="flex items-center gap-2">
-              <span>Confirm Selection</span>
+              <span>Submit</span>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
