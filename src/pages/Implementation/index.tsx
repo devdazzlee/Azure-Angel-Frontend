@@ -6,7 +6,6 @@ import TaskCard from '../../components/TaskCard';
 import TaskCompletionModal from '../../components/TaskCompletionModal';
 import ServiceProviderModal from '../../components/ServiceProviderModal';
 import HelpModal from '../../components/HelpModal';
-import ComprehensiveSupport from '../../components/ComprehensiveSupport';
 import FloatingComprehensiveSupport from '../../components/FloatingComprehensiveSupport';
 import RoadmapDisplay from '../../components/RoadmapDisplay';
 import ImplementationCompletionModal from '../../components/ImplementationCompletionModal';
@@ -17,22 +16,18 @@ import { budgetService } from '../../services/budgetService';
 import type { Budget, BudgetItem } from '../../types/apiTypes';
 import { 
   Target, 
-  Users, 
-  Lightbulb,
   Rocket,
-  Phone,
-  Settings,
-  Megaphone,
-  Shield,
   DollarSign,
   FileText,
   Download,
   Building2,
   MapPin,
   Trophy,
-  AlertTriangle,
   Home,
-  ArrowLeft
+  ArrowLeft,
+  Shield,
+  Settings,
+  Megaphone
 } from 'lucide-react';
 
 interface ImplementationSubstep {
@@ -716,227 +711,280 @@ const Implementation: React.FC<ImplementationProps> = ({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 pb-20 sm:pb-0">
-      {/* Header - Better Spacing */}
-      <div className="bg-gradient-to-b from-white via-white to-gray-50/30 backdrop-blur-xl border-b border-gray-200/50 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 sm:pr-[440px] lg:pr-[500px]">
-          {/* Navigation Buttons */}
-          <div className="flex items-center gap-3 mb-6">
-            <button
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-teal-50/40 pb-20 sm:pb-0">
+      {/* Header - Premium Design */}
+      <div className="relative bg-white/80 backdrop-blur-2xl border-b border-gray-200/60 shadow-lg">
+        {/* Subtle pattern overlay */}
+        <div className="absolute inset-0 bg-gradient-to-r from-teal-500/5 via-transparent to-blue-500/5 pointer-events-none"></div>
+        
+        <div className="relative max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-6 sm:py-8">
+          {/* Navigation Buttons - Premium Style */}
+          <div className="flex items-center gap-3 mb-8">
+            <motion.button
               onClick={() => navigate('/')}
-              className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg text-gray-700 font-medium transition-all duration-200 hover:shadow-md"
+              className="group flex items-center gap-2.5 px-5 py-2.5 bg-white/90 hover:bg-white border border-gray-200/80 rounded-xl text-gray-700 font-semibold transition-all duration-300 hover:shadow-lg hover:border-teal-300/50 hover:-translate-y-0.5"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
-              <Home className="h-4 w-4" />
-              <span className="hidden sm:inline">Home</span>
-            </button>
-            <button
+              <Home className="h-4 w-4 group-hover:text-teal-600 transition-colors" />
+              <span className="hidden sm:inline text-sm">Home</span>
+            </motion.button>
+            <motion.button
               onClick={() => navigate(`/ventures/${sessionId}`)}
-              className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg text-gray-700 font-medium transition-all duration-200 hover:shadow-md"
+              className="group flex items-center gap-2.5 px-5 py-2.5 bg-white/90 hover:bg-white border border-gray-200/80 rounded-xl text-gray-700 font-semibold transition-all duration-300 hover:shadow-lg hover:border-teal-300/50 hover:-translate-y-0.5"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
-              <ArrowLeft className="h-4 w-4" />
-              <span className="hidden sm:inline">Back to Roadmap</span>
-              <span className="sm:hidden">Back</span>
-            </button>
+              <ArrowLeft className="h-4 w-4 group-hover:text-teal-600 transition-colors" />
+              <span className="hidden sm:inline text-sm">Back to Roadmap</span>
+              <span className="sm:hidden text-sm">Back</span>
+            </motion.button>
           </div>
           
-          {/* Row 1: Implementation Phase */}
-          <div className="flex flex-col gap-6 mb-4">
-            {/* Top Row - Title */}
-            <div className="flex-1">
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Implementation Phase</h1>
-              <p className="text-gray-600 mt-1">Turning your roadmap into actionable results</p>
-              <div className="flex items-center gap-2 mt-2">
+          {/* Hero Section - Premium Typography */}
+          <div className="mb-10">
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="flex items-start justify-between flex-wrap gap-6"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2.5 bg-gradient-to-br from-teal-500 to-blue-600 rounded-xl shadow-lg">
+                    <Rocket className="h-6 w-6 text-white" />
+                  </div>
+                  <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 leading-tight">
+                    Implementation Phase
+                  </h1>
+                </div>
+                <p className="text-base text-gray-600 font-medium ml-12 mb-3">
+                  Turning your roadmap into actionable results
+                </p>
+                <div className="flex items-center gap-3 ml-12">
+                  <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-50 to-blue-50 rounded-lg border border-teal-200/50">
                 {getPhaseIcon(currentTask.phase_name)}
-                <span className="text-sm font-medium text-gray-700">
+                    <span className="text-sm font-semibold text-gray-700">
                   {getPhaseName(currentTask.phase_name)}
                 </span>
               </div>
             </div>
-
+              </div>
+            </motion.div>
           </div>
 
-          {/* Row 2: Business Information and Progress - Side by Side */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-            {/* Business Information Card */}
-            <div className="relative bg-gradient-to-br from-teal-50 via-blue-50 to-indigo-50 border border-teal-200/50 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group animate-fadeIn">
-              {/* Animated background gradient */}
-              <div className="absolute inset-0 bg-gradient-to-r from-teal-400/0 via-blue-400/5 to-indigo-400/0 group-hover:from-teal-400/10 group-hover:via-blue-400/10 group-hover:to-indigo-400/10 transition-all duration-500"></div>
+          {/* Premium Cards Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-7xl mx-auto">
+            {/* Business Information Card - Premium Design */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+              className="relative group"
+            >
+              <div className="relative h-full bg-white/90 backdrop-blur-xl border border-gray-200/60 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-500 overflow-hidden">
+                {/* Premium gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-br from-teal-500/10 via-blue-500/5 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                
+                {/* Decorative corner accent */}
+                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-teal-400/20 to-transparent rounded-bl-full"></div>
               
               {/* Content */}
               <div className="relative z-10">
-                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2 animate-slideDown">
-                  <div className="p-2 bg-gradient-to-br from-teal-500 to-blue-600 rounded-lg shadow-md">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="p-3 bg-gradient-to-br from-teal-500 via-teal-600 to-blue-600 rounded-xl shadow-md transform group-hover:scale-105 transition-transform duration-300">
                     <Building2 className="h-5 w-5 text-white" />
                   </div>
-                  <span className="bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900 mb-0.5">
                     Business Information
-                  </span>
                 </h3>
-                
-                {businessContextLoading ? (
-                  // Beautiful Skeleton Loader
-                  <div className="space-y-3 animate-pulse">
-                    <div className="flex items-center gap-3 p-3 bg-white/60 rounded-xl backdrop-blur-sm">
-                      <div className="h-8 w-8 bg-gradient-to-br from-teal-200 to-blue-200 rounded-lg"></div>
-                      <div className="flex-1">
-                        <div className="h-4 bg-gradient-to-r from-teal-200 via-blue-200 to-indigo-200 rounded w-32 mb-2"></div>
-                        <div className="h-5 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-48"></div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-3 bg-white/60 rounded-xl backdrop-blur-sm">
-                      <div className="h-8 w-8 bg-gradient-to-br from-teal-200 to-blue-200 rounded-lg"></div>
-                      <div className="flex-1">
-                        <div className="h-4 bg-gradient-to-r from-teal-200 via-blue-200 to-indigo-200 rounded w-28 mb-2"></div>
-                        <div className="h-5 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-40"></div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-3 bg-white/60 rounded-xl backdrop-blur-sm">
-                      <div className="h-8 w-8 bg-gradient-to-br from-teal-200 to-blue-200 rounded-lg"></div>
-                      <div className="flex-1">
-                        <div className="h-4 bg-gradient-to-r from-teal-200 via-blue-200 to-indigo-200 rounded w-32 mb-2"></div>
-                        <div className="h-5 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-52"></div>
-                      </div>
+                      <p className="text-xs text-gray-500 font-medium">Company Details</p>
                     </div>
                   </div>
+                
+                {businessContextLoading ? (
+                    <div className="space-y-4 animate-pulse">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="flex items-center gap-4 p-5 bg-gray-50 rounded-2xl">
+                          <div className="h-12 w-12 bg-gray-200 rounded-xl"></div>
+                          <div className="flex-1 space-y-2">
+                            <div className="h-4 bg-gray-200 rounded w-24"></div>
+                            <div className="h-5 bg-gray-300 rounded w-40"></div>
+                      </div>
+                    </div>
+                      ))}
+                  </div>
                 ) : (
-                  // Beautiful Actual Content
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 p-3 bg-white/70 hover:bg-white/90 rounded-xl backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-md animate-slideInLeft">
-                      <div className="p-2 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg shadow-sm">
+                    <div className="space-y-4">
+                      <motion.div
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.2 }}
+                        className="group/item flex items-center gap-4 p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-teal-200 hover:shadow-md transition-all duration-300 cursor-pointer"
+                      >
+                        <div className="p-2.5 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg shadow-sm group-hover/item:scale-105 transition-transform">
                         <Building2 className="h-5 w-5 text-white" />
                       </div>
-                      <div className="flex-1">
-                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Business Name</p>
-                        <p className="text-base font-bold text-gray-900">{businessContext.business_name || currentTask?.business_context.business_name}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Business Name</p>
+                          <p className="text-base font-bold text-gray-900 truncate">{businessContext.business_name || currentTask?.business_context.business_name}</p>
                       </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-3 p-3 bg-white/70 hover:bg-white/90 rounded-xl backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-md animate-slideInLeft animation-delay-100">
-                      <div className="p-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-sm">
+                      </motion.div>
+                      
+                      <motion.div
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.3 }}
+                        className="group/item flex items-center gap-4 p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all duration-300 cursor-pointer"
+                      >
+                        <div className="p-2.5 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-sm group-hover/item:scale-105 transition-transform">
                         <Target className="h-5 w-5 text-white" />
                       </div>
-                      <div className="flex-1">
-                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Industry</p>
-                        <p className="text-base font-semibold text-gray-800">{businessContext.industry || currentTask?.business_context.industry}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Industry</p>
+                          <p className="text-base font-bold text-gray-900 truncate">{businessContext.industry || currentTask?.business_context.industry}</p>
                       </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-3 p-3 bg-white/70 hover:bg-white/90 rounded-xl backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-md animate-slideInLeft animation-delay-200">
-                      <div className="p-2 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg shadow-sm">
+                      </motion.div>
+                      
+                      <motion.div
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.4 }}
+                        className="group/item flex items-center gap-4 p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-indigo-200 hover:shadow-md transition-all duration-300 cursor-pointer"
+                      >
+                        <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg shadow-sm group-hover/item:scale-105 transition-transform">
                         <MapPin className="h-5 w-5 text-white" />
                       </div>
-                      <div className="flex-1">
-                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Location</p>
-                        <p className="text-base font-semibold text-gray-800">{businessContext.location || currentTask?.business_context.location}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Location</p>
+                          <p className="text-base font-bold text-gray-900 truncate">{businessContext.location || currentTask?.business_context.location}</p>
                       </div>
-                    </div>
+                      </motion.div>
                   </div>
                 )}
               </div>
             </div>
+            </motion.div>
 
-            {/* Implementation Progress Card - Subtle Colors */}
-            <div className="relative bg-gradient-to-br from-teal-50 via-blue-50 to-indigo-50 border border-teal-200/50 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group animate-fadeIn">
-              {/* Subtle background pattern */}
-              <div className="absolute inset-0 bg-gradient-to-r from-teal-100/30 via-blue-100/30 to-indigo-100/30 opacity-50 group-hover:opacity-70 transition-opacity duration-500"></div>
+            {/* Implementation Progress Card - Premium Design */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="relative group"
+            >
+              <div className="relative h-full bg-white/90 backdrop-blur-xl border border-gray-200/60 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-500 overflow-hidden">
+                {/* Premium gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-teal-500/5 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                
+                {/* Decorative corner accent */}
+                <div className="absolute top-0 left-0 w-32 h-32 bg-gradient-to-br from-blue-400/20 to-transparent rounded-br-full"></div>
               
               {/* Content */}
               <div className="relative z-10">
-                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-start justify-between mb-6 flex-wrap gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="p-3 bg-gradient-to-br from-teal-500 to-blue-600 rounded-xl shadow-md">
-                      <Target className="h-6 w-6 text-white" />
+                      <div className="p-3 bg-gradient-to-br from-blue-500 via-teal-500 to-blue-600 rounded-xl shadow-md transform group-hover:scale-105 transition-transform duration-300">
+                        <Trophy className="h-5 w-5 text-white" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold text-gray-900">Implementation Progress</h3>
-                      <p className="text-sm text-gray-600">Track your journey to success</p>
+                        <h3 className="text-xl font-bold text-gray-900 mb-0.5">Progress Tracker</h3>
+                        <p className="text-xs text-gray-500 font-medium">Your implementation journey</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-3xl font-bold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
+                      <div className="text-4xl sm:text-5xl font-black bg-gradient-to-r from-blue-600 via-teal-600 to-blue-700 bg-clip-text text-transparent leading-none">
                       {progressPercent}%
                     </div>
-                    <p className="text-xs text-gray-600">Complete</p>
+                      <p className="text-xs font-semibold text-gray-600 mt-1">Complete</p>
                   </div>
                 </div>
 
-                {/* Progress Bar */}
-                <div className="mb-4">
-                  <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-teal-500 to-blue-500 rounded-full transition-all duration-1000 ease-out shadow-sm relative overflow-hidden"
-                      style={{ width: `${progressPercent}%` }}
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
-                    </div>
+                  {/* Premium Progress Bar */}
+                  <div className="mb-6">
+                    <div className="h-3 bg-gray-100 rounded-full overflow-hidden shadow-inner">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${progressPercent}%` }}
+                        transition={{ duration: 1.5, ease: "easeOut" }}
+                        className="h-full bg-gradient-to-r from-blue-500 via-teal-500 to-blue-600 rounded-full relative overflow-hidden shadow-md"
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
+                      </motion.div>
                   </div>
                 </div>
 
-                {/* Stats Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="bg-white/80 backdrop-blur-sm rounded-lg p-3 border border-gray-200 shadow-sm">
-                    <div className="text-2xl font-bold text-gray-900">
+                  {/* Premium Stats Grid */}
+                  <div className="grid grid-cols-2 gap-3 mb-5">
+                    <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100 hover:border-teal-200 hover:shadow-md transition-all duration-300 group/stat">
+                      <div className="text-3xl font-black text-gray-900 mb-1.5 group-hover/stat:scale-105 transition-transform inline-block">
                       {completedMainTasks}
                     </div>
-                    <div className="text-xs text-gray-600 mt-1">Tasks Done</div>
+                      <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Tasks Done</div>
                   </div>
-                  <div className="bg-white/80 backdrop-blur-sm rounded-lg p-3 border border-gray-200 shadow-sm">
-                    <div className="text-2xl font-bold text-gray-900">
+                    <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all duration-300 group/stat">
+                      <div className="text-3xl font-black text-gray-900 mb-1.5 group-hover/stat:scale-105 transition-transform inline-block">
                       {(progress as any).substeps_completed ?? completedTasks.filter(t => t.includes('_substep_')).length}
                     </div>
-                    <div className="text-xs text-gray-600 mt-1">Steps Done</div>
+                      <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Steps Done</div>
                   </div>
-                  <div className="bg-white/80 backdrop-blur-sm rounded-lg p-3 border border-gray-200 shadow-sm">
-                    <div className="text-2xl font-bold text-gray-900">
+                    <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100 hover:border-indigo-200 hover:shadow-md transition-all duration-300 group/stat">
+                      <div className="text-3xl font-black text-gray-900 mb-1.5 group-hover/stat:scale-105 transition-transform inline-block">
                       {progress.phases_completed ?? 0}
                     </div>
-                    <div className="text-xs text-gray-600 mt-1">Phases Done</div>
+                      <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Phases Done</div>
                   </div>
-                  <div className="bg-white/80 backdrop-blur-sm rounded-lg p-3 border border-gray-200 shadow-sm">
-                    <div className="text-2xl font-bold text-gray-900">
+                    <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100 hover:border-rose-200 hover:shadow-md transition-all duration-300 group/stat">
+                      <div className="text-3xl font-black text-gray-900 mb-1.5 group-hover/stat:scale-105 transition-transform inline-block">
                       {Math.max(0, totalTasks - completedMainTasks)}
                     </div>
-                    <div className="text-xs text-gray-600 mt-1">Remaining</div>
+                      <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Remaining</div>
                   </div>
                 </div>
 
-                {/* Milestone */}
+                  {/* Premium Milestone */}
                 {progress.milestone && (
-                  <div className="mt-4 flex items-center gap-2 bg-white/80 backdrop-blur-sm rounded-lg p-3 border border-gray-200 shadow-sm">
-                    <Rocket className="h-5 w-5 text-teal-600" />
+                    <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-teal-50 via-blue-50 to-indigo-50 rounded-xl border border-teal-200/50 shadow-sm">
+                      <div className="p-2.5 bg-gradient-to-br from-teal-500 to-blue-600 rounded-lg shadow-md">
+                        <Rocket className="h-5 w-5 text-white" />
+                      </div>
                     <div className="flex-1">
-                      <p className="text-xs text-gray-600">Current Milestone</p>
-                      <p className="text-sm font-semibold text-gray-900">{progress.milestone}</p>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-0.5">Current Milestone</p>
+                        <p className="text-base font-bold text-gray-900">{progress.milestone}</p>
                     </div>
                   </div>
                 )}
               </div>
             </div>
+            </motion.div>
           </div>
         </div>
       </div>
 
-      {/* Tab Navigation - Redesigned */}
-      <div className="bg-gradient-to-b from-white via-white to-gray-50/50 border-b border-gray-200/50 sticky top-0 z-30 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 sm:pr-[440px] lg:pr-[500px]">
-          <div className="flex gap-1">
+      {/* Premium Tab Navigation */}
+      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-2xl border-b border-gray-200/60 shadow-lg">
+        <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
+          <div className="flex gap-2">
             <motion.button
               onClick={() => handleTabChange('task')}
-              className={`relative py-4 px-6 font-medium text-sm rounded-t-lg transition-all ${
+              className={`relative py-4 px-6 font-semibold text-sm rounded-t-xl transition-all duration-300 ${
                 activeTab === 'task'
-                  ? 'text-teal-700'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'text-teal-700 bg-gradient-to-b from-teal-50/50 to-white'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50/50'
               }`}
-              whileHover={{ scale: 1.02 }}
+              whileHover={{ scale: 1.02, y: -1 }}
               whileTap={{ scale: 0.98 }}
             >
               <div className="flex items-center gap-2">
+                <div className={`p-1.5 rounded-lg ${activeTab === 'task' ? 'bg-teal-100' : 'bg-gray-100'}`}>
                 <Target className={`h-4 w-4 ${activeTab === 'task' ? 'text-teal-600' : 'text-gray-500'}`} />
+                </div>
                 <span>Current Task</span>
               </div>
               {activeTab === 'task' && (
                 <motion.div
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-teal-500 to-blue-500"
+                  className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-500 via-blue-500 to-teal-500 rounded-t-full"
                   layoutId="activeTab"
                   initial={false}
                   transition={{ type: "spring", stiffness: 500, damping: 30 }}
@@ -945,21 +993,23 @@ const Implementation: React.FC<ImplementationProps> = ({
             </motion.button>
             <motion.button
               onClick={() => handleTabChange('roadmap')}
-              className={`relative py-4 px-6 font-medium text-sm rounded-t-lg transition-all ${
+              className={`relative py-4 px-6 font-semibold text-sm rounded-t-xl transition-all duration-300 ${
                 activeTab === 'roadmap'
-                  ? 'text-teal-700'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'text-teal-700 bg-gradient-to-b from-teal-50/50 to-white'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50/50'
               }`}
-              whileHover={{ scale: 1.02 }}
+              whileHover={{ scale: 1.02, y: -1 }}
               whileTap={{ scale: 0.98 }}
             >
               <div className="flex items-center gap-2">
+                <div className={`p-1.5 rounded-lg ${activeTab === 'roadmap' ? 'bg-teal-100' : 'bg-gray-100'}`}>
                 <FileText className={`h-4 w-4 ${activeTab === 'roadmap' ? 'text-teal-600' : 'text-gray-500'}`} />
+                </div>
                 <span>Full Roadmap</span>
               </div>
               {activeTab === 'roadmap' && (
                 <motion.div
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-teal-500 to-blue-500"
+                  className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-500 via-blue-500 to-teal-500 rounded-t-full"
                   layoutId="activeTab"
                   initial={false}
                   transition={{ type: "spring", stiffness: 500, damping: 30 }}
@@ -968,21 +1018,23 @@ const Implementation: React.FC<ImplementationProps> = ({
             </motion.button>
             <motion.button
               onClick={() => handleTabChange('budget')}
-              className={`relative py-4 px-6 font-medium text-sm rounded-t-lg transition-all ${
+              className={`relative py-4 px-6 font-semibold text-sm rounded-t-xl transition-all duration-300 ${
                 activeTab === 'budget'
-                  ? 'text-teal-700'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'text-teal-700 bg-gradient-to-b from-teal-50/50 to-white'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50/50'
               }`}
-              whileHover={{ scale: 1.02 }}
+              whileHover={{ scale: 1.02, y: -1 }}
               whileTap={{ scale: 0.98 }}
             >
               <div className="flex items-center gap-2">
+                <div className={`p-1.5 rounded-lg ${activeTab === 'budget' ? 'bg-teal-100' : 'bg-gray-100'}`}>
                 <DollarSign className={`h-4 w-4 ${activeTab === 'budget' ? 'text-teal-600' : 'text-gray-500'}`} />
+                </div>
                 <span>Budget</span>
               </div>
               {activeTab === 'budget' && (
                 <motion.div
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-teal-500 to-blue-500"
+                  className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-500 via-blue-500 to-teal-500 rounded-t-full"
                   layoutId="activeTab"
                   initial={false}
                   transition={{ type: "spring", stiffness: 500, damping: 30 }}
@@ -993,8 +1045,8 @@ const Implementation: React.FC<ImplementationProps> = ({
         </div>
       </div>
 
-      {/* Main Content - Better Spacing with Right Padding for Floating Support */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 sm:pr-[440px] lg:pr-[500px]">
+      {/* Main Content - Premium Spacing */}
+      <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-6 sm:py-8">
         <AnimatePresence mode="wait">
           {activeTab === 'task' && (
             <motion.div
@@ -1029,33 +1081,37 @@ const Implementation: React.FC<ImplementationProps> = ({
               transition={{ duration: 0.3 }}
               className="w-full"
             >
-              <div className="bg-white/90 backdrop-blur-xl border border-gray-200/50 rounded-xl p-4 sm:p-6 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-              <div>
-                <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Full Launch Roadmap</h2>
-                <p className="text-sm sm:text-base text-gray-600 mt-1">Complete roadmap in table format</p>
-              </div>
+              <div className="bg-white/95 backdrop-blur-xl border border-gray-200/60 rounded-2xl p-6 shadow-lg">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-1">Full Launch Roadmap</h2>
+                    <p className="text-sm text-gray-600 font-medium">Complete roadmap in table format</p>
+                  </div>
               {roadmapContent && (
-                <a
+                    <motion.a
                   href="#"
                   onClick={(e) => {
                     e.preventDefault();
-                    // The RoadmapDisplay component has its own export button, so we'll just show a message
                     toast.info('Use the export button in the roadmap view below');
                   }}
-                  className="flex items-center justify-center gap-2 bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base whitespace-nowrap"
+                      className="flex items-center justify-center gap-2 bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white px-5 py-2.5 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-300 transform hover:-translate-y-0.5 whitespace-nowrap text-sm"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
                 >
-                  <Download className="h-4 w-4" />
+                      <Download className="h-5 w-5" />
                   <span className="hidden sm:inline">Export Available Below</span>
                   <span className="sm:hidden">Export Below</span>
-                </a>
+                    </motion.a>
               )}
             </div>
             {roadmapLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500"></div>
-                <span className="ml-4 text-gray-600">Loading roadmap...</span>
-              </div>
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <div className="relative">
+                      <div className="animate-spin rounded-full h-12 w-12 border-4 border-teal-200 border-t-teal-600"></div>
+                      <div className="absolute inset-0 animate-ping rounded-full h-12 w-12 border-4 border-teal-400 opacity-20"></div>
+                    </div>
+                    <span className="mt-4 text-base font-semibold text-gray-700">Loading roadmap...</span>
+                  </div>
             ) : roadmapContent ? (
               <RoadmapDisplay
                 roadmapContent={roadmapContent}
@@ -1065,15 +1121,21 @@ const Implementation: React.FC<ImplementationProps> = ({
                 hideStartButton={true}
               />
             ) : (
-              <div className="text-center py-12">
-                <p className="text-gray-600">No roadmap content available</p>
-                <button
-                  onClick={loadRoadmapContent}
-                  className="mt-4 bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                >
-                  Load Roadmap
-                </button>
-              </div>
+                  <div className="text-center py-12">
+                    <div className="inline-flex p-3 bg-gradient-to-br from-teal-100 to-blue-100 rounded-xl mb-4">
+                      <FileText className="h-10 w-10 text-teal-600" />
+                    </div>
+                    <p className="text-lg font-semibold text-gray-700 mb-2">No roadmap content available</p>
+                    <p className="text-sm text-gray-500 mb-5">Load your roadmap to view the complete plan</p>
+                    <motion.button
+                      onClick={loadRoadmapContent}
+                      className="bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white px-6 py-2.5 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-300 transform hover:-translate-y-0.5"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      Load Roadmap
+                    </motion.button>
+                  </div>
             )}
               </div>
             </motion.div>
@@ -1088,11 +1150,14 @@ const Implementation: React.FC<ImplementationProps> = ({
               transition={{ duration: 0.3 }}
               className="w-full"
             >
-              <div className="bg-white/90 backdrop-blur-xl border border-gray-200/50 rounded-xl p-4 sm:p-6 shadow-sm">
+              <div className="bg-white/95 backdrop-blur-xl border border-gray-200/60 rounded-2xl p-6 shadow-lg">
                 {budgetLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500"></div>
-                    <span className="ml-4 text-gray-600">Loading budget...</span>
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <div className="relative">
+                      <div className="animate-spin rounded-full h-12 w-12 border-4 border-teal-200 border-t-teal-600"></div>
+                      <div className="absolute inset-0 animate-ping rounded-full h-12 w-12 border-4 border-teal-400 opacity-20"></div>
+                    </div>
+                    <span className="mt-4 text-base font-semibold text-gray-700">Loading budget data...</span>
                   </div>
                 ) : budget ? (
                   <BudgetDashboard
@@ -1105,13 +1170,19 @@ const Implementation: React.FC<ImplementationProps> = ({
                   />
                 ) : (
                   <div className="text-center py-12">
-                    <p className="text-gray-600">No budget data available</p>
-                    <button
+                    <div className="inline-flex p-3 bg-gradient-to-br from-teal-100 to-blue-100 rounded-xl mb-4">
+                      <DollarSign className="h-10 w-10 text-teal-600" />
+                    </div>
+                    <p className="text-lg font-semibold text-gray-700 mb-2">No budget data available</p>
+                    <p className="text-sm text-gray-500 mb-5">Create your first budget to start tracking expenses</p>
+                    <motion.button
                       onClick={loadBudget}
-                      className="mt-4 bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                      className="bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white px-6 py-2.5 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-300 transform hover:-translate-y-0.5"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
                     >
-                      Load Budget
-                    </button>
+                      Initialize Budget
+                    </motion.button>
                   </div>
                 )}
               </div>
