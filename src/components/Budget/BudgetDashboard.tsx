@@ -95,15 +95,15 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       className="h-full"
     >
       <Card className="h-full border-2 hover:border-opacity-50 transition-all duration-300 shadow-lg hover:shadow-xl">
-        <CardContent className="p-6">
+        <CardContent className="p-4 sm:p-6">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600 mb-1">{title}</p>
+            <div className="flex-1 min-w-0 pr-2">
+              <p className="text-xs sm:text-sm font-medium text-gray-600 mb-1 truncate">{title}</p>
               <motion.p
                 initial={{ scale: 0.8 }}
                 animate={{ scale: 1 }}
                 transition={{ delay: index * 0.1 + 0.3, type: "spring" }}
-                className={`text-3xl font-bold ${color}`}
+                className={`text-xl sm:text-2xl md:text-3xl font-bold ${color} break-words`}
               >
                 {value}
               </motion.p>
@@ -112,7 +112,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: index * 0.1 + 0.5 }}
-                  className={`text-sm font-semibold mt-1 ${trend >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                  className={`text-xs sm:text-sm font-semibold mt-1 ${trend >= 0 ? 'text-green-600' : 'text-red-600'}`}
                 >
                   {trend >= 0 ? '↑' : '↓'} {trend >= 0 ? '+' : ''}{trend}%
                 </motion.p>
@@ -121,8 +121,9 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
             <motion.div
               animate={{ rotate: [0, 10, -10, 0] }}
               transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+              className="flex-shrink-0"
             >
-              <Icon className={`w-10 h-10 ${color}`} />
+              <Icon className={`w-8 h-8 sm:w-10 sm:h-10 ${color}`} />
             </motion.div>
           </div>
         </CardContent>
@@ -133,10 +134,10 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Budget Dashboard</h2>
-          <p className="text-gray-600">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Budget Dashboard</h2>
+          <p className="text-sm sm:text-base text-gray-600">
             {showActuals ? 'Actual' : 'Estimated'} budget for Year 1
           </p>
         </div>
@@ -159,7 +160,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <SummaryCard
           title="Initial Investment"
           value={formatCurrency(budget.initial_investment)}
@@ -195,10 +196,10 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
 
       {/* Main Content */}
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="items">Manage Items</TabsTrigger>
-          <TabsTrigger value="analysis">Analysis</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-3 text-xs sm:text-sm">
+          <TabsTrigger value="overview" className="text-xs sm:text-sm">Overview</TabsTrigger>
+          <TabsTrigger value="items" className="text-xs sm:text-sm">Manage Items</TabsTrigger>
+          <TabsTrigger value="analysis" className="text-xs sm:text-sm">Analysis</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
@@ -210,7 +211,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
               exit={{ opacity: 0 }}
               className="space-y-6"
             >
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
                 {/* Expenses Pie Chart */}
                 <motion.div
                   initial={{ opacity: 0, x: -20 }}
@@ -289,7 +290,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         </TabsContent>
 
         <TabsContent value="analysis" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
             {/* Budget Variance */}
             <Card>
               <CardHeader>

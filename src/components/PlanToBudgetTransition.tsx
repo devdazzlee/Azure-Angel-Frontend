@@ -271,4 +271,3 @@ const PlanToBudgetTransition: React.FC<PlanToBudgetTransitionProps> = ({
 };
 
 export default PlanToBudgetTransition;
-

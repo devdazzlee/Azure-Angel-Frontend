@@ -107,7 +107,7 @@ const BudgetPieChart: React.FC<BudgetPieChartProps> = ({
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2 }}
       >
-        <ResponsiveContainer width="100%" height={height}>
+        <ResponsiveContainer width="100%" height={height} className="min-h-[250px] sm:min-h-[300px]">
           <PieChart>
             <Pie
               data={chartData}
@@ -146,21 +146,22 @@ const BudgetPieChart: React.FC<BudgetPieChartProps> = ({
           transition={{ delay: 0.3 }}
           className="mt-4"
         >
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-2 px-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-2 px-1 sm:px-2">
             {chartData.map((entry, index) => (
               <motion.div
                 key={`legend-${index}`}
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.3 + index * 0.05 }}
-                className="flex items-center gap-1.5 bg-white px-2 py-1.5 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+                className="flex items-center gap-1.5 bg-white px-2 py-1.5 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow text-xs sm:text-sm"
               >
                 <div
                   className="w-3 h-3 rounded-sm flex-shrink-0"
                   style={{ backgroundColor: entry.color }}
                 />
-                <span className="text-xs font-medium text-gray-700 whitespace-nowrap truncate">
-                  {entry.name}: {formatCurrency(entry.value)}
+                <span className="font-medium text-gray-700 truncate flex-1 min-w-0">
+                  <span className="block truncate">{entry.name}</span>
+                  <span className="block text-xs text-gray-500">{formatCurrency(entry.value)}</span>
                 </span>
               </motion.div>
             ))}
@@ -172,7 +173,7 @@ const BudgetPieChart: React.FC<BudgetPieChartProps> = ({
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
-        className="mt-4 grid grid-cols-2 gap-4 text-sm"
+        className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 text-sm"
       >
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200 shadow-sm">
           <p className="text-gray-600 mb-1">Total Budget</p>

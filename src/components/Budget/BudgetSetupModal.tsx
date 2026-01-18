@@ -332,7 +332,7 @@ const BudgetSetupModal: React.FC<BudgetSetupModalProps> = ({
               </p>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 min-w-0 w-full">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 min-w-0 w-full">
               {/* Expenses */}
               <Card className="min-w-0 w-full overflow-visible">
                 <CardHeader>
@@ -483,30 +483,33 @@ const BudgetSetupModal: React.FC<BudgetSetupModalProps> = ({
             >
               <Card className="bg-gradient-to-br from-gray-50 to-blue-50 border-2 border-blue-200">
                 <CardContent className="pt-6">
-                  <div className="grid grid-cols-3 gap-4 text-center mb-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 text-center mb-4 sm:mb-6">
                     <motion.div
                       initial={{ scale: 0.8 }}
                       animate={{ scale: 1 }}
                       transition={{ delay: 0.4, type: "spring" }}
+                      className="bg-white/50 rounded-lg p-3 sm:p-4"
                     >
-                      <p className="text-sm text-gray-600 mb-1">Total Expenses</p>
-                      <p className="text-2xl font-bold text-red-600">${totalExpenses.toLocaleString()}</p>
+                      <p className="text-xs sm:text-sm text-gray-600 mb-1">Total Expenses</p>
+                      <p className="text-lg sm:text-2xl font-bold text-red-600 break-words">${totalExpenses.toLocaleString()}</p>
                     </motion.div>
                     <motion.div
                       initial={{ scale: 0.8 }}
                       animate={{ scale: 1 }}
                       transition={{ delay: 0.5, type: "spring" }}
+                      className="bg-white/50 rounded-lg p-3 sm:p-4"
                     >
-                      <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
-                      <p className="text-2xl font-bold text-green-600">${totalRevenue.toLocaleString()}</p>
+                      <p className="text-xs sm:text-sm text-gray-600 mb-1">Total Revenue</p>
+                      <p className="text-lg sm:text-2xl font-bold text-green-600 break-words">${totalRevenue.toLocaleString()}</p>
                     </motion.div>
                     <motion.div
                       initial={{ scale: 0.8 }}
                       animate={{ scale: 1 }}
                       transition={{ delay: 0.6, type: "spring" }}
+                      className="bg-white/50 rounded-lg p-3 sm:p-4"
                     >
-                      <p className="text-sm text-gray-600 mb-1">Net Budget</p>
-                      <p className={`text-2xl font-bold ${netBudget >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <p className="text-xs sm:text-sm text-gray-600 mb-1">Net Budget</p>
+                      <p className={`text-lg sm:text-2xl font-bold break-words ${netBudget >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         ${netBudget.toLocaleString()}
                       </p>
                     </motion.div>
@@ -518,38 +521,56 @@ const BudgetSetupModal: React.FC<BudgetSetupModalProps> = ({
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       transition={{ delay: 0.7 }}
-                      className="bg-white rounded-lg p-6 border border-gray-200"
+                      className="bg-white rounded-lg p-3 sm:p-4 md:p-6 border border-gray-200 overflow-x-auto"
                     >
-                      <p className="text-lg font-bold text-gray-800 mb-4 text-center">Budget Preview</p>
-                      <BudgetPieChart
-                        data={estimatedExpenses.map((exp, idx) => ({
-                          name: exp.name,
-                          estimated_total: exp.estimated_amount,
-                          actual_total: 0,
-                          items: [exp],
-                          color: idx % 2 === 0 ? '#ef4444' : '#dc2626'
-                        }))}
-                        currency="$"
-                        height={400}
-                        showLegend={true}
-                      />
+                      <p className="text-base sm:text-lg font-bold text-gray-800 mb-3 sm:mb-4 text-center">Budget Preview</p>
+                      <div className="w-full min-w-[280px]">
+                        <div className="hidden sm:block">
+                          <BudgetPieChart
+                            data={estimatedExpenses.map((exp, idx) => ({
+                              name: exp.name,
+                              estimated_total: exp.estimated_amount,
+                              actual_total: 0,
+                              items: [exp],
+                              color: idx % 2 === 0 ? '#ef4444' : '#dc2626'
+                            }))}
+                            currency="$"
+                            height={400}
+                            showLegend={true}
+                          />
+                        </div>
+                        <div className="block sm:hidden">
+                          <BudgetPieChart
+                            data={estimatedExpenses.map((exp, idx) => ({
+                              name: exp.name,
+                              estimated_total: exp.estimated_amount,
+                              actual_total: 0,
+                              items: [exp],
+                              color: idx % 2 === 0 ? '#ef4444' : '#dc2626'
+                            }))}
+                            currency="$"
+                            height={300}
+                            showLegend={true}
+                          />
+                        </div>
+                      </div>
                     </motion.div>
                   )}
                 </CardContent>
               </Card>
             </motion.div>
 
-            <div className="flex justify-between gap-4 mt-6">
+            <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4 mt-4 sm:mt-6">
               <Button 
                 variant="outline" 
                 onClick={() => setStep(1)}
-                className="border-2 border-gray-300 hover:border-blue-500 hover:bg-blue-50 text-gray-700 hover:text-blue-700 font-semibold px-6 py-2 shadow-md hover:shadow-lg transition-all"
+                className="border-2 border-gray-300 hover:border-blue-500 hover:bg-blue-50 text-gray-700 hover:text-blue-700 font-semibold px-4 sm:px-6 py-2 text-sm sm:text-base shadow-md hover:shadow-lg transition-all w-full sm:w-auto"
               >
                 Back
               </Button>
               <Button 
                 onClick={handleComplete} 
-                className="flex items-center gap-2 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 hover:from-green-600 hover:via-emerald-600 hover:to-teal-600 text-white font-bold px-8 py-2 shadow-xl hover:shadow-2xl transition-all"
+                className="flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 hover:from-green-600 hover:via-emerald-600 hover:to-teal-600 text-white font-bold px-6 sm:px-8 py-2 text-sm sm:text-base shadow-xl hover:shadow-2xl transition-all w-full sm:w-auto"
               >
                 Complete Budget Setup
                 <ArrowRight className="w-4 h-4" />
@@ -567,7 +588,7 @@ const BudgetSetupModal: React.FC<BudgetSetupModalProps> = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
         showCloseButton={false}
-        className="!max-w-[80vw] !w-[80vw] !min-w-0 max-h-[95vh] overflow-y-auto bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 border-2 border-blue-200 !p-4"
+        className="!max-w-[95vw] sm:!max-w-[90vw] md:!max-w-[80vw] !w-[95vw] sm:!w-[90vw] md:!w-[80vw] !min-w-0 max-h-[95vh] overflow-y-auto bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 border-2 border-blue-200 !p-3 sm:!p-4"
       >
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between">
