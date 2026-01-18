@@ -1,5 +1,6 @@
 import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { motion } from 'framer-motion';
 import type { BudgetItem, BudgetCategory } from '@/types/apiTypes';
 
 interface BudgetPieChartProps {
@@ -35,15 +36,19 @@ const BudgetPieChart: React.FC<BudgetPieChartProps> = ({
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-          <p className="font-semibold text-gray-900">{payload[0].name}</p>
-          <p className="text-sm text-gray-600">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-white p-4 border border-gray-200 rounded-lg shadow-xl backdrop-blur-sm"
+        >
+          <p className="font-semibold text-gray-900 mb-1">{payload[0].name}</p>
+          <p className="text-lg font-bold" style={{ color: payload[0].payload.color }}>
             {formatCurrency(payload[0].value)}
           </p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-500 mt-1">
             {payload[0].payload.percentage}% of total
           </p>
-        </div>
+        </motion.div>
       );
     }
     return null;
@@ -78,60 +83,109 @@ const BudgetPieChart: React.FC<BudgetPieChartProps> = ({
     color: COLORS[index % COLORS.length]
   }));
 
+  const total = data.reduce((sum, cat) => sum + (cat.estimated_total || cat.actual_total), 0);
+
   return (
-    <div className="w-full">
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.5 }}
+      className="w-full"
+    >
       {title && (
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 text-center">
+        <motion.h3
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-lg font-semibold text-gray-900 mb-4 text-center"
+        >
           {title}
-        </h3>
+        </motion.h3>
       )}
       
-      <ResponsiveContainer width="100%" height={height}>
-        <PieChart>
-          <Pie
-            data={chartData}
-            cx="50%"
-            cy="50%"
-            labelLine={false}
-            label={CustomLabel}
-            outerRadius={Math.min(height, 400) / 2 - 40}
-            fill="#8884d8"
-            dataKey="value"
-          >
-            {chartData.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={entry.color} />
-            ))}
-          </Pie>
-          
-          <Tooltip content={<CustomTooltip />} />
-          
-          {showLegend && (
-            <Legend 
-              verticalAlign="bottom" 
-              height={36}
-              formatter={(value: string, entry: any) => (
-                <span className="text-sm text-gray-700">
-                  {value}: {formatCurrency(entry.payload.value)}
-                </span>
-              )}
-            />
-          )}
-        </PieChart>
-      </ResponsiveContainer>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.2 }}
+      >
+        <ResponsiveContainer width="100%" height={height}>
+          <PieChart>
+            <Pie
+              data={chartData}
+              cx="50%"
+              cy="50%"
+              labelLine={false}
+              label={CustomLabel}
+              outerRadius={Math.min(height, 400) / 2 - 40}
+              fill="#8884d8"
+              dataKey="value"
+              animationBegin={0}
+              animationDuration={1500}
+              animationEasing="ease-out"
+            >
+              {chartData.map((entry, index) => (
+                <Cell 
+                  key={`cell-${index}`} 
+                  fill={entry.color}
+                  style={{
+                    filter: 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1))',
+                    transition: 'all 0.3s ease'
+                  }}
+                />
+              ))}
+            </Pie>
+            
+            <Tooltip content={<CustomTooltip />} />
+          </PieChart>
+        </ResponsiveContainer>
+      </motion.div>
       
-      <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
-        <div className="bg-gray-50 p-3 rounded-lg">
-          <p className="text-gray-600">Total Budget</p>
-          <p className="font-semibold text-gray-900">
-            {formatCurrency(data.reduce((sum, cat) => sum + (cat.estimated_total || cat.actual_total), 0))}
+      {showLegend && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="mt-4"
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-2 px-2">
+            {chartData.map((entry, index) => (
+              <motion.div
+                key={`legend-${index}`}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.3 + index * 0.05 }}
+                className="flex items-center gap-1.5 bg-white px-2 py-1.5 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+              >
+                <div
+                  className="w-3 h-3 rounded-sm flex-shrink-0"
+                  style={{ backgroundColor: entry.color }}
+                />
+                <span className="text-xs font-medium text-gray-700 whitespace-nowrap truncate">
+                  {entry.name}: {formatCurrency(entry.value)}
+                </span>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+      
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="mt-4 grid grid-cols-2 gap-4 text-sm"
+      >
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200 shadow-sm">
+          <p className="text-gray-600 mb-1">Total Budget</p>
+          <p className="text-xl font-bold text-gray-900">
+            {formatCurrency(total)}
           </p>
         </div>
-        <div className="bg-gray-50 p-3 rounded-lg">
-          <p className="text-gray-600">Categories</p>
-          <p className="font-semibold text-gray-900">{data.length}</p>
+        <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-4 rounded-lg border border-purple-200 shadow-sm">
+          <p className="text-gray-600 mb-1">Categories</p>
+          <p className="text-xl font-bold text-gray-900">{data.length}</p>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };
 

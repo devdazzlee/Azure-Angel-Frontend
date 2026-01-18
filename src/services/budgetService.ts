@@ -44,5 +44,15 @@ export const budgetService = {
   }>> => {
     const response = await httpClient.get<APIResponse<any>>(`/api/sessions/${sessionId}/budget/summary`);
     return response.data;
+  },
+
+  // Generate estimated expenses from business plan
+  generateEstimatedExpenses: async (sessionId: string): Promise<APIResponse<{
+    expenses_list: BudgetItem[];
+    revenue_list: BudgetItem[];
+    markdown_table: string;
+  }>> => {
+    const response = await httpClient.post<APIResponse<any>>(`/api/sessions/${sessionId}/budget/generate-estimates`);
+    return response.data;
   }
 };

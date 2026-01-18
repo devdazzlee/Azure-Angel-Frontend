@@ -16,6 +16,7 @@ interface PlanToRoadmapTransitionProps {
   loading?: boolean;
   sessionId?: string;
   initialQuote?: MotivationalQuote | null;
+  nextStep?: 'budget' | 'roadmap'; // Indicates what the next step is
 }
 
 interface ModificationArea {
@@ -325,7 +326,8 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
   onRevisit,
   loading = false,
   sessionId,
-  initialQuote = null
+  initialQuote = null,
+  nextStep = 'roadmap' // Default to roadmap for backward compatibility
 }) => {
   const navigate = useNavigate(); // Initialize navigate hook
   const contentRef = useRef<HTMLDivElement>(null);
@@ -794,8 +796,12 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            <h3 className="text-3xl font-bold text-gray-900 mb-3">🚀 Generating Your Roadmap</h3>
-            <p className="text-lg text-gray-600 mb-6">Creating your personalized launch roadmap...</p>
+            <h3 className="text-3xl font-bold text-gray-900 mb-3">
+              {nextStep === 'budget' ? '💰 Setting Up Your Budget' : '🚀 Generating Your Roadmap'}
+            </h3>
+            <p className="text-lg text-gray-600 mb-6">
+              {nextStep === 'budget' ? 'Preparing your budget setup...' : 'Creating your personalized launch roadmap...'}
+            </p>
             <div className="flex items-center justify-center gap-3 mb-6">
               <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
               <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
@@ -1013,6 +1019,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
         </div>
 
         {/* What's Next Section - Moved before Roadmap Structure */}
+        {nextStep === 'roadmap' && (
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
             🚀 What's Next: Roadmap Generation
@@ -1094,8 +1101,33 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
             </div>
           </div>
         </div>
+        )}
+
+        {/* Budget Setup Info - Show when nextStep is 'budget' */}
+        {nextStep === 'budget' && (
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+            💰 What's Next: Budget Setup
+          </h2>
+          <div className="bg-gradient-to-r from-teal-50 to-blue-50 border border-teal-200 rounded-xl p-6">
+            <p className="text-gray-700 mb-4">
+              Before we create your roadmap, let's set up your budget. Based on your business plan, I'll help you:
+            </p>
+            <ul className="text-gray-700 space-y-2 mb-4">
+              <li>• <strong>Set your initial investment</strong> - How much capital you're starting with</li>
+              <li>• <strong>Estimate expenses</strong> - AI-generated expense estimates based on your business plan</li>
+              <li>• <strong>Plan revenues</strong> - Forecast your income streams</li>
+              <li>• <strong>Visualize your budget</strong> - See everything in charts and graphs</li>
+            </ul>
+            <p className="text-gray-700">
+              Once your budget is set, we'll proceed to create your comprehensive roadmap that incorporates your financial plan.
+            </p>
+          </div>
+        </div>
+        )}
 
         {/* Roadmap Structure Section */}
+        {nextStep === 'roadmap' && (
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
             🎯 Roadmap Structure
@@ -1189,8 +1221,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
             </div>
           </div>
         </div>
-
-
+        )}
 
         {/* Decision Buttons */}
         <div className="text-center">
@@ -1204,15 +1235,15 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
               onClick={() => {
-                // Check subscription before allowing roadmap transition
-                if (!hasPaid) {
+                // Check subscription only for roadmap transition, not for budget
+                if (nextStep === 'roadmap' && !hasPaid) {
                   setShowPaymentModal(true);
                   toast.info('Subscription required to proceed to Roadmap phase');
                   return;
                 }
                 onApprove();
               }}
-              disabled={loading || !hasPaid}
+              disabled={loading || (nextStep === 'roadmap' && !hasPaid)}
               className="group relative bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white px-10 py-5 rounded-xl text-xl font-bold shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border-2 border-green-400"
             >
               {loading ? (
@@ -1222,17 +1253,25 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <span className="text-2xl font-bold">Generating Roadmap...</span>
+                    <span className="text-2xl font-bold">
+                      {nextStep === 'budget' ? 'Setting Up Budget...' : 'Generating Roadmap...'}
+                    </span>
                   </div>
-                  <div className="text-sm opacity-95 font-medium">This may take 10-30 seconds</div>
+                  <div className="text-sm opacity-95 font-medium">
+                    {nextStep === 'budget' ? 'Preparing your budget setup' : 'This may take 10-30 seconds'}
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center gap-2">
                   <div className="flex items-center justify-center gap-3">
                     <span className="text-2xl animate-pulse">🚀</span>
-                    <span className="text-2xl">Continue to Roadmap</span>
+                    <span className="text-2xl">
+                      {nextStep === 'budget' ? 'Continue to Budget' : 'Continue to Roadmap'}
+                    </span>
                   </div>
-                  <div className="text-sm opacity-95 font-medium">Proceed to roadmap generation</div>
+                  <div className="text-sm opacity-95 font-medium">
+                    {nextStep === 'budget' ? 'Proceed to budget setup' : 'Proceed to roadmap generation'}
+                  </div>
                 </div>
               )}
               <div className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>

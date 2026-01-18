@@ -32,15 +32,15 @@ const BudgetSlider: React.FC<BudgetSliderProps> = ({
   return (
     <div className={cn('space-y-3', className)}>
       {label && (
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center mb-2">
           <label className="text-sm font-medium text-gray-700">{label}</label>
-          <span className="text-sm font-semibold text-gray-900">
+          <span className="text-lg font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-lg border border-blue-200">
             {formatCurrency(value)}
           </span>
         </div>
       )}
       
-      <div className="relative">
+      <div className="relative py-2">
         <Slider
           value={[value]}
           onValueChange={(values) => onChange(values[0])}
@@ -48,12 +48,12 @@ const BudgetSlider: React.FC<BudgetSliderProps> = ({
           min={min}
           step={step}
           disabled={disabled}
-          className="w-full"
+          className="w-full [&_[data-slot=slider-track]]:bg-gray-200 [&_[data-slot=slider-track]]:h-3 [&_[data-slot=slider-range]]:bg-gradient-to-r [&_[data-slot=slider-range]]:from-blue-500 [&_[data-slot=slider-range]]:to-indigo-600 [&_[data-slot=slider-thumb]]:bg-blue-600 [&_[data-slot=slider-thumb]]:border-blue-700 [&_[data-slot=slider-thumb]]:w-6 [&_[data-slot=slider-thumb]]:h-6 [&_[data-slot=slider-thumb]]:shadow-lg [&_[data-slot=slider-thumb]]:ring-2 [&_[data-slot=slider-thumb]]:ring-blue-300 [&_[data-slot=slider-thumb]]:cursor-pointer"
         />
         
-        <div className="flex justify-between mt-2">
-          <span className="text-xs text-gray-500">{formatCurrency(min)}</span>
-          <span className="text-xs text-gray-500">{formatCurrency(max)}</span>
+        <div className="flex justify-between mt-3">
+          <span className="text-xs text-gray-500 font-medium">{formatCurrency(min)}</span>
+          <span className="text-xs text-gray-500 font-medium">{formatCurrency(max)}</span>
         </div>
       </div>
     </div>

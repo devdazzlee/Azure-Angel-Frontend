@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { DollarSign, TrendingUp, TrendingDown, PieChart, ArrowRight, X } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, PieChart, ArrowRight, X, Sparkles } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import BudgetSlider from './BudgetSlider';
-import type { Budget, BudgetItem } from '@/types/apiTypes';
+import BudgetPieChart from './BudgetPieChart';
+import type { Budget, BudgetItem, BudgetCategory } from '@/types/apiTypes';
 
 interface BudgetSetupModalProps {
   isOpen: boolean;
@@ -168,12 +169,23 @@ const BudgetSetupModal: React.FC<BudgetSetupModalProps> = ({
     setEstimatedRevenue(baseRevenue);
   };
 
+  // Generate estimates when modal opens - prepare data for step 2
   React.useEffect(() => {
-    if (isOpen && step === 2) {
+    if (isOpen && estimatedExpenses.length === 0) {
+      console.log("📊 Generating estimated expenses and revenue for budget modal");
       generateEstimatedExpenses();
       generateEstimatedRevenue();
     }
-  }, [isOpen, step]);
+  }, [isOpen]);
+  
+  // Also ensure data is generated when moving to step 2
+  React.useEffect(() => {
+    if (step === 2 && estimatedExpenses.length === 0) {
+      console.log("📊 Step 2 reached - generating estimates if missing");
+      generateEstimatedExpenses();
+      generateEstimatedRevenue();
+    }
+  }, [step]);
 
   const handleAddCustomExpense = () => {
     if (customExpense.name && customExpense.amount > 0) {
@@ -224,17 +236,41 @@ const BudgetSetupModal: React.FC<BudgetSetupModalProps> = ({
     switch (step) {
       case 1:
         return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <DollarSign className="w-16 h-16 text-blue-600 mx-auto mb-4" />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-6"
+          >
+            <motion.div
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              transition={{ type: "spring", stiffness: 200 }}
+              className="text-center"
+            >
+              <motion.div
+                animate={{ rotate: [0, 10, -10, 0] }}
+                transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+              >
+                <DollarSign className="w-16 h-16 text-blue-600 mx-auto mb-4" />
+              </motion.div>
               <h3 className="text-2xl font-bold text-gray-900 mb-2">Let's Set Up Your Budget</h3>
               <p className="text-gray-600">
-                Based on your business plan for {businessContext?.business_name || 'your business'}, 
+                Based on your business plan for <span className="font-semibold text-blue-600">{businessContext?.business_name || 'your business'}</span>, 
                 we'll help you create a comprehensive budget for Year 1.
               </p>
-            </div>
+            </motion.div>
 
-            <div className="space-y-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="space-y-6 bg-white rounded-xl p-6 border-2 border-blue-200 shadow-lg"
+            >
+              <div className="space-y-2">
+                <h4 className="text-lg font-semibold text-gray-900">Initial Investment</h4>
+                <p className="text-sm text-gray-600">Enter the total amount you're investing to start your business</p>
+              </div>
               <BudgetSlider
                 label="Initial Investment"
                 value={initialInvestment}
@@ -245,25 +281,43 @@ const BudgetSetupModal: React.FC<BudgetSetupModalProps> = ({
                 currency="$"
               />
               
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <p className="text-sm text-blue-800">
-                  💡 This is the amount you're investing to start your business. 
-                  It will be used to cover initial expenses until your business becomes profitable.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex justify-end">
-              <Button 
-                onClick={() => setStep(2)}
-                disabled={initialInvestment === 0}
-                className="flex items-center gap-2"
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.5 }}
+                className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200"
               >
-                Continue
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
+                <p className="text-sm text-blue-800 flex items-start gap-2">
+                  <Sparkles className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>
+                    This is the amount you're investing to start your business. 
+                    It will be used to cover initial expenses until your business becomes profitable.
+                  </span>
+                </p>
+              </motion.div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.7 }}
+              className="flex justify-end"
+            >
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Button 
+                  onClick={() => setStep(2)}
+                  disabled={initialInvestment === 0}
+                  className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white"
+                >
+                  Continue
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              </motion.div>
+            </motion.div>
+          </motion.div>
         );
 
       case 2:
@@ -278,19 +332,22 @@ const BudgetSetupModal: React.FC<BudgetSetupModalProps> = ({
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 min-w-0 w-full">
               {/* Expenses */}
-              <Card>
+              <Card className="min-w-0 w-full overflow-visible">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-red-600">
                     <TrendingDown className="w-5 h-5" />
                     Estimated Expenses
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="space-y-4">
                   {estimatedExpenses.map((expense) => (
-                    <div key={expense.id} className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                      <span className="text-sm font-medium">{expense.name}</span>
+                    <div key={expense.id} className="flex flex-col gap-3 p-3 bg-gray-50 rounded-lg">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-900">{expense.name}</span>
+                        <span className="text-sm font-bold text-blue-600">${expense.estimated_amount.toLocaleString()}</span>
+                      </div>
                       <BudgetSlider
                         value={expense.estimated_amount}
                         onChange={(value) => {
@@ -305,8 +362,8 @@ const BudgetSetupModal: React.FC<BudgetSetupModalProps> = ({
                         max={10000}
                         step={100}
                         currency="$"
-                        label={expense.name}
-                        className="flex-1 ml-4"
+                        label=""
+                        className="w-full"
                       />
                     </div>
                   ))}
@@ -335,7 +392,11 @@ const BudgetSetupModal: React.FC<BudgetSetupModalProps> = ({
                         onChange={(e) => setCustomExpense({ ...customExpense, description: e.target.value })}
                         rows={2}
                       />
-                      <Button onClick={handleAddCustomExpense} size="sm" className="w-full">
+                      <Button 
+                        onClick={handleAddCustomExpense} 
+                        size="sm" 
+                        className="w-full bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all"
+                      >
                         Add Expense
                       </Button>
                     </div>
@@ -352,28 +413,30 @@ const BudgetSetupModal: React.FC<BudgetSetupModalProps> = ({
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {estimatedRevenue.map((revenue) => (
-                    <div key={revenue.id} className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                      <span className="text-sm font-medium">{revenue.name}</span>
-                      <BudgetSlider
-                        value={revenue.estimated_amount}
-                        onChange={(value) => {
-                          const updated = estimatedRevenue.map(item =>
-                            item.id === revenue.id
-                              ? { ...item, estimated_amount: value, amount: value }
-                              : item
-                          );
-                          setEstimatedRevenue(updated);
-                        }}
-                        min={0}
-                        max={20000}
-                        step={100}
-                        currency="$"
-                        label={revenue.name}
-                        className="flex-1 ml-4"
-                      />
-                    </div>
-                  ))}
+                    {estimatedRevenue.map((revenue) => (
+                      <div key={revenue.id} className="flex flex-col sm:flex-row gap-3 items-start sm:items-center p-3 bg-gray-50 rounded-lg">
+                        <span className="text-sm font-medium min-w-[120px]">{revenue.name}</span>
+                        <div className="flex-1 w-full sm:w-auto">
+                          <BudgetSlider
+                            value={revenue.estimated_amount}
+                            onChange={(value) => {
+                              const updated = estimatedRevenue.map(item =>
+                                item.id === revenue.id
+                                  ? { ...item, estimated_amount: value, amount: value }
+                                  : item
+                              );
+                              setEstimatedRevenue(updated);
+                            }}
+                            min={0}
+                            max={20000}
+                            step={100}
+                            currency="$"
+                            label=""
+                            className="w-full"
+                          />
+                        </div>
+                      </div>
+                    ))}
                   
                   {/* Add Custom Revenue */}
                   <div className="border-t pt-3">
@@ -399,7 +462,11 @@ const BudgetSetupModal: React.FC<BudgetSetupModalProps> = ({
                         onChange={(e) => setCustomRevenue({ ...customRevenue, description: e.target.value })}
                         rows={2}
                       />
-                      <Button onClick={handleAddCustomRevenue} size="sm" className="w-full">
+                      <Button 
+                        onClick={handleAddCustomRevenue} 
+                        size="sm" 
+                        className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all"
+                      >
                         Add Revenue
                       </Button>
                     </div>
@@ -408,33 +475,82 @@ const BudgetSetupModal: React.FC<BudgetSetupModalProps> = ({
               </Card>
             </div>
 
-            {/* Budget Summary */}
-            <Card>
-              <CardContent className="pt-6">
-                <div className="grid grid-cols-3 gap-4 text-center">
-                  <div>
-                    <p className="text-sm text-gray-600">Total Expenses</p>
-                    <p className="text-xl font-bold text-red-600">${totalExpenses.toLocaleString()}</p>
+            {/* Budget Summary with Chart Preview */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+            >
+              <Card className="bg-gradient-to-br from-gray-50 to-blue-50 border-2 border-blue-200">
+                <CardContent className="pt-6">
+                  <div className="grid grid-cols-3 gap-4 text-center mb-6">
+                    <motion.div
+                      initial={{ scale: 0.8 }}
+                      animate={{ scale: 1 }}
+                      transition={{ delay: 0.4, type: "spring" }}
+                    >
+                      <p className="text-sm text-gray-600 mb-1">Total Expenses</p>
+                      <p className="text-2xl font-bold text-red-600">${totalExpenses.toLocaleString()}</p>
+                    </motion.div>
+                    <motion.div
+                      initial={{ scale: 0.8 }}
+                      animate={{ scale: 1 }}
+                      transition={{ delay: 0.5, type: "spring" }}
+                    >
+                      <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
+                      <p className="text-2xl font-bold text-green-600">${totalRevenue.toLocaleString()}</p>
+                    </motion.div>
+                    <motion.div
+                      initial={{ scale: 0.8 }}
+                      animate={{ scale: 1 }}
+                      transition={{ delay: 0.6, type: "spring" }}
+                    >
+                      <p className="text-sm text-gray-600 mb-1">Net Budget</p>
+                      <p className={`text-2xl font-bold ${netBudget >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        ${netBudget.toLocaleString()}
+                      </p>
+                    </motion.div>
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total Revenue</p>
-                    <p className="text-xl font-bold text-green-600">${totalRevenue.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Net Budget</p>
-                    <p className={`text-xl font-bold ${netBudget >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      ${netBudget.toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                  
+                  {/* Mini Chart Preview */}
+                  {estimatedExpenses.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.7 }}
+                      className="bg-white rounded-lg p-6 border border-gray-200"
+                    >
+                      <p className="text-lg font-bold text-gray-800 mb-4 text-center">Budget Preview</p>
+                      <BudgetPieChart
+                        data={estimatedExpenses.map((exp, idx) => ({
+                          name: exp.name,
+                          estimated_total: exp.estimated_amount,
+                          actual_total: 0,
+                          items: [exp],
+                          color: idx % 2 === 0 ? '#ef4444' : '#dc2626'
+                        }))}
+                        currency="$"
+                        height={400}
+                        showLegend={true}
+                      />
+                    </motion.div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
 
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep(1)}>
+            <div className="flex justify-between gap-4 mt-6">
+              <Button 
+                variant="outline" 
+                onClick={() => setStep(1)}
+                className="border-2 border-gray-300 hover:border-blue-500 hover:bg-blue-50 text-gray-700 hover:text-blue-700 font-semibold px-6 py-2 shadow-md hover:shadow-lg transition-all"
+              >
                 Back
               </Button>
-              <Button onClick={handleComplete} className="flex items-center gap-2">
+              <Button 
+                onClick={handleComplete} 
+                className="flex items-center gap-2 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 hover:from-green-600 hover:via-emerald-600 hover:to-teal-600 text-white font-bold px-8 py-2 shadow-xl hover:shadow-2xl transition-all"
+              >
                 Complete Budget Setup
                 <ArrowRight className="w-4 h-4" />
               </Button>
@@ -449,11 +565,14 @@ const BudgetSetupModal: React.FC<BudgetSetupModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent 
+        showCloseButton={false}
+        className="!max-w-[80vw] !w-[80vw] !min-w-0 max-h-[95vh] overflow-y-auto bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 border-2 border-blue-200 !p-4"
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between">
             <span>Budget Setup</span>
-            <Button variant="ghost" size="sm" onClick={onClose}>
+            <Button variant="ghost" size="sm" onClick={onClose} className="hover:bg-gray-100">
               <X className="w-4 h-4" />
             </Button>
           </DialogTitle>

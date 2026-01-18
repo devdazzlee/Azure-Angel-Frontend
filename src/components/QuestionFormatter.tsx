@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 
 interface QuestionFormatterProps {
   text: string;
-  phase?: 'KYC' | 'BUSINESS_PLAN' | 'PLAN_TO_ROADMAP_TRANSITION' | 'ROADMAP' | 'ROADMAP_GENERATED' | 'ROADMAP_TO_IMPLEMENTATION_TRANSITION' | 'IMPLEMENTATION';
+  phase?: 'KYC' | 'BUSINESS_PLAN' | 'PLAN_TO_ROADMAP_TRANSITION' | 'PLAN_TO_SUMMARY_TRANSITION' | 'PLAN_TO_BUDGET_TRANSITION' | 'ROADMAP' | 'ROADMAP_GENERATED' | 'ROADMAP_TO_IMPLEMENTATION_TRANSITION' | 'IMPLEMENTATION';
 }
 
 const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text }) => {

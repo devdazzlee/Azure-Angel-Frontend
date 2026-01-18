@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { PieChart, BarChart3, TrendingUp, TrendingDown, DollarSign, Eye, EyeOff } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Budget, BudgetItem, BudgetCategory } from '@/types/apiTypes';
 import BudgetPieChart from './BudgetPieChart';
+import BudgetBarChart from './BudgetBarChart';
 import BudgetItemManager from './BudgetItemManager';
 
 interface BudgetDashboardProps {
@@ -70,33 +72,62 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   const currentTotalRevenue = showActuals ? totalActualRevenue : totalEstimatedRevenue;
   const netBudget = currentTotalRevenue - currentTotalExpenses;
 
-  const formatCurrency = (value: number) => {
+  const formatCurrency = (value: number | null | undefined) => {
+    if (value === null || value === undefined || isNaN(value)) {
+      return `${currency}0`;
+    }
     return `${currency}${value.toLocaleString()}`;
   };
 
-  const SummaryCard = ({ title, value, icon: Icon, trend, color }: {
+  const SummaryCard = ({ title, value, icon: Icon, trend, color, index }: {
     title: string;
     value: string;
     icon: any;
     trend?: number;
     color: string;
+    index: number;
   }) => (
-    <Card>
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-gray-600">{title}</p>
-            <p className={`text-2xl font-bold ${color}`}>{value}</p>
-            {trend !== undefined && (
-              <p className={`text-sm ${trend >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {trend >= 0 ? '+' : ''}{trend}%
-              </p>
-            )}
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: index * 0.1 }}
+      whileHover={{ scale: 1.05, y: -5 }}
+      className="h-full"
+    >
+      <Card className="h-full border-2 hover:border-opacity-50 transition-all duration-300 shadow-lg hover:shadow-xl">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600 mb-1">{title}</p>
+              <motion.p
+                initial={{ scale: 0.8 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: index * 0.1 + 0.3, type: "spring" }}
+                className={`text-3xl font-bold ${color}`}
+              >
+                {value}
+              </motion.p>
+              {trend !== undefined && (
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: index * 0.1 + 0.5 }}
+                  className={`text-sm font-semibold mt-1 ${trend >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                >
+                  {trend >= 0 ? '↑' : '↓'} {trend >= 0 ? '+' : ''}{trend}%
+                </motion.p>
+              )}
+            </div>
+            <motion.div
+              animate={{ rotate: [0, 10, -10, 0] }}
+              transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+            >
+              <Icon className={`w-10 h-10 ${color}`} />
+            </motion.div>
           </div>
-          <Icon className={`w-8 h-8 ${color}`} />
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 
   return (
@@ -134,6 +165,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
           value={formatCurrency(budget.initial_investment)}
           icon={DollarSign}
           color="text-blue-600"
+          index={0}
         />
         
         <SummaryCard
@@ -141,6 +173,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
           value={formatCurrency(currentTotalExpenses)}
           icon={TrendingDown}
           color="text-red-600"
+          index={1}
         />
         
         <SummaryCard
@@ -148,6 +181,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
           value={formatCurrency(currentTotalRevenue)}
           icon={TrendingUp}
           color="text-green-600"
+          index={2}
         />
         
         <SummaryCard
@@ -155,6 +189,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
           value={formatCurrency(netBudget)}
           icon={PieChart}
           color={netBudget >= 0 ? 'text-green-600' : 'text-red-600'}
+          index={3}
         />
       </div>
 
@@ -167,43 +202,80 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Expenses Pie Chart */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingDown className="w-5 h-5 text-red-500" />
-                  Expenses Breakdown
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <BudgetPieChart
-                  data={budgetCategories.filter(cat => cat.name.startsWith('Expense') || !cat.name.startsWith('Revenue'))}
-                  currency={currency}
-                  height={250}
-                  showLegend={true}
-                />
-              </CardContent>
-            </Card>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key="charts"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="space-y-6"
+            >
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Expenses Pie Chart */}
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <TrendingDown className="w-5 h-5 text-red-500" />
+                        Expenses Breakdown
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <BudgetPieChart
+                        data={budgetCategories.filter(cat => cat.name.startsWith('Expense') || !cat.name.startsWith('Revenue'))}
+                        currency={currency}
+                        height={300}
+                        showLegend={true}
+                      />
+                    </CardContent>
+                  </Card>
+                </motion.div>
 
-            {/* Revenue Pie Chart */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-green-500" />
-                  Revenue Breakdown
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <BudgetPieChart
-                  data={budgetCategories.filter(cat => cat.name.startsWith('Revenue'))}
+                {/* Revenue Pie Chart */}
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5, delay: 0.2 }}
+                >
+                  <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5 text-green-500" />
+                        Revenue Breakdown
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <BudgetPieChart
+                        data={budgetCategories.filter(cat => cat.name.startsWith('Revenue'))}
+                        currency={currency}
+                        height={300}
+                        showLegend={true}
+                      />
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </div>
+
+              {/* Bar Charts */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.4 }}
+              >
+                <BudgetBarChart
+                  expenses={expenses}
+                  revenues={revenues}
                   currency={currency}
-                  height={250}
-                  showLegend={true}
+                  height={350}
+                  showActuals={showActuals}
                 />
-              </CardContent>
-            </Card>
-          </div>
+              </motion.div>
+            </motion.div>
+          </AnimatePresence>
         </TabsContent>
 
         <TabsContent value="items">
@@ -229,7 +301,8 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
               <CardContent>
                 <div className="space-y-4">
                   {budget.items.map(item => {
-                    if (item.actual_amount === undefined) return null;
+                    if (item.actual_amount === undefined || item.actual_amount === null) return null;
+                    if (item.estimated_amount === undefined || item.estimated_amount === null) return null;
                     
                     const variance = ((item.actual_amount - item.estimated_amount) / item.estimated_amount) * 100;
                     
