@@ -43,9 +43,9 @@ const LoginPage: React.FC = () => {
       }, 1000);
     } catch (err: any) {
       console.log('Signin error:', err.message);
-      toast.error(
-        err.message || 'Signup failed. Please try again.'
-      );
+      // Error message is already extracted in authService, just display it
+      // Don't show duplicate toast - httpClient already shows it
+      // But we can set a state to show it in the UI if needed
     } finally {
       setIsLoading(false);
     }

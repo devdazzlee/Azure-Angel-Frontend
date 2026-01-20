@@ -15,6 +15,8 @@ const ResetPasswordPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [token, setToken] = useState<string>('');
 
+  const [errorMessage, setErrorMessage] = useState<string>('');
+
   useEffect(() => {
     // Extract token from URL hash or query params
     // Supabase typically puts it in the hash: #access_token=xxx&type=recovery
@@ -32,20 +34,26 @@ const ResetPasswordPage: React.FC = () => {
       
       if (error || errorCode) {
         // Handle error cases
-        let errorMessage = 'Invalid or expired reset link.';
+        let errorMsg = 'Invalid or expired reset link.';
         
         if (errorCode === 'otp_expired' || errorCode === 'token_expired') {
-          errorMessage = 'This password reset link has expired. Please request a new one.';
+          errorMsg = 'This password reset link has expired. Password reset links are valid for 1 hour. Please request a new one.';
         } else if (errorCode === 'invalid_token') {
-          errorMessage = 'This password reset link is invalid. Please request a new one.';
+          errorMsg = 'This password reset link is invalid. It may have already been used. Please request a new one.';
         } else if (errorDescription) {
-          errorMessage = decodeURIComponent(errorDescription.replace(/\+/g, ' '));
+          errorMsg = decodeURIComponent(errorDescription.replace(/\+/g, ' '));
         } else if (error) {
-          errorMessage = `Error: ${error}`;
+          errorMsg = `Error: ${error}`;
         }
         
-        toast.error(errorMessage);
-        setTimeout(() => navigate('/forgot-password'), 3000);
+        setErrorMessage(errorMsg);
+        toast.error(errorMsg);
+        
+        // Clean up URL hash
+        window.history.replaceState(null, '', window.location.pathname);
+        
+        // Redirect after showing error
+        setTimeout(() => navigate('/forgot-password'), 4000);
         return;
       }
       
@@ -55,6 +63,8 @@ const ResetPasswordPage: React.FC = () => {
       
       if (accessToken && type === 'recovery') {
         setToken(accessToken);
+        // Clean up URL hash after extracting token
+        window.history.replaceState(null, '', window.location.pathname);
         return;
       }
     }
@@ -64,11 +74,15 @@ const ResetPasswordPage: React.FC = () => {
     
     if (tokenFromQuery) {
       setToken(tokenFromQuery);
+      // Clean up URL query params after extracting token
+      window.history.replaceState(null, '', window.location.pathname);
     }
     
     // If no token found and no error, show error
     if (!tokenFromQuery && !hash) {
-      toast.error('Invalid or missing reset token. Please request a new password reset link.');
+      const errorMsg = 'Invalid or missing reset token. Please request a new password reset link.';
+      setErrorMessage(errorMsg);
+      toast.error(errorMsg);
       setTimeout(() => navigate('/forgot-password'), 2000);
     }
   }, [navigate]);
@@ -141,6 +155,16 @@ const ResetPasswordPage: React.FC = () => {
                 <p className="text-gray-700">Enter your new password</p>
               </div>
             </div>
+
+            {/* Error Message Display */}
+            {errorMessage && (
+              <div className="px-8 pt-2">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                  <p className="text-red-800 text-sm">{errorMessage}</p>
+                  <p className="text-red-600 text-xs mt-2">Redirecting to forgot password page...</p>
+                </div>
+              </div>
+            )}
 
             {/* Form Fields */}
             <form className="p-8 pt-2" onSubmit={handleSubmit}>

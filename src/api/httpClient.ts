@@ -46,6 +46,15 @@ const handleError = (error: any): never => {
         // FastAPI standard: check detail field first, then error/message for backward compatibility
         toast.error(response?.data?.detail || response?.data?.error || response?.data?.message || ErrorMessages[ErrorCodes.INVALID_INPUT]);
         break;
+      case 401:
+        // For 401 errors, show the actual error message from the backend
+        // FastAPI returns error in 'detail' field
+        const errorMessage = response?.data?.detail || 
+                            response?.data?.error || 
+                            response?.data?.message || 
+                            ErrorMessages[ErrorCodes.UNAUTHORIZED];
+        toast.error(errorMessage);
+        break;
       case 429:
         toast.error(ErrorMessages[ErrorCodes.RATE_LIMIT]);
         break;
@@ -109,9 +118,15 @@ httpClient.interceptors.response.use(
 
     const is401 = error?.response?.status === 401;
     const isRetry = originalRequest._retry === true;
+    
+    // Skip token refresh for signin/login endpoints - these are authentication attempts, not token refresh
+    const isAuthEndpoint = originalRequest.url?.includes('/auth/signin') || 
+                          originalRequest.url?.includes('/auth/signup') ||
+                          originalRequest.url?.includes('/auth/login');
 
     // Handle 401 errors (token expired) with automatic refresh
-    if (is401 && !isRetry) {
+    // BUT skip for authentication endpoints (signin/signup) - those should show actual error messages
+    if (is401 && !isRetry && !isAuthEndpoint) {
       console.log('🔐 Token expired (401), attempting refresh...');
       originalRequest._retry = true;
 

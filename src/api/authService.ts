@@ -32,8 +32,13 @@ export async function signIn({ email, password }: { email: string; password: str
     const { data } = await httpClient.post<AuthResponse>('/auth/signin', { email, password });
     return data.result.session;
   } catch (err: any) {
-    const message = err.message || 'Signin failed';
-    throw new Error(message);
+    // Extract actual error message from response (FastAPI returns in 'detail' field)
+    const errorMessage = err?.response?.data?.detail || 
+                        err?.response?.data?.error || 
+                        err?.response?.data?.message || 
+                        err?.message || 
+                        'Signin failed. Please check your credentials and try again.';
+    throw new Error(errorMessage);
   }
 }
 
