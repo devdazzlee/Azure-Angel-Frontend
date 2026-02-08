@@ -131,11 +131,12 @@ export interface BudgetItem {
   id: string;
   name: string;
   category: 'expense' | 'revenue';
-  amount: number;
   estimated_amount: number;
   actual_amount?: number;
   description?: string;
   is_custom?: boolean;
+  isSelected?: boolean;
+  is_active?: boolean; // Added for soft delete
   created_at?: string;
   updated_at?: string;
 }
@@ -169,4 +170,22 @@ export interface BudgetCategory {
   actual_total: number;
   items: BudgetItem[];
   color: string;
+}
+
+export interface RevenueStream {
+  id: string;
+  name: string;
+  estimatedPrice: number;
+  estimatedVolume: number;
+  revenueProjection: number;
+  isSelected: boolean;
+  isCustom: boolean; // To distinguish user-added streams
+  category: "revenue";
+}
+
+export interface RevenueStreamInitial {
+  name: string;
+  estimated_price: number;
+  estimated_volume: number;
+  category: "revenue";
 }

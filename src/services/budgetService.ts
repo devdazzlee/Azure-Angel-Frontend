@@ -1,5 +1,5 @@
 import httpClient from '../api/httpClient';
-import type { Budget, BudgetItem, APIResponse } from '../types/apiTypes';
+import type { Budget, BudgetItem, APIResponse, RevenueStreamInitial, RevenueStream } from '../types/apiTypes';
 
 export const budgetService = {
   // Get budget for a session
@@ -47,12 +47,20 @@ export const budgetService = {
   },
 
   // Generate estimated expenses from business plan
-  generateEstimatedExpenses: async (sessionId: string): Promise<APIResponse<{
-    expenses_list: BudgetItem[];
-    revenue_list: BudgetItem[];
-    markdown_table: string;
-  }>> => {
-    const response = await httpClient.post<APIResponse<any>>(`/api/sessions/${sessionId}/budget/generate-estimates`);
+  generateEstimatedExpenses: async (sessionId: string): Promise<APIResponse<BudgetItem[]>> => {
+    const response = await httpClient.post<APIResponse<BudgetItem[]>>(`/api/sessions/${sessionId}/budget/generate-estimates`);
+    return response.data;
+  },
+
+  // Generate initial revenue streams
+  generateInitialRevenueStreams: async (sessionId: string): Promise<APIResponse<RevenueStreamInitial[]>> => {
+    const response = await httpClient.get<APIResponse<RevenueStreamInitial[]>>(`/api/sessions/${sessionId}/revenue-streams/generate`);
+    return response.data;
+  },
+
+  // Save selected revenue streams
+  saveRevenueStreams: async (sessionId: string, revenueStreams: RevenueStream[]): Promise<APIResponse<any>> => {
+    const response = await httpClient.put<APIResponse<any>>(`/api/sessions/${sessionId}/revenue-streams`, revenueStreams);
     return response.data;
   }
 };

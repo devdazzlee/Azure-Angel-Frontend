@@ -1,13 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { toast } from 'react-toastify';
-import { ArrowLeft, Save, Download, RefreshCw } from 'lucide-react';
+import { ArrowUp, Menu, X, Download, FileText, ArrowLeft, RefreshCw, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BudgetDashboard } from '@/components/Budget';
-import type { Budget, BudgetItem } from '@/types/apiTypes';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+
+// Import all budget components
+import StartupBudgetSummary from '@/components/Budget/StartupBudgetSummary';
+import StartupCostsTable from '@/components/Budget/StartupCostsTable';
+import OperatingExpensesTable from '@/components/Budget/OperatingExpensesTable';
+import PayrollCostsTable from '@/components/Budget/PayrollCostsTable';
+import COGSTable from '@/components/Budget/COGSTable';
+import RevenueTable from '@/components/Budget/RevenueTable';
+import { BudgetSummaryCards } from '@/components/Budget/BudgetSummaryCards';
+import { BreakEvenAnalysis } from '@/components/Budget/BreakEvenAnalysis';
+import { BudgetCharts } from '@/components/Budget/BudgetCharts';
+import { formatCurrency } from '@/lib/formatters';
+import { toast } from 'react-toastify';
 import { budgetService } from '@/services/budgetService';
+import { exportBudgetToExcel } from '@/utils/excelExport';
+import httpClient from '@/api/httpClient';
+import BudgetDashboard from '@/components/Budget/BudgetDashboard';
+
+import type { APIResponse, Budget, BudgetItem, BusinessContextPayload, RevenueStream } from '@/types/apiTypes';
 
 const BudgetPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -15,12 +32,32 @@ const BudgetPage: React.FC = () => {
   const [budget, setBudget] = useState<Budget | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [businessName, setBusinessName] = useState<string | undefined>(undefined);
+  const [businessType, setBusinessType] = useState<string>('Startup'); // Default to 'Startup'
 
   useEffect(() => {
     if (id) {
       fetchBudget();
+      fetchBusinessContext(id); // Fetch business context when component mounts
     }
   }, [id]);
+
+  const fetchBusinessContext = async (sessionId: string) => {
+    try {
+      const response = await httpClient.get<APIResponse<{ business_context: BusinessContextPayload }>>(`/api/sessions/${sessionId}/business-context`);
+      if (response.data.success && response.data.result?.business_context?.business_type) {
+        setBusinessType(response.data.result.business_context.business_type);
+        if (response.data.result.business_context.business_name) {
+          setBusinessName(response.data.result.business_context.business_name);
+        }
+      } else {
+        console.warn("Could not fetch business type, defaulting to 'Startup'");
+      }
+    } catch (error) {
+      console.error("Error fetching business context:", error);
+      setBusinessType('Startup'); // Fallback in case of error
+    }
+  };
 
   const fetchBudget = async () => {
     try {
@@ -127,6 +164,12 @@ const BudgetPage: React.FC = () => {
     handleUpdateBudget({ items: updatedItems });
   };
 
+  const handleExportExcel = () => {
+    if (!budget) return;
+    exportBudgetToExcel(budget, businessName);
+    toast.success('Budget exported to Excel');
+  };
+
   const handleDeleteItem = (itemId: string) => {
     if (!budget) return;
     
@@ -216,6 +259,15 @@ const BudgetPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
+                size="sm"
+                onClick={handleExportExcel}
+                className="flex items-center gap-2 text-green-600 hover:text-green-700 border-green-600"
+              >
+                <Download className="w-4 h-4" />
+                Export to Excel
+              </Button>
+              <Button
+                variant="outline"
                 onClick={exportBudget}
                 className="flex items-center gap-2"
               >
@@ -245,9 +297,10 @@ const BudgetPage: React.FC = () => {
         <BudgetDashboard
           budget={budget}
           onUpdateBudget={handleUpdateBudget}
-          onAddItem={handleAddItem}
           onUpdateItem={handleUpdateItem}
           onDeleteItem={handleDeleteItem}
+          businessType={businessType} // Pass businessType to BudgetDashboard
+          sessionId={id!} // Pass sessionId to BudgetDashboard
         />
       </div>
     </motion.div>

@@ -4,7 +4,6 @@ import remarkGfm from 'remark-gfm';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
 import { TrendingUp, TrendingDown, DollarSign, PieChart as PieChartIcon } from 'lucide-react';
-import BudgetSetupModal from './Budget/BudgetSetupModal';
 import type { BudgetItem } from '../types/apiTypes';
 import { budgetService } from '../services/budgetService';
 
@@ -77,7 +76,7 @@ const PlanToBudgetTransition: React.FC<PlanToBudgetTransitionProps> = ({
             id: item.id || `temp-${Date.now()}-${Math.random()}`,
             name: item.name,
             category: item.category,
-            amount: item.amount || item.estimated_amount,
+            amount: item.estimated_amount,
             estimated_amount: item.estimated_amount,
             actual_amount: item.actual_amount,
             description: item.description,
@@ -258,14 +257,6 @@ const PlanToBudgetTransition: React.FC<PlanToBudgetTransitionProps> = ({
           </motion.div>
         </motion.div>
       </div>
-
-      {/* Budget Setup Modal */}
-      <BudgetSetupModal
-        isOpen={showBudgetModal}
-        onClose={() => setShowBudgetModal(false)}
-        onComplete={handleBudgetComplete}
-        businessContext={businessContext}
-      />
     </>
   );
 };

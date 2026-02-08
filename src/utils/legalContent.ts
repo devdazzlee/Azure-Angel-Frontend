@@ -1,6 +1,15 @@
 // Legal document content for Terms and Privacy Policy modals
 // Full content for display in acceptance modals
 
+/**
+ * Type for legal content functions
+ */
+export type LegalContentFunction = () => string;
+
+/**
+ * Returns the HTML content for Terms and Conditions
+ * @returns {string} HTML string for terms content
+ */
 export const getTermsContent = (): string => {
   return `
     <h2 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem; color: #0d9488;">TERMS AND CONDITIONS</h2>
@@ -104,6 +113,10 @@ export const getTermsContent = (): string => {
   `;
 };
 
+/**
+ * Returns the HTML content for Privacy Policy
+ * @returns {string} HTML string for privacy policy content
+ */
 export const getPrivacyContent = (): string => {
   return `
     <h2 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem; color: #0d9488;">Privacy Policy for Founderport (Founderport Platform)</h2>

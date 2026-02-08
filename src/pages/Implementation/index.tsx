@@ -1163,7 +1163,6 @@ const Implementation: React.FC<ImplementationProps> = ({
                   <BudgetDashboard
                     budget={budget}
                     onUpdateBudget={handleUpdateBudget}
-                    onAddItem={handleAddItem}
                     onUpdateItem={handleUpdateItem}
                     onDeleteItem={handleDeleteItem}
                     showActuals={true}

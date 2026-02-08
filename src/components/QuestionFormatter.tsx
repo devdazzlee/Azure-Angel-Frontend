@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 
 interface QuestionFormatterProps {
@@ -6,26 +6,101 @@ interface QuestionFormatterProps {
   phase?: 'KYC' | 'BUSINESS_PLAN' | 'PLAN_TO_ROADMAP_TRANSITION' | 'PLAN_TO_SUMMARY_TRANSITION' | 'PLAN_TO_BUDGET_TRANSITION' | 'ROADMAP' | 'ROADMAP_GENERATED' | 'ROADMAP_TO_IMPLEMENTATION_TRANSITION' | 'IMPLEMENTATION';
 }
 
-const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text }) => {
+export function parseBusinessPlanQuestionParts(inputText: string): {
+  mainQuestion: string;
+  helperLines: string[];
+  thoughtStarters: string[];
+} {
+  const rawLines = (inputText || '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const thoughtStarterRegex = /^(🧠|💡|📌|📋|🚀|🧩|🌍)?\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip|Pro Tip|Pro-tip|Example|Consider|Reminder|Note|Watch out)\s*:/iu;
+
+  const thoughtStarters: string[] = [];
+  const nonThoughtLines: string[] = [];
+
+  rawLines.forEach((line) => {
+    if (thoughtStarterRegex.test(line)) {
+      thoughtStarters.push(line);
+      return;
+    }
+    nonThoughtLines.push(line);
+  });
+
+  const mainQuestionIndex = nonThoughtLines.findIndex((line) => {
+    if (!line) return false;
+    if (line.endsWith(':')) return false;
+    if (line.endsWith('?')) return true;
+    return /^(What|How|Why|When|Where|Who|Which|Do|Does|Did|Is|Are|Can|Could|Would|Should|Describe|Explain|Tell|List)\b/i.test(line);
+  });
+
+  const fallbackIndex = nonThoughtLines.findIndex((line) => line && !line.endsWith(':'));
+  const resolvedIndex = mainQuestionIndex >= 0 ? mainQuestionIndex : (fallbackIndex >= 0 ? fallbackIndex : 0);
+  const mainQuestion = resolvedIndex >= 0 ? (nonThoughtLines[resolvedIndex] ?? '') : '';
+  const helperLines = nonThoughtLines.filter((_, idx) => idx !== resolvedIndex);
+
+  return { mainQuestion, helperLines, thoughtStarters };
+}
+
+const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) => {
   if (!text || typeof text !== 'string') {
     return <div>{String(text || '')}</div>;
   }
 
-  let processedText = text;
+  const processedText = useMemo(() => {
+    let next = text;
+    next = next.replace(/\[\[Q:[A-Z_]+\.\d{2}]]\s*/g, "");
+    next = next.replace(/Question\s+\d+(?:\s+of\s+\d+)?/gi, '').trim();
+    next = next.replace(/([A-Za-z0-9,;:)])\s*\n+\s*\?/g, '$1?');
+    return next;
+  }, [text]);
 
-  // Step 1: Remove machine tags
-  processedText = processedText.replace(/\[\[Q:[A-Z_]+\.\d{2}]]\s*/g, "");
+  const businessPlanParts = useMemo(() => {
+    if (phase !== 'BUSINESS_PLAN') return null;
 
-  // Step 2: Remove "Question X" text
-  processedText = processedText.replace(/Question\s+\d+(?:\s+of\s+\d+)?/gi, '').trim();
+    return parseBusinessPlanQuestionParts(processedText);
+  }, [phase, processedText]);
 
-  // Step 3: Fix broken questions
-  processedText = processedText.replace(/([A-Za-z0-9,;:)])\s*\n+\s*\?/g, '$1?');
+  if (businessPlanParts) {
+    return (
+      <div className="question-formatter">
+        {businessPlanParts.mainQuestion ? (
+          <div className="font-bold text-gray-900 text-base leading-relaxed">
+            {businessPlanParts.mainQuestion}
+          </div>
+        ) : null}
+
+        {businessPlanParts.helperLines.length ? (
+          <div className="mt-2 text-sm leading-relaxed text-gray-700">
+            <ReactMarkdown>
+              {businessPlanParts.helperLines.join('\n\n')}
+            </ReactMarkdown>
+          </div>
+        ) : null}
+
+        {businessPlanParts.thoughtStarters.length ? (
+          <div className="mt-3 space-y-2">
+            {businessPlanParts.thoughtStarters.map((line, idx) => (
+              <div key={`${idx}-${line}`} className="text-sm italic text-gray-600 leading-relaxed">
+                {line}
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  let mutableText = processedText;
 
   // Step 4: ROOT CAUSE FIX - Handle heading+question patterns
   // Process line by line to handle both same-line and multi-line cases
   
-  const lines = processedText.split('\n');
+  const lines = mutableText.split('\n');
   const processedLines: string[] = [];
   let i = 0;
   
@@ -91,18 +166,18 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text }) => {
     i++;
   }
   
-  processedText = processedLines.join('\n');
+  mutableText = processedLines.join('\n');
 
   // Step 5: Normalize whitespace
-  processedText = processedText.replace(/\n{3,}/g, '\n\n');
-  processedText = processedText.replace(/\r\n/g, '\n');
+  mutableText = mutableText.replace(/\n{3,}/g, '\n\n');
+  mutableText = mutableText.replace(/\r\n/g, '\n');
 
   // Step 6: Bold all remaining questions (not already in heading+question patterns)
-  processedText = processedText.replace(/\*\*([^*]+\?)\*\*/g, '$1');
-  processedText = processedText.replace(/([A-Z][A-Za-z0-9\s,'"()-]{10,}?\?)/g, (match, question) => {
+  mutableText = mutableText.replace(/\*\*([^*]+\?)\*\*/g, '$1');
+  mutableText = mutableText.replace(/([A-Z][A-Za-z0-9\s,'"()-]{10,}?\?)/g, (match, question) => {
     if (question.includes('**')) return match;
     // Skip if already part of heading+question pattern
-    const beforeText = processedText.substring(0, processedText.indexOf(match));
+    const beforeText = mutableText.substring(0, mutableText.indexOf(match));
     const lineWithMatch = (beforeText + match).split('\n').pop() || '';
     if (/(🧠|💡|📌|📋|🚀|🧩|🌍)?\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):/u.test(lineWithMatch)) {
       return match; // Already processed
@@ -111,31 +186,31 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text }) => {
   });
 
   // Step 7: Clean up formatting
-  processedText = processedText.replace(/(?<!\*)\*(?!\*)/g, '');
-  processedText = processedText.replace(/#+/g, '');
-  processedText = processedText.replace(/^[-–—•]+\s*/gm, '');
+  mutableText = mutableText.replace(/(?<!\*)\*(?!\*)/g, '');
+  mutableText = mutableText.replace(/#+/g, '');
+  mutableText = mutableText.replace(/^[-–—•]+\s*/gm, '');
 
   // Step 8: Add spacing for regular questions
-  processedText = processedText.replace(/([^:\-–—\n🧠💡📌📋🚀🧩🌍])\s*(\*\*[^*]+\?\*\*)/gu, '$1\n\n$2');
-  processedText = processedText.replace(/(\*\*[^*]+\?\*\*)([^\n])/g, '$1\n\n$2');
+  mutableText = mutableText.replace(/([^:\-–—\n🧠💡📌📋🚀🧩🌍])\s*(\*\*[^*]+\?\*\*)/gu, '$1\n\n$2');
+  mutableText = mutableText.replace(/(\*\*[^*]+\?\*\*)([^\n])/g, '$1\n\n$2');
   
   // Step 9: Ensure proper spacing around heading+question patterns
-  processedText = processedText.replace(
+  mutableText = mutableText.replace(
     /([^\n])\s*((🧠|💡|📌|📋|🚀|🧩|🌍)\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):\s*\*\*[^*]+\?\*\*)/gu,
     '$1\n\n$2'
   );
   
-  processedText = processedText.replace(
+  mutableText = mutableText.replace(
     /((🧠|💡|📌|📋|🚀|🧩|🌍)\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):)\s*\n+\s*(\*\*[^*]+\?\*\*)/gu,
     '$1 $3'
   );
   
-  processedText = processedText.replace(
+  mutableText = mutableText.replace(
     /((🧠|💡|📌|📋|🚀|🧩|🌍)\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):\s*\*\*[^*]+\?\*\*)\s*\n\n/gu,
     '$1\n'
   );
 
-  processedText = processedText.replace(/\n{3,}/g, '\n\n');
+  mutableText = mutableText.replace(/\n{3,}/g, '\n\n');
 
   return (
     <div className="question-formatter">
@@ -161,7 +236,7 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text }) => {
           },
         }}
       >
-        {processedText}
+        {mutableText}
       </ReactMarkdown>
     </div>
   );

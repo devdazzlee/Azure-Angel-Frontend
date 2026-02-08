@@ -37,7 +37,8 @@ import BackButton from "../../components/BackButton";
 import AngelThinkingLoader from "../../components/AngelThinkingLoader";
 import QuestionFormatter from "../../components/QuestionFormatter";
 import type { Budget, BudgetItem, APIResponse } from "../../types/apiTypes";
-import BudgetSetupModal from "../../components/Budget/BudgetSetupModal";
+import BusinessPlanningInstructions from "../../components/BusinessPlanningInstructions";
+import KycToBusinessPlanIntro from "../../components/KycToBusinessPlanIntro";
 import { budgetService } from "../../services/budgetService";
 
 interface ConversationPair {
@@ -759,10 +760,6 @@ export default function ChatPage() {
       business_type?: string;
     };
   } | null>(null);
-  const [kycToBusinessTransition, setKycToBusinessTransition] = useState<{
-    kycSummary: string;
-    isActive: boolean;
-  } | null>(null);
   const [kycTransitionCompleted, setKycTransitionCompleted] = useState(false); // Track if user completed KYC transition
   const [modifyModal, setModifyModal] = useState<{
     isOpen: boolean;
@@ -805,6 +802,8 @@ export default function ChatPage() {
     isOpen: false,
     businessPlanCompleted: false
   });
+  const [showInstructions, setShowInstructions] = useState(false);
+  const [showKycToBusinessIntro, setShowKycToBusinessIntro] = useState(false);
 
   const markUploadPromptAsSeen = useCallback(() => {
     if (hasSeenUploadPrompt) {
@@ -886,10 +885,10 @@ export default function ChatPage() {
   }, [fetchTransitionQuote]);
 
   useEffect(() => {
-    if ((kycToBusinessTransition?.isActive ?? false) || transitionData?.transitionPhase === "PLAN_TO_ROADMAP") {
+    if (transitionData?.transitionPhase === "PLAN_TO_ROADMAP") {
       fetchTransitionQuote();
     }
-  }, [fetchTransitionQuote, kycToBusinessTransition, transitionData]);
+  }, [fetchTransitionQuote, transitionData]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -918,11 +917,6 @@ export default function ChatPage() {
       return;
     }
     if (hasSeenUploadPrompt || hasUploadedPlan || uploadPlanModal.isOpen) {
-      return;
-    }
-    // CRITICAL: Don't show upload modal if KYC transition modal is active
-    // The upload modal will be shown AFTER user clicks "Continue to Business Planning"
-    if (kycToBusinessTransition?.isActive) {
       return;
     }
     // CRITICAL: Don't show upload modal automatically if user just completed KYC transition
@@ -962,7 +956,6 @@ export default function ChatPage() {
     backendTotals.answered,
     hasSeenUploadPrompt,
     hasUploadedPlan,
-    kycToBusinessTransition,
     kycTransitionCompleted,
     openUploadPlanModal,
     progress.phase,
@@ -1306,9 +1299,6 @@ export default function ChatPage() {
     try {
       setLoading(true);
       toast.info("Starting business planning phase...");
-      
-      // Clear transition and proceed to business planning
-      setKycToBusinessTransition(null);
       
       // Fetch the first business plan question
       const {
@@ -3184,17 +3174,13 @@ export default function ChatPage() {
         return;
       }
 
-      // Handle KYC to Business Plan transition
-      if (transition_phase === "KYC_TO_BUSINESS_PLAN" || 
-          (progress.phase === "BUSINESS_PLAN" && progress.answered === 0)) {
-        setKycToBusinessTransition({
-          kycSummary: reply || "KYC completed successfully!",
-          isActive: true
-        });
-        // Keep the optimistic update for this transition
-        return;
-      }
-      
+        // Handle KYC to Business Plan transition
+        if (transition_phase === "KYC_TO_BUSINESS_PLAN" ||
+            (progress.phase === "BUSINESS_PLAN" && progress.answered === 0)) {
+          setShowKycToBusinessIntro(true);
+          // Keep the optimistic update for this transition
+          return;
+        }      
       // Handle roadmap generation
       if (transition_phase === "ROADMAP_GENERATED") {
         setRoadmapData({
@@ -3739,116 +3725,6 @@ export default function ChatPage() {
     return <VentureLoader title="Loading your venture" />;
 
   // Show KYC to Business Plan transition
-  if (kycToBusinessTransition && kycToBusinessTransition.isActive) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 flex items-center justify-center p-4">
-        <div className="max-w-4xl w-full">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-teal-500 to-blue-600 p-8 text-center">
-              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-3xl">🎉</span>
-              </div>
-              <h1 className="text-3xl font-bold text-white mb-2">KYC Phase Complete!</h1>
-              <p className="text-teal-100 text-lg">Great job completing your entrepreneurial profile</p>
-            </div>
-
-            {/* Content */}
-            <div className="p-8">
-              <div className="prose prose-lg max-w-none mb-8 space-y-4">
-                <div className="text-gray-700 leading-relaxed space-y-3">
-                  {renderKycSummaryContent(kycToBusinessTransition.kycSummary)}
-                </div>
-              </div>
-
-              {/* Next Steps */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 mb-8 border border-blue-200">
-                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
-                  <span className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm mr-3">📋</span>
-                  Ready for Business Planning?
-                </h3>
-                <p className="text-gray-600 mb-4">
-                  Now we'll dive deep into every aspect of your business idea. I'll be asking detailed questions about your product, market, finances, and strategy.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
-                  <div className="flex items-start">
-                    <span className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center text-green-600 text-xs mr-2 mt-0.5">✓</span>
-                    <span>Mission, vision, and unique selling proposition</span>
-                  </div>
-                  <div className="flex items-start">
-                    <span className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center text-green-600 text-xs mr-2 mt-0.5">✓</span>
-                    <span>Target audience and competitors</span>
-                  </div>
-                  <div className="flex items-start">
-                    <span className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center text-green-600 text-xs mr-2 mt-0.5">✓</span>
-                    <span>Revenue model and financial planning</span>
-                  </div>
-                  <div className="flex items-start">
-                    <span className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center text-green-600 text-xs mr-2 mt-0.5">✓</span>
-                    <span>Marketing and operational strategies</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                {/* Continue Button */}
-                <button
-                  onClick={handleStartBusinessPlanning}
-                  disabled={loading}
-                  className="group relative bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white px-8 py-4 rounded-xl text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                >
-                  <div className="flex items-center justify-center gap-3">
-                    <span className="text-xl">🚀</span>
-                    <span>Continue to Business Planning</span>
-                    {loading && (
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white ml-2"></div>
-                    )}
-                  </div>
-                  <div className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                </button>
-
-                {/* Modify Button */}
-                <button
-                  onClick={() => {
-                    setLoading(true);
-                    setTimeout(() => {
-                      setKycToBusinessTransition(null);
-                      setLoading(false);
-                      // Allow user to review and modify their KYC responses
-                      toast.info('Review your responses below. You can continue answering or modify any previous answers.');
-                    }, 300);
-                  }}
-                  disabled={loading}
-                  className="group relative bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 text-gray-700 px-8 py-4 rounded-xl text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border-2 border-gray-300"
-                >
-                  <div className="flex items-center justify-center gap-3">
-                    <span className="text-xl">✏️</span>
-                    <span>Modify My Responses</span>
-                    {loading && (
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-700 ml-2"></div>
-                    )}
-                  </div>
-                  <div className="absolute inset-0 bg-gray-400/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                </button>
-              </div>
-
-              {/* Quote */}
-              <div className="text-center mt-8">
-                <p className="text-gray-500 italic text-sm">
-                  {transitionQuote
-                    ? `“${transitionQuote.quote}” – ${transitionQuote.author}`
-                    : "“Success is not final; failure is not fatal: it is the courage to continue that counts.” – Winston Churchill"}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Show transition component if in transition phase
   if (transitionData && transitionData.transitionPhase === "PLAN_TO_SUMMARY") {
     return (
       <PlanToRoadmapTransition
@@ -4625,6 +4501,16 @@ export default function ChatPage() {
               </div>
             )}
             
+            <div className="mb-3 flex justify-center">
+              <button
+                onClick={() => setShowInstructions(true)}
+                className="text-gray-500 hover:text-gray-700 transition-colors"
+                title="Help"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.79 4 4 0 2.21-1.79 4-4 4-1.742 0-3.223-.835-3.772-2M12 18v.01M12 2a10 10 0 100 20 10 10 0 000-20z"></path></svg>
+              </button>
+            </div>
+
             <SmartInput
               value={currentInput}
               onChange={setCurrentInput}
@@ -5160,12 +5046,26 @@ export default function ChatPage() {
       />
 
       {/* Budget Setup Modal */}
-      <BudgetSetupModal
+      {/* <BudgetSetupModal
         isOpen={budgetSetupModal.isOpen}
         onClose={() => setBudgetSetupModal({ isOpen: false, businessPlanCompleted: false })}
         onComplete={handleBudgetSetupComplete}
         businessContext={mergedBusinessContext}
-      />
+      /> */}
+
+      {showKycToBusinessIntro && (
+        <KycToBusinessPlanIntro
+          onStart={() => {
+            setShowKycToBusinessIntro(false);
+            handleStartBusinessPlanning();
+          }}
+          isLoading={loading}
+        />
+      )}
+
+      {showInstructions && (
+        <BusinessPlanningInstructions onClose={() => setShowInstructions(false)} />
+      )}
     </div>
   );
 }

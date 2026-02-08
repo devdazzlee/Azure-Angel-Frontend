@@ -1,5 +1,9 @@
+import React, { useEffect, useMemo, useState } from "react";
+
 type Props = {
-  title: string
+  title: string;
+  subtitle?: string;
+  subtitles?: string[];
 }
 
 // Animation styles
@@ -67,7 +71,23 @@ const styles = `
   }
 `;
 
-const VentureLoader = ({ title }: Props) => {
+const VentureLoader = ({ title, subtitle, subtitles }: Props) => {
+  const effectiveSubtitles = useMemo(() => {
+    if (Array.isArray(subtitles) && subtitles.length > 0) return subtitles;
+    if (typeof subtitle === "string" && subtitle.trim()) return [subtitle];
+    return ["Please wait while we prepare your workspace"];
+  }, [subtitle, subtitles]);
+
+  const [subtitleIndex, setSubtitleIndex] = useState(0);
+
+  useEffect(() => {
+    if (effectiveSubtitles.length <= 1) return;
+    const interval = window.setInterval(() => {
+      setSubtitleIndex((prev) => (prev + 1) % effectiveSubtitles.length);
+    }, 2200);
+    return () => window.clearInterval(interval);
+  }, [effectiveSubtitles]);
+
   return (
     <>
       <style>{styles}</style>
@@ -102,7 +122,7 @@ const VentureLoader = ({ title }: Props) => {
             <h3 className="text-2xl font-bold bg-gradient-to-r from-teal-600 via-blue-600 to-purple-600 bg-clip-text text-transparent">
               <span className="loading-dots">{title}</span>
             </h3>
-            <p className="text-gray-500 text-sm">Please wait while we prepare your workspace</p>
+            <p className="text-gray-500 text-sm">{effectiveSubtitles[subtitleIndex] || effectiveSubtitles[0]}</p>
           </div>
 
           {/* Progress bar */}

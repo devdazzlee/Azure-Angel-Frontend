@@ -64,14 +64,14 @@ const BudgetItemManager: React.FC<BudgetItemManagerProps> = ({
     setFormData({
       name: item.name,
       category: item.category,
-      amount: item.amount,
+      amount: item.estimated_amount,
       estimated_amount: item.estimated_amount,
       actual_amount: item.actual_amount || 0,
       description: item.description || ''
     });
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (id: string): void => {
     if (window.confirm('Are you sure you want to delete this item?')) {
       onDeleteItem(id);
     }

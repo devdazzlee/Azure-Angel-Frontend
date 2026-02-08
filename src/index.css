@@ -1,50 +1,195 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700&family=Raleway:wght@700&display=swap');
+/* Azure-Angel-Frontend/src/index.css */
 
+/* Global styles */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body { 
-  font-family: 'Inter', sans-serif; 
-  scroll-behavior: smooth;
-}
-h1, h2, h3 {
-  font-family: 'Raleway', sans-serif;
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
 
-/* Custom styles for Angel introduction text to fix excessive spacing */
-.angel-intro-text {
-  /* Reduce excessive line breaks in Angel introduction */
-  line-height: 1.6;
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
 }
 
-/* Specific targeting for the journey question to reduce spacing */
-.angel-intro-text:has-text("Are you ready to begin your journey?") {
-  /* This will be handled by JavaScript formatting */
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
 }
 
-/* Smooth scrolling for chat container */
-.chat-container {
-  scroll-behavior: smooth;
-  scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 #f1f5f9;
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
 
-/* Custom scrollbar styling for webkit browsers */
-.chat-container::-webkit-scrollbar {
-  width: 6px;
-}
 
-.chat-container::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 3px;
-}
+/* --- Print Styles --- */
+@media print {
+  /* Hide non-essential elements */
+  body > header, /* Assuming a global header */
+  body > nav,    /* Assuming a global navigation */
+  .no-print,     /* Custom class for hiding specific elements */
+  .sm\:hidden,
+  .md\:hidden,
+  .lg\:hidden,
+  .xl\:hidden,
+  .2xl\:hidden,
+  button,
+  a.button,
+  .TabsList, /* Hide the tabs navigation itself */
+  .Toastify, /* Hide react-toastify notifications */
+  .flex.items-center.justify-between.mt-4, /* Action buttons div */
+  .relative.flex.items-center.mb-4 > .absolute, /* Dollar sign icon in CurrencyInput */
+  .Slider, /* Hide sliders */
+  /* Hide the export buttons themselves from the print output */
+  .flex.justify-end.mb-4,
+  .flex.justify-center.mt-4 {
+    display: none !important;
+  }
 
-.chat-container::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
-}
+  /* Make sure the main content is visible and takes full width */
+  body {
+    background-color: #fff !important;
+    color: #000 !important;
+    -webkit-print-color-adjust: exact !important; /* Ensure background colors and images are printed */
+    print-color-adjust: exact !important;
+  }
 
-.chat-container::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  /* Reset margins and padding for print */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Ensure content fills page width */
+  .container, .max-w-2xl, .w-full {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Tables: ensure they don't break across pages awkwardly */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-bottom: 1em !important;
+  }
+  th, td {
+    padding: 8px !important;
+    border: 1px solid #ccc !important;
+    vertical-align: top !important;
+  }
+  thead {
+    display: table-header-group !important; /* Repeat table headers on each page */
+  }
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
+  }
+
+  /* Card components: simplify for print */
+  .Card, .shadow-lg, .border-2, .border-blue-200, .bg-gradient-to-br, .from-blue-50, .to-indigo-50 {
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
+    background: none !important;
+    margin-bottom: 1em !important;
+    page-break-inside: avoid !important;
+  }
+  .CardHeader, .CardTitle, .CardContent {
+    padding: 1em !important;
+  }
+
+  /* Inputs: remove styling, show plain text */
+  input[type="text"],
+  input[type="number"],
+  textarea {
+    border: none !important;
+    background: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    display: inline-block !important; /* To keep text in line */
+    width: auto !important;
+  }
+  /* For CurrencyInput specifically, ensure only the value is visible */
+  .CurrencyInput .Input {
+    border: none !important;
+    background: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    display: inline-block !important;
+    width: auto !important;
+    text-align: right !important; /* Align currency to right */
+    font-weight: bold !important;
+  }
+  /* Hide currency input's absolute dollar sign */
+  .CurrencyInput .relative .absolute {
+    display: none !important;
+  }
+
+  /* Tabs content should appear as continuous sections */
+  .TabsContent {
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Ensure text colors are readable */
+  .text-gray-900, .text-gray-800, .text-gray-700, .text-gray-600 {
+    color: #000 !important;
+  }
+  .text-green-600 { color: #22c55e !important; }
+  .text-red-600 { color: #ef4444 !important; }
+  .text-blue-800 { color: #1e40af !important; }
+
+  /* Headings */
+  h1, h2, h3, h4, h5, h6 {
+    color: #000 !important;
+  }
+
+  /* Specific handling for BudgetDashboard structure to ensure all sections print */
+  .relative.space-y-6 > div { /* Target direct children of the main wrapper */
+    margin-bottom: 1em !important; /* Add some spacing */
+  }
+
+  /* Add page breaks between major sections if desired */
+  .StartupBudgetSummary, .BreakEvenAnalysis, .BudgetCharts, .Card {
+    page-break-after: avoid !important;
+  }
+  
+  /* Add business name and date header */
+  @page {
+    /* Set up repeating header and footer */
+    /* This might vary based on browser support */
+    @top-center {
+      content: "Founder AI Budget Report - [Business Name] - " attr(data-date);
+      font-size: 10pt;
+      color: #555;
+    }
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 8pt;
+      color: #777;
+    }
+    margin: 1cm;
+  }
+
+  /* Overwrite print button visibility */
+  button.no-print {
+    display: none !important;
+  }
+
+  .main-content-area {
+    margin-top: 2em; /* Ensure space for potential browser headers/footers */
+  }
+
+  /* Ensure charts print correctly - often requires specific library support */
+  .BudgetCharts {
+    /* If charts are SVGs or canvases, they might need explicit width/height in print */
+    /* Often, the best way is to render them as images for PDF */
+  }
 }
