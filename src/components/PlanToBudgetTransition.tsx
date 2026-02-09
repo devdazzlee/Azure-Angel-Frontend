@@ -3,10 +3,12 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
-import { TrendingUp, TrendingDown, DollarSign, PieChart as PieChartIcon } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, PieChart as PieChartIcon, X } from 'lucide-react';
 import type { BudgetItem } from '../types/apiTypes';
 import { budgetService } from '../services/budgetService';
 import { budgetIntro } from './Budget/budgetIntroContent';
+import BudgetDashboard from './Budget/BudgetDashboard';
+import type { Budget } from '../types/apiTypes';
 
 interface PlanToBudgetTransitionProps {
   businessPlanSummary: string;
@@ -46,6 +48,16 @@ const PlanToBudgetTransition: React.FC<PlanToBudgetTransitionProps> = ({
   
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [budgetCompleted, setBudgetCompleted] = useState(false);
+  const [budget, setBudget] = useState<Budget>({
+    id: '',
+    session_id: sessionId || '',
+    initial_investment: 20000,
+    total_estimated_expenses: 0,
+    total_estimated_revenue: 0,
+    items: [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  });
 
   const handleStartBudget = () => {
     setShowBudgetModal(true);
@@ -288,6 +300,68 @@ const PlanToBudgetTransition: React.FC<PlanToBudgetTransitionProps> = ({
           </motion.div>
         </motion.div>
       </div>
+
+      {/* Budget Setup Modal */}
+      {showBudgetModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-900">Budget Setup</h2>
+              <button
+                onClick={() => setShowBudgetModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-100px)]">
+              <BudgetDashboard
+                budget={budget}
+                onUpdateBudget={(updates) => setBudget(prev => ({ ...prev, ...updates }))}
+                onUpdateItem={async (id, updates) => {
+                  setBudget(prev => ({
+                    ...prev,
+                    items: prev.items.map(item => 
+                      item.id === id ? { ...item, ...updates } : item
+                    )
+                  }));
+                }}
+                onDeleteItem={async (id) => {
+                  setBudget(prev => ({
+                    ...prev,
+                    items: prev.items.filter(item => item.id !== id)
+                  }));
+                }}
+                businessContext={businessContext}
+                sessionId={sessionId}
+              />
+            </div>
+            <div className="flex justify-end gap-4 p-6 border-t border-gray-200">
+              <button
+                onClick={() => setShowBudgetModal(false)}
+                className="px-6 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const expenses = budget.items.filter(item => item.category === 'expense');
+                  const revenue = budget.items.filter(item => item.category === 'revenue');
+                  
+                  handleBudgetComplete({
+                    initialInvestment: budget.initial_investment,
+                    estimatedExpenses: expenses,
+                    estimatedRevenue: revenue
+                  });
+                }}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                Complete Budget Setup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

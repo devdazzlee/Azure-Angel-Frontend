@@ -166,7 +166,7 @@ const AddLineItemModal: React.FC<AddLineItemModalProps> = ({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="sm:max-w-[425px] sm:rounded-lg max-sm:h-[100vh] max-sm:max-w-none max-sm:rounded-none max-sm:p-4">
+      <DialogContent className="sm:max-w-[425px] sm:rounded-lg max-sm:h-[100vh] max-sm:max-w-none max-sm:rounded-none max-sm:p-4 bg-white border border-gray-200 shadow-xl">
         <DialogHeader>
           <DialogTitle>{getTitle()}</DialogTitle>
           <DialogDescription>

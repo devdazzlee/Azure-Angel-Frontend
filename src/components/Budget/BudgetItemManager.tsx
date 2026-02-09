@@ -47,14 +47,31 @@ const BudgetItemManager: React.FC<BudgetItemManagerProps> = ({
   };
 
   const handleSubmit = () => {
-    if (!formData.name.trim()) return;
+    if (!formData.name.trim()) {
+      alert('Please enter an item name');
+      return;
+    }
 
     if (editingItem) {
-      onUpdateItem(editingItem.id, formData);
+      onUpdateItem(editingItem.id, {
+        name: formData.name,
+        category: formData.category,
+        estimated_amount: formData.estimated_amount,
+        actual_amount: formData.actual_amount,
+        description: formData.description
+      });
       setEditingItem(null);
     } else {
-      onAddItem(formData);
-      setIsAddDialogOpen(false);
+      onAddItem({
+        name: formData.name,
+        category: formData.category,
+        estimated_amount: formData.estimated_amount,
+        actual_amount: formData.actual_amount,
+        description: formData.description,
+        is_custom: true,
+        isSelected: true
+      });
+      // Don't close dialog here - let parent control it
     }
     resetForm();
   };
@@ -178,7 +195,7 @@ const BudgetItemManager: React.FC<BudgetItemManagerProps> = ({
             >
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={!formData.name.trim()}>
+            <Button onClick={handleSubmit} disabled={!formData.name.trim() || formData.estimated_amount <= 0}>
               {editingItem ? 'Update' : 'Add'} Item
             </Button>
           </div>
@@ -309,9 +326,6 @@ const BudgetItemManager: React.FC<BudgetItemManagerProps> = ({
           )}
         </div>
       </div>
-
-      {/* Edit Dialog */}
-      {editingItem && <ItemForm trigger={undefined} />}
     </div>
   );
 };
