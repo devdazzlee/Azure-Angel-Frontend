@@ -309,10 +309,14 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         } finally {
           setLoadingRevenueStreams(false);
         }
+      } else {
+        // If sessionId or businessType is missing, don't show loading
+        setLoadingRevenueStreams(false);
+        setDynamicRevenueStreams([]);
       }
     };
     fetchInitialRevenueStreams();
-  }, [sessionId, businessType, budget.items]);
+  }, [sessionId, businessType]);
 
   const handleRevenueStreamsChange = useCallback((updatedStreams: RevenueStream[]) => {
     setDynamicRevenueStreams(updatedStreams);
@@ -1400,12 +1404,12 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   };
 
   return (
-    <div id="budget-dashboard-content" className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-12">
+    <div id="budget-dashboard-content" className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-24">
       {/* Budget Introduction */}
       <BudgetIntroduction />
 
       {/* Header Section */}
-      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b-2 border-gray-200 shadow-lg mb-8">
+      <div className="bg-white/80 backdrop-blur-xl border-b-2 border-gray-200 shadow-lg mb-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
@@ -1474,14 +1478,6 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
               >
                 <Download className="w-4 h-4 mr-2" />
                 Export Excel
-              </Button>
-
-              <Button
-                onClick={handleGoToRoadmap}
-                className="bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white shadow-lg"
-              >
-                <span className="text-lg mr-2">🚀</span>
-                Go to Roadmap
               </Button>
             </div>
           </div>
@@ -2125,8 +2121,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         />
       )}
 
-      {addLineItemCategory && (
-        <AddLineItemModal
+      <AddLineItemModal
           isOpen={isAddLineItemModalOpen}
           onClose={closeAddLineItemModal}
           onAddExpenseItem={(item) => {
@@ -2172,7 +2167,6 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
           }
           currency={currency}
         />
-      )}
 
       <RemoveItemModal
         isOpen={removeModalState.isOpen}
@@ -2181,6 +2175,23 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         itemName={removeModalState.itemName}
         isCustom={removeModalState.isCustom}
       />
+      
+      {/* Sticky Go to Roadmap Button */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg p-4 z-50">
+        <div className="max-w-7xl mx-auto">
+          <Button
+            onClick={handleGoToRoadmap}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-6 font-medium rounded-lg transition-colors duration-200"
+          >
+            <div className="flex items-center justify-center gap-2">
+              <span>Continue to Roadmap</span>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+            </div>
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };
