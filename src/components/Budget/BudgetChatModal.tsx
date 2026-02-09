@@ -6,6 +6,8 @@ import { Send, X, Bot, User } from 'lucide-react';
 import type { BudgetItem, BusinessContextPayload } from '@/types/apiTypes';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils'; // Assuming cn utility is available
+import { fetchQuestion } from '@/services/authService';
+import { toast } from 'react-toastify';
 
 interface ChatMessage {
   id: string;
@@ -74,18 +76,62 @@ const BudgetChatModal: React.FC<BudgetChatModalProps> = ({
     setInputMessage('');
     setIsTyping(true);
 
-    // TODO: Send message to backend API for Angel's response
-    // For now, simulate a response
-    setTimeout(() => {
+    try {
+      const selectedSummary = selectedItems.length
+        ? selectedItems.map((item) => formatBudgetItem(item)).join('\n')
+        : 'None';
+
+      const allItemsSummary = allBudgetItems.length
+        ? allBudgetItems.slice(0, 200).map((item) => formatBudgetItem(item)).join('\n')
+        : 'None';
+
+      const contextText = businessContext ? JSON.stringify(businessContext) : '';
+
+      const content = [
+        'You are Angel, a helpful finance assistant. The user is working on a startup budget dashboard.',
+        'Give concise, practical budget guidance and suggestions.',
+        '',
+        'Business plan summary:',
+        businessPlanSummary || '',
+        '',
+        'Business context (JSON):',
+        contextText,
+        '',
+        'Selected budget items (focus on these):',
+        selectedSummary,
+        '',
+        'All budget items (for reference):',
+        allItemsSummary,
+        '',
+        'User message:',
+        newUserMessage.text,
+      ]
+        .filter((v) => v !== undefined)
+        .join('\n');
+
+      const res = await fetchQuestion(content, sessionId);
+      const reply = res?.result?.reply || res?.result?.immediate_response || 'No response received.';
+
       const angelResponse: ChatMessage = {
         id: `angel-${Date.now()}`,
         sender: 'angel',
-        text: `Thanks for asking about "${newUserMessage.text}". I'm still learning to provide specific budget guidance based on selected items. For now, here's a generic response.`,
+        text: reply,
         timestamp: new Date().toLocaleTimeString(),
       };
       setMessages((prev) => [...prev, angelResponse]);
+    } catch (err: any) {
+      const message = (err as Error)?.message || 'Failed to send message.';
+      toast.error(message);
+      const errorMessage: ChatMessage = {
+        id: `angel-${Date.now()}`,
+        sender: 'angel',
+        text: message,
+        timestamp: new Date().toLocaleTimeString(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
   const formatBudgetItem = (item: BudgetItem) => {

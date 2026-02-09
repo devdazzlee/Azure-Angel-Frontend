@@ -51,6 +51,11 @@ export const BreakEvenAnalysis: React.FC<BreakEvenAnalysisProps> = ({
                   {breakEven.months} months
                   {breakEven.years ? ` (${Math.round(breakEven.years * 10) / 10} years)` : ''}
                 </p>
+                <p className="mt-2 text-xs text-gray-600">
+                  *Projected break-even point is auto-calculated as the month when cumulative net cashflow becomes non-negative:
+                  <br />
+                  <span className="font-semibold">(Total startup costs + monthly costs) - monthly revenue projection</span> reaches 0 or below.
+                </p>
                 {breakEven.months !== null && breakEven.months > 24 && (
                   <div className="mt-2 flex items-start gap-2">
                     <Info className="w-5 h-5 text-red-600 mt-0.5" />
@@ -88,6 +93,11 @@ export const BreakEvenAnalysis: React.FC<BreakEvenAnalysisProps> = ({
                 <p className={`text-lg font-bold ${breakEvenColor}`}>
                   {breakEven.months} months
                   {breakEven.years ? ` (${Math.round(breakEven.years * 10) / 10} years)` : ''}
+                </p>
+                <p className="mt-2 text-xs text-gray-600">
+                  *Projected break-even point is auto-calculated as the month when cumulative net cashflow becomes non-negative:
+                  <br />
+                  <span className="font-semibold">(Total startup costs + monthly costs) - monthly revenue projection</span> reaches 0 or below.
                 </p>
                 {breakEven.months !== null && breakEven.months > 24 && (
                   <div className="mt-2 flex items-start gap-2">

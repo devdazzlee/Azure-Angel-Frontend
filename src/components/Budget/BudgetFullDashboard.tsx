@@ -28,6 +28,7 @@ import type { BudgetItem, RevenueStream } from '@/types/apiTypes';
 import { formatCurrency } from '@/lib/utils';
 import { BreakEvenAnalysis } from './BreakEvenAnalysis';
 import { toast } from 'react-toastify';
+import { budgetService } from '@/services/budgetService';
 import BudgetCharts from './BudgetCharts';
 import StartupCostsTable from './StartupCostsTable';
 import OperatingExpensesTable from './OperatingExpensesTable';
@@ -853,52 +854,37 @@ export const BudgetFullDashboard: React.FC<BudgetFullDashboardProps> = ({
             isOpen={isAddLineItemModalOpen}
             onClose={closeAddLineItemModal}
             onAddExpenseItem={(item) => {
-              const id =
-                typeof crypto !== 'undefined' && 'randomUUID' in crypto
-                  ? crypto.randomUUID()
-                  : Date.now().toString();
-              const now = new Date().toISOString();
+              if (!sessionId) {
+                toast.error('Session ID is missing, cannot add item');
+                return;
+              }
 
-              const newItem: BudgetItem = {
-                ...item,
-                id,
-                created_at: now,
-                updated_at: now,
-              };
-
-              onUpdateBudget({ items: [...budget.items, newItem] });
+              void (async () => {
+                try {
+                  const response = await budgetService.addBudgetItem(sessionId, item);
+                  if (response.success) {
+                    onUpdateBudget({ items: response.result.items });
+                  } else {
+                    toast.error(response.message || 'Failed to add item');
+                  }
+                } catch (error) {
+                  console.error('Error adding budget item:', error);
+                  toast.error('Failed to add item');
+                }
+              })();
             }}
 
             onAddRevenueStream={(payload) => {
-              const id =
-                typeof crypto !== 'undefined' && 'randomUUID' in crypto
-                  ? crypto.randomUUID()
-                  : Date.now().toString();
-
               const projection = payload.estimatedPrice * payload.estimatedVolume;
+              const baseId = payload.name.trim().toLowerCase().replace(/\s+/g, '-');
+              const id = `custom-${baseId}-${revenueStreams.length}`;
 
-              // Update RevenueTable state with full fidelity (price + volume)
-              setRevenueStreams((prev) => {
-                const next: RevenueStream[] = [
-                  ...prev,
-                  {
-                    id,
-                    name: payload.name,
-                    estimatedPrice: payload.estimatedPrice,
-                    estimatedVolume: payload.estimatedVolume,
-                    revenueProjection: projection,
-                    isSelected: true,
-                    isCustom: true,
-                    category: 'revenue',
-                  },
-                ];
-                return next;
-              });
+              if (!sessionId) {
+                toast.error('Session ID is missing, cannot add revenue stream');
+                return;
+              }
 
-              // Also add a revenue BudgetItem so totals/exports remain consistent
-              const now = new Date().toISOString();
-              const revenueItem: BudgetItem = {
-                id,
+              const revenueItem: Omit<BudgetItem, 'id' | 'created_at' | 'updated_at'> = {
                 name: payload.name,
                 category: 'revenue',
                 estimated_amount: projection,
@@ -906,11 +892,37 @@ export const BudgetFullDashboard: React.FC<BudgetFullDashboardProps> = ({
                 description: payload.description,
                 is_custom: true,
                 isSelected: true,
-                created_at: now,
-                updated_at: now,
               };
 
-              onUpdateBudget({ items: [...budget.items, revenueItem] });
+              void (async () => {
+                try {
+                  const response = await budgetService.addBudgetItem(sessionId, revenueItem);
+                  if (response.success) {
+                    onUpdateBudget({ items: response.result.items });
+                    setRevenueStreams((prev) => {
+                      const next: RevenueStream[] = [
+                        ...prev,
+                        {
+                          id,
+                          name: payload.name,
+                          estimatedPrice: payload.estimatedPrice,
+                          estimatedVolume: payload.estimatedVolume,
+                          revenueProjection: projection,
+                          isSelected: true,
+                          isCustom: true,
+                          category: 'revenue',
+                        },
+                      ];
+                      return next;
+                    });
+                  } else {
+                    toast.error(response.message || 'Failed to add revenue stream');
+                  }
+                } catch (error) {
+                  console.error('Error adding revenue stream:', error);
+                  toast.error('Failed to add revenue stream');
+                }
+              })();
             }}
             category={addLineItemCategory}
             existingItems={

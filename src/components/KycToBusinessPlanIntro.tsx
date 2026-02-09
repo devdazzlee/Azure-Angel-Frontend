@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 interface KycToBusinessPlanIntroProps {
   onStart: () => void;
@@ -6,6 +6,13 @@ interface KycToBusinessPlanIntroProps {
 }
 
 const KycToBusinessPlanIntro: React.FC<KycToBusinessPlanIntroProps> = ({ onStart, isLoading }) => {
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      onStart();
+    }, 600);
+    return () => window.clearTimeout(t);
+  }, [onStart]);
+
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -30,6 +37,14 @@ const KycToBusinessPlanIntro: React.FC<KycToBusinessPlanIntroProps> = ({ onStart
               <li>Develop your product/service strategy and operational plan.</li>
               <li>Outline your revenue model and initial financial forecasts.</li>
             </ul>
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="font-semibold text-slate-900">Quick actions during Business Planning</p>
+              <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-slate-700">
+                <li><span className="font-semibold">Support</span>: get guided help for the current question.</li>
+                <li><span className="font-semibold">Draft</span>: generate a first-pass answer you can edit.</li>
+                <li><span className="font-semibold">Scrapping</span>: paste text you wrote and have Angel polish it.</li>
+              </ul>
+            </div>
           </div>
           <button
             onClick={onStart}
@@ -38,7 +53,7 @@ const KycToBusinessPlanIntro: React.FC<KycToBusinessPlanIntroProps> = ({ onStart
           >
             <div className="flex items-center justify-center gap-3">
               <span className="text-xl">🚀</span>
-              <span>Start Business Planning</span>
+              <span>{isLoading ? 'Starting...' : 'Start Business Planning'}</span>
               {isLoading && (
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white ml-2"></div>
               )}

@@ -133,6 +133,17 @@ const StartupCostsTable: React.FC<StartupCostsTableProps> = ({
     onChange(next);
   };
 
+  const handleRemoveItem = useCallback(
+    (item: BudgetItem) => {
+      if (onRemoveItem) {
+        onRemoveItem(item.id, item.name);
+        return;
+      }
+      onChange(items.filter((i) => i.id !== item.id));
+    },
+    [items, onChange, onRemoveItem]
+  );
+
   const getVarianceDisplay = (item: BudgetItem): { valueText: string; className: string } => {
     const budget = Number(item.estimated_amount) || 0;
     const actual = item.actual_amount;

@@ -6,6 +6,7 @@ import { toast } from 'react-toastify';
 import { TrendingUp, TrendingDown, DollarSign, PieChart as PieChartIcon } from 'lucide-react';
 import type { BudgetItem } from '../types/apiTypes';
 import { budgetService } from '../services/budgetService';
+import { budgetIntro } from './Budget/budgetIntroContent';
 
 interface PlanToBudgetTransitionProps {
   businessPlanSummary: string;
@@ -73,14 +74,14 @@ const PlanToBudgetTransition: React.FC<PlanToBudgetTransitionProps> = ({
           total_estimated_expenses: totalExpenses,
           total_estimated_revenue: totalRevenue,
           items: [...budgetData.estimatedExpenses, ...budgetData.estimatedRevenue].map(item => ({
-            id: item.id || `temp-${Date.now()}-${Math.random()}`,
+            id: item.id,
             name: item.name,
             category: item.category,
-            amount: item.estimated_amount,
             estimated_amount: item.estimated_amount,
             actual_amount: item.actual_amount,
             description: item.description,
-            is_custom: item.is_custom
+            is_custom: item.is_custom,
+            isSelected: item.isSelected
           }))
         });
 
@@ -177,6 +178,36 @@ const PlanToBudgetTransition: React.FC<PlanToBudgetTransitionProps> = ({
               </motion.div>
             </motion.div>
           )}
+
+          <div className="mb-8 bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-3">{budgetIntro.section1.title}</h2>
+            <div className="space-y-2 text-gray-700">
+              {budgetIntro.section1.paragraphs.map((p) => (
+                <p key={p}>{p}</p>
+              ))}
+            </div>
+            <div className="my-6 h-px bg-gray-200" />
+            <h3 className="text-lg font-bold text-gray-900 mb-2">{budgetIntro.section2.title}</h3>
+            <p className="text-gray-700 mb-3">{budgetIntro.section2.intro}</p>
+            <ul className="list-disc list-inside space-y-1 text-gray-700 mb-4">
+              {budgetIntro.section2.list1.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            <p className="text-gray-700 mb-3">{budgetIntro.section2.outro}</p>
+            <ul className="list-disc list-inside space-y-1 text-gray-700">
+              {budgetIntro.section2.list2.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            <div className="my-6 h-px bg-gray-200" />
+            <h3 className="text-lg font-bold text-gray-900 mb-2">{budgetIntro.section3.title}</h3>
+            <div className="space-y-2 text-gray-700">
+              {budgetIntro.section3.paragraphs.map((p) => (
+                <p key={p}>{p}</p>
+              ))}
+            </div>
+          </div>
 
           {/* What's Next */}
           <div className="mb-8 bg-gradient-to-r from-teal-50 to-blue-50 border border-teal-200 rounded-xl p-6">

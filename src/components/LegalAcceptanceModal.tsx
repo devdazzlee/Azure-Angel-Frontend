@@ -171,7 +171,7 @@ const LegalAcceptanceModal: React.FC<LegalAcceptanceModalProps> = ({
                     setError(''); // Clear error when checkbox is checked
                   }}
                   disabled={isLoading}
-                  className="shrink-0"
+                  className="shrink-0 border-2 border-slate-500 data-[state=checked]:border-slate-700 data-[state=checked]:bg-slate-700 focus-visible:ring-2 focus-visible:ring-slate-600/50"
                 />
                 <Label 
                   htmlFor="acknowledge" 

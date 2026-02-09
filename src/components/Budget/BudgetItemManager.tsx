@@ -200,7 +200,7 @@ const BudgetItemManager: React.FC<BudgetItemManagerProps> = ({
           <TrendingDown className="w-5 h-5 text-red-500" />
           <h3 className="text-lg font-semibold text-gray-900">Expenses</h3>
           <span className="text-sm text-gray-500">
-            ({expenses.length} items, {currency}{expenses.reduce((sum, item) => sum + item.estimated_amount, 0).toLocaleString()})
+            ({expenses.length} items, {currency}{expenses.reduce((sum, item) => sum + (Number(item.estimated_amount) || 0), 0).toLocaleString()})
           </span>
         </div>
         
@@ -215,11 +215,11 @@ const BudgetItemManager: React.FC<BudgetItemManagerProps> = ({
                   )}
                   <div className="mt-2 flex items-center gap-4 text-sm">
                     <span className="text-gray-500">
-                      Est: {currency}{item.estimated_amount.toLocaleString()}
+                      Est: {currency}{(Number(item.estimated_amount) || 0).toLocaleString()}
                     </span>
-                    {item.actual_amount !== undefined && (
+                    {item.actual_amount !== undefined && item.actual_amount !== null && (
                       <span className="text-gray-500">
-                        Actual: {currency}{item.actual_amount.toLocaleString()}
+                        Actual: {currency}{(Number(item.actual_amount) || 0).toLocaleString()}
                       </span>
                     )}
                   </div>
@@ -258,7 +258,7 @@ const BudgetItemManager: React.FC<BudgetItemManagerProps> = ({
           <TrendingUp className="w-5 h-5 text-green-500" />
           <h3 className="text-lg font-semibold text-gray-900">Revenue</h3>
           <span className="text-sm text-gray-500">
-            ({revenues.length} items, {currency}{revenues.reduce((sum, item) => sum + item.estimated_amount, 0).toLocaleString()})
+            ({revenues.length} items, {currency}{revenues.reduce((sum, item) => sum + (Number(item.estimated_amount) || 0), 0).toLocaleString()})
           </span>
         </div>
         
@@ -273,11 +273,11 @@ const BudgetItemManager: React.FC<BudgetItemManagerProps> = ({
                   )}
                   <div className="mt-2 flex items-center gap-4 text-sm">
                     <span className="text-gray-500">
-                      Est: {currency}{item.estimated_amount.toLocaleString()}
+                      Est: {currency}{(Number(item.estimated_amount) || 0).toLocaleString()}
                     </span>
-                    {item.actual_amount !== undefined && (
+                    {item.actual_amount !== undefined && item.actual_amount !== null && (
                       <span className="text-gray-500">
-                        Actual: {currency}{item.actual_amount.toLocaleString()}
+                        Actual: {currency}{(Number(item.actual_amount) || 0).toLocaleString()}
                       </span>
                     )}
                   </div>

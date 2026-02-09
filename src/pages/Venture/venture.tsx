@@ -68,6 +68,12 @@ interface ProgressState {
     answered: number;
     total: number;
     percent: number;
+    phase_breakdown?: {
+      kyc_completed: number;
+      kyc_total: number;
+      bp_completed: number;
+      bp_total: number;
+    };
   };
   phase_breakdown?: {
     kyc_completed: number;
@@ -165,7 +171,23 @@ const deriveQuestionNumber = (
   replyText: string,
   progressPayload?: Record<string, any>
 ): number | null => {
-  if (typeof backendQuestionNumber === "number" && !Number.isNaN(backendQuestionNumber)) {
+  // For KYC phase, use sequential numbering instead of backend question numbers
+  if (progressPayload?.phase === 'KYC' && typeof backendQuestionNumber === "number" && !Number.isNaN(backendQuestionNumber)) {
+    // Map backend KYC question numbers to sequential numbers
+    const kycSequentialMap: Record<number, number> = {
+      1: 1,  // KYC.01 -> Question 1
+      3: 2,  // KYC.03 -> Question 2  
+      7: 3,  // KYC.07 -> Question 3
+      14: 4, // KYC.14 -> Question 4
+      15: 5, // KYC.15 -> Question 5
+      17: 6,  // KYC.17 -> Question 6
+    };
+    return kycSequentialMap[backendQuestionNumber] ?? backendQuestionNumber;
+  }
+
+  // For Business Plan phase, use sequential numbering starting from 1
+  if (progressPayload?.phase === 'BUSINESS_PLAN' && typeof backendQuestionNumber === "number" && !Number.isNaN(backendQuestionNumber)) {
+    // Business Plan questions are sequential (1, 2, 3, etc.)
     return backendQuestionNumber;
   }
 
@@ -595,14 +617,14 @@ export default function ChatPage() {
   const [progress, setProgress] = useState<ProgressState>({
     phase: "KYC",
     answered: 0,
-    total: 19,
+    total: QUESTION_COUNTS.KYC,
     percent: 0,
   });
   const [backendTotals, setBackendTotals] = useState({
     answered: 0,
     total: QUESTION_COUNTS.KYC,
     overallAnswered: 0,
-    overallTotal: QUESTION_COUNTS.KYC,
+    overallTotal: 51, // 6 KYC + 45 Business Plan
   });
   const [transitionQuote, setTransitionQuote] = useState<MotivationalQuote | null>(null);
   const pickFallbackTransitionQuote = useCallback((exclude?: string) => {
@@ -644,16 +666,29 @@ export default function ChatPage() {
     }
   }, [pickFallbackTransitionQuote, sessionId]);
 
-  const applyProgressUpdate = (
-    progressData: ProgressState & {
-      overall_progress?: {
-        answered: number;
-        total: number;
-        percent?: number;
-      };
-    }
-  ) => {
-    setProgress(progressData);
+  const applyProgressUpdate = (progressData: ProgressState) => {
+    // DEBUG: Log raw API response to see if phase_breakdown is present
+    console.log("🔍 DEBUG - Raw API Response progressData:", progressData);
+    console.log("🔍 DEBUG - Backend Progress Data:", {
+      phase: progressData.phase,
+      answered: progressData.answered,
+      phase_answered: progressData.phase_answered,
+      total: progressData.total,
+      overall_progress: progressData.overall_progress,
+      asked_q: progressData.asked_q
+    });
+    
+    setProgress((prev) => ({
+      ...progressData,
+      overall_progress: progressData.overall_progress
+        ? {
+            ...progressData.overall_progress,
+            phase_breakdown:
+              progressData.overall_progress.phase_breakdown ??
+              prev.overall_progress?.phase_breakdown,
+          }
+        : prev.overall_progress,
+    }));
     setBackendTotals((prev) => {
       const phaseKey = progressData.phase as keyof typeof QUESTION_COUNTS;
       const phaseTotal =
@@ -666,17 +701,41 @@ export default function ChatPage() {
           : typeof progressData.answered === "number"
             ? progressData.answered
             : prev.answered;
+      
+      // Calculate combined totals for KYC and BUSINESS_PLAN phases
+      let combinedTotal: number;
+      let combinedAnswered: number;
+      let phaseAnsweredForDisplay: number;
+      
+      if (progressData.phase === "KYC" || progressData.phase === "BUSINESS_PLAN") {
+        combinedTotal = 51; // 6 KYC + 45 Business Plan
+        
+        if (progressData.phase === "KYC") {
+          // Backend now sends completed questions count directly, no need to subtract 1
+          phaseAnsweredForDisplay = phaseAnswered;
+          combinedAnswered = phaseAnsweredForDisplay;
+        } else {
+          // For Business Plan, add KYC total (6) to current answered
+          phaseAnsweredForDisplay = phaseAnswered;
+          combinedAnswered = 6 + phaseAnswered;
+        }
+      } else {
+        combinedTotal = phaseTotal;
+        phaseAnsweredForDisplay = phaseAnswered;
+        combinedAnswered = phaseAnswered;
+      }
+      
       const overallAnswered =
         typeof progressData.overall_progress?.answered === "number"
           ? progressData.overall_progress.answered
-          : phaseAnswered;
+          : combinedAnswered;
       const overallTotal =
         typeof progressData.overall_progress?.total === "number"
           ? progressData.overall_progress.total
-          : prev.overallTotal ?? phaseTotal;
+          : combinedTotal;
 
       return {
-        answered: phaseAnswered,
+        answered: phaseAnsweredForDisplay,
         total: phaseTotal,
         overallAnswered,
         overallTotal,
@@ -864,9 +923,12 @@ export default function ChatPage() {
         toast.success('Budget setup completed successfully!');
         
         // Add budget setup completion message to history
+        const initialInvestment = Number(budgetData?.initialInvestment) || 0;
+        const totalEstimatedExpenses = Number(budgetPayload?.total_estimated_expenses) || 0;
+        const totalEstimatedRevenue = Number(budgetPayload?.total_estimated_revenue) || 0;
         setHistory(prev => [...prev, {
           question: "Budget Setup",
-          answer: `Great! I've set up your budget with an initial investment of $${budgetData.initialInvestment.toLocaleString()}, estimated expenses of $${budgetPayload.total_estimated_expenses.toLocaleString()}, and estimated revenue of $${budgetPayload.total_estimated_revenue.toLocaleString()}. You can view and manage your budget anytime by clicking the Budget tab.`,
+          answer: `Great! I've set up your budget with an initial investment of $${initialInvestment.toLocaleString()}, estimated expenses of $${totalEstimatedExpenses.toLocaleString()}, and estimated revenue of $${totalEstimatedRevenue.toLocaleString()}. You can view and manage your budget anytime by clicking the Budget tab.`,
           phase: 'BUSINESS_PLAN'
         }]);
       } else {
@@ -1762,7 +1824,7 @@ export default function ChatPage() {
     // Clean up excessive whitespace - be more aggressive with line breaks
     formatted = formatted.replace(/\n{3,}/g, "\n\n");
     formatted = formatted.replace(/\n\s*\n\s*\n/g, "\n\n"); // Remove empty lines between content
-    formatted = formatted.replace(/\s{3,}/g, " ");
+    formatted = formatted.replace(/[ \t]{2,}/g, " ");
     
     // Remove excessive spacing around specific phrases - be more aggressive
     formatted = formatted.replace(/\n{3,}\s*Are you ready to begin your journey\?\s*\n{3,}/g, "\n\nAre you ready to begin your journey?\n\n");
@@ -1838,7 +1900,7 @@ export default function ChatPage() {
     // Clean up excessive whitespace - be more aggressive with line breaks
     formatted = formatted.replace(/\n{3,}/g, "\n\n");
     formatted = formatted.replace(/\n\s*\n\s*\n/g, "\n\n"); // Remove empty lines between content
-    formatted = formatted.replace(/\s{3,}/g, " ");
+    formatted = formatted.replace(/[ \t]{2,}/g, " ");
     
     // Remove excessive spacing around specific phrases - be more aggressive
     formatted = formatted.replace(/\n{3,}\s*Are you ready to begin your journey\?\s*\n{3,}/g, "\n\nAre you ready to begin your journey?\n\n");
@@ -2044,7 +2106,7 @@ export default function ChatPage() {
     finalCleanup = finalCleanup.replace(/\n{4,}/g, '\n\n');
     
     // Clean up excessive whitespace in non-question areas
-    finalCleanup = finalCleanup.replace(/\s{3,}/g, ' ');
+    finalCleanup = finalCleanup.replace(/[ \t]{2,}/g, ' ');
     
     finalCleanup = finalCleanup.trim();
     
@@ -2075,7 +2137,7 @@ export default function ChatPage() {
     
     // Clean up excessive whitespace again
     finalCleanup = finalCleanup.replace(/\n{3,}/g, '\n\n');
-    finalCleanup = finalCleanup.replace(/\s{3,}/g, ' ');
+    finalCleanup = finalCleanup.replace(/[ \t]{2,}/g, ' ');
     
     return finalCleanup.trim();
   };
@@ -2742,6 +2804,8 @@ export default function ChatPage() {
             answered: overallAnswered,
             total: overallTotal,
             percent: overallPercent,
+            phase_breakdown:
+              prev.overall_progress?.phase_breakdown,
           },
         }));
 
@@ -3051,7 +3115,7 @@ export default function ChatPage() {
           });
           setHistory([]);
           setNeedsInitialQuestion(true);
-          setBackendTotals({ answered: 0, total: QUESTION_COUNTS.KYC, overallAnswered: 0, overallTotal: QUESTION_COUNTS.KYC });
+          setBackendTotals({ answered: 0, total: QUESTION_COUNTS.KYC, overallAnswered: 0, overallTotal: 51 });
         }
       }
     };
@@ -3177,8 +3241,8 @@ export default function ChatPage() {
         // Handle KYC to Business Plan transition
         if (transition_phase === "KYC_TO_BUSINESS_PLAN" ||
             (progress.phase === "BUSINESS_PLAN" && progress.answered === 0)) {
-          setShowKycToBusinessIntro(true);
-          // Keep the optimistic update for this transition
+          // Skip modal and go directly to business planning
+          handleStartBusinessPlanning();
           return;
         }      
       // Handle roadmap generation
@@ -3722,7 +3786,12 @@ export default function ChatPage() {
   );
 
   if (loading && currentQuestion === "")
-    return <VentureLoader title="Loading your venture" />;
+    return (
+      <VentureLoader
+        title="Loading Roadmap"
+        subtitle="Please wait while we prepare your next steps"
+      />
+    );
 
   // Show KYC to Business Plan transition
   if (transitionData && transitionData.transitionPhase === "PLAN_TO_SUMMARY") {
@@ -3748,6 +3817,9 @@ export default function ChatPage() {
         businessContext={transitionData.businessContext}
         onComplete={async (budgetData) => {
           // Budget is complete, now transition to roadmap
+          // Immediately switch UI into a global loading state to avoid a "stuck" feeling
+          setTransitionData(null);
+          setCurrentQuestion("");
           setLoading(true);
           try {
             const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/transition-decision`, {
@@ -3765,7 +3837,6 @@ export default function ChatPage() {
             const data = await response.json();
             
             if (data.success) {
-              setTransitionData(null);
               if (data.result?.progress) {
                 applyProgressUpdate(data.result.progress);
               }
@@ -4501,15 +4572,17 @@ export default function ChatPage() {
               </div>
             )}
             
-            <div className="mb-3 flex justify-center">
-              <button
-                onClick={() => setShowInstructions(true)}
-                className="text-gray-500 hover:text-gray-700 transition-colors"
-                title="Help"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.79 4 4 0 2.21-1.79 4-4 4-1.742 0-3.223-.835-3.772-2M12 18v.01M12 2a10 10 0 100 20 10 10 0 000-20z"></path></svg>
-              </button>
-            </div>
+            {progress.phase !== 'KYC' && (
+              <div className="mb-3 flex justify-center">
+                <button
+                  onClick={() => setShowInstructions(true)}
+                  className="text-gray-500 hover:text-gray-700 transition-colors"
+                  title="Help"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.79 4 4 0 2.21-1.79 4-4 4-1.742 0-3.223-.835-3.772-2M12 18v.01M12 2a10 10 0 100 20 10 10 0 000-20z"></path></svg>
+                </button>
+              </div>
+            )}
 
             <SmartInput
               value={currentInput}
@@ -4609,6 +4682,7 @@ export default function ChatPage() {
               answered: overallAnswered,
               total: overallTotal,
               percent: overallPercent,
+              phase_breakdown: progress.overall_progress?.phase_breakdown,
             },
           }}
           currentQuestionNumber={currentQuestionNumber}

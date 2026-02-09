@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import BusinessPlanProgressWidget from './BusinessPlanProgressWidget';
 
 interface Question {
@@ -89,6 +89,11 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
 
   const bpBreakdown =
     currentProgress.overall_progress?.phase_breakdown ?? currentProgress.phase_breakdown;
+  
+  console.log('🔍 QuestionNavigator - Full currentProgress object:', currentProgress);
+  console.log('🔍 QuestionNavigator - overall_progress:', currentProgress.overall_progress);
+  console.log('🔍 QuestionNavigator - phase_breakdown path:', currentProgress.overall_progress?.phase_breakdown);
+  console.log('🔍 QuestionNavigator - bpBreakdown:', bpBreakdown);
   const inferredBpTotal =
     bpBreakdown?.bp_total ??
     (currentPhase === 'BUSINESS_PLAN'
@@ -161,10 +166,10 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
                     KYC
                   </span>
                   <span className="text-xs font-semibold text-blue-700 ml-1">
-                    {currentProgress.overall_progress?.phase_breakdown
+                    {bpBreakdown
                       ? Math.round(
-                          (currentProgress.overall_progress.phase_breakdown.kyc_completed /
-                            currentProgress.overall_progress.phase_breakdown.kyc_total) *
+                          (bpBreakdown.kyc_completed /
+                            bpBreakdown.kyc_total) *
                             100
                         )
                       : Math.round(currentProgress.percent)}
@@ -177,10 +182,10 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
                     BP
                   </span>
                   <span className="text-xs font-semibold text-purple-700 ml-1">
-                    {currentProgress.overall_progress?.phase_breakdown
+                    {bpBreakdown
                       ? Math.round(
-                          (currentProgress.overall_progress.phase_breakdown.bp_completed /
-                            currentProgress.overall_progress.phase_breakdown.bp_total) *
+                          (bpBreakdown.bp_completed /
+                            bpBreakdown.bp_total) *
                             100
                         )
                       : 0}

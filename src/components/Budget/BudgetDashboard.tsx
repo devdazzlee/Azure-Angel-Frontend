@@ -14,7 +14,6 @@ import RevenueTable from './RevenueTable';
 import { BudgetSummaryCards } from './BudgetSummaryCards';
 import { BreakEvenAnalysis } from './BreakEvenAnalysis';
 import { BudgetCharts } from './BudgetCharts';
-import { BudgetFullDashboard } from './BudgetFullDashboard';
 import { formatCurrency, formatMoney } from '@/lib/formatters'; // Import from new formatters
 import CurrencyInput from '../ui/CurrencyInput'; // Import CurrencyInput
 import StartupBudgetSummary from './StartupBudgetSummary'; // Import StartupBudgetSummary
@@ -47,14 +46,13 @@ interface BudgetDashboardProps {
   budget: Budget;
   onUpdateBudget: (updates: Partial<Budget>) => void;
   // onAddItem: (item: Omit<BudgetItem, 'id' | 'created_at' | 'updated_at'>) => void; // This prop is now handled internally
-  onUpdateItem: (id: string, updates: Partial<BudgetItem>) => void;
-  onDeleteItem: (id: string) => void;
+  onUpdateItem: (id: string, updates: Partial<BudgetItem>) => void | Promise<void>;
+  onDeleteItem: (id: string) => void | Promise<void>;
   currency?: string;
   showActuals?: boolean;
   businessType?: string;
   sessionId?: string;
   businessContext?: any; // Replace with any type for now
-  initialBudgetSuggestions?: BudgetItem[]; // New prop
 }
 const debounce = <T extends (...args: any[]) => void>(
   func: T,
@@ -78,7 +76,6 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   businessType,
   sessionId,
   businessContext,
-  initialBudgetSuggestions, // Destructure new prop
 }) => {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [viewMode, setViewMode] = useState<'estimated' | 'actual'>('estimated');
@@ -209,25 +206,15 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   );
 
   useEffect(() => {
-    if (initialBudgetSuggestions && initialBudgetSuggestions.length > 0 && budget.items.length === 0) {
-      console.log("Adding initial budget suggestions to empty budget:", initialBudgetSuggestions);
-      initialBudgetSuggestions.forEach(item => {
-        // Use the new handleAddItem to persist immediately
-        handleAddItem(item);
-      });
-    }
-  }, [initialBudgetSuggestions, budget.items, handleAddItem]);
-
-  useEffect(() => {
     const fetchInitialRevenueStreams = async () => {
       if (sessionId && businessType) {
         setLoadingRevenueStreams(true);
         try {
           const response = await budgetService.generateInitialRevenueStreams(sessionId);
           if (response.success) {
-            const apiGeneratedStreams: RevenueStream[] = response.result.map(stream => ({
+            const apiGeneratedStreams: RevenueStream[] = response.result.map((stream, index) => ({
               ...stream,
-              id: `api-${crypto.randomUUID()}`,
+              id: `api-${String(stream.name || 'stream').trim().toLowerCase().replace(/\s+/g, '-')}-${index}`,
               estimatedPrice: stream.estimated_price,
               estimatedVolume: stream.estimated_volume,
               revenueProjection: stream.estimated_price * stream.estimated_volume,
@@ -517,6 +504,47 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
     };
   }, [monthlyNetIncome, startupCostsTotal]);
 
+  const twoYearProjection = useMemo(() => {
+    const months = 24;
+    const revenue24 = (Number(effectiveMonthlyRevenueForBreakEven) || 0) * months;
+    const costs24 = (Number(totalMonthlyCosts) || 0) * months;
+    const net24 = revenue24 - costs24;
+
+    const totalStartup = Number(startupCostsTotal) || 0;
+    const netAfterStartup24 = net24 - totalStartup;
+
+    return { months, revenue24, costs24, net24, totalStartup, netAfterStartup24 };
+  }, [effectiveMonthlyRevenueForBreakEven, totalMonthlyCosts, startupCostsTotal]);
+
+  const startupActualTotal = useMemo(() => {
+    return startupCostItems.reduce((sum, item) => sum + (Number(item.actual_amount) || 0), 0);
+  }, [startupCostItems]);
+
+  const remainingStartupFunds = useMemo(() => {
+    const investment = Number(budget.initial_investment) || 0;
+    const spent = startupActualTotal > 0 ? startupActualTotal : startupCostsTotal;
+    return investment - spent;
+  }, [budget.initial_investment, startupActualTotal, startupCostsTotal]);
+
+  const startupChartData = useMemo(() => {
+    return startupCostItems
+      .map((item) => ({
+        name: item.name,
+        value: getMonthlyValue(item),
+      }))
+      .filter((d) => Number.isFinite(d.value) && d.value > 0);
+  }, [startupCostItems, getMonthlyValue]);
+
+  const monthlyChartData = useMemo(() => {
+    const entries = [
+      { name: 'Operating', value: operatingExpenseItems.reduce((sum, item) => sum + getMonthlyValue(item), 0) },
+      { name: 'Payroll', value: payrollExpenseItems.reduce((sum, item) => sum + getMonthlyValue(item), 0) },
+      { name: 'COGS', value: cogsExpenseItems.reduce((sum, item) => sum + getMonthlyValue(item), 0) },
+    ];
+
+    return entries.filter((d) => Number.isFinite(d.value) && d.value > 0);
+  }, [operatingExpenseItems, payrollExpenseItems, cogsExpenseItems, getMonthlyValue]);
+
   const allBudgetItems = useMemo(() => {
     // Collect all unique budget items from different categories and dynamic revenue streams
     const itemsMap = new Map<string, BudgetItem>();
@@ -729,7 +757,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
           selectedItems={selectedItems}
           allBudgetItems={allBudgetItems}
           businessContext={businessContext}
-          businessPlanSummary={budgetIntro.section1.paragraphs.join('\n\n')} // Placeholder, should come from actual business plan
+          businessPlanSummary={String((businessContext as any)?.business_plan_summary || (businessContext as any)?.businessPlanSummary || '')}
         />
       )}
 
@@ -769,65 +797,6 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         </TabsList>
 
         <TabsContent value="overview" className="mt-4 space-y-6">
-          <StartupBudgetSummary
-            initialInvestment={budget.initial_investment}
-            totalStartupCosts={startupCostsTotal}
-            currency={currency}
-          />
-          <div className="pt-2">
-            <hr className="border-gray-200" />
-            <div className="mt-4 flex items-center justify-between">
-              <div>
-                <h3 className="text-xl sm:text-2xl font-bold text-gray-900">Detailed Budget</h3>
-                <p className="text-sm sm:text-base text-gray-600">
-                  {viewMode === 'actual' ? 'Actual' : 'Estimated'} budget for Year 1
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <Card className="shadow-lg">
-            <CardContent className="p-4 sm:p-6 space-y-6">
-              <div>
-                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">{budgetIntro.section1.title}</h3>
-                <div className="space-y-2 text-gray-700 leading-relaxed">
-                  {budgetIntro.section1.paragraphs.map((p) => (
-                    <p key={p}>{p}</p>
-                  ))}
-                </div>
-              </div>
-
-              <hr className="border-gray-200" />
-
-              <div>
-                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">{budgetIntro.section2.title}</h3>
-                <p className="text-gray-700 leading-relaxed mb-2">{budgetIntro.section2.intro}</p>
-                <ul className="list-disc list-inside text-gray-700 space-y-1 ml-4">
-                  {budgetIntro.section2.list1.map((li) => (
-                    <li key={li}>{li}</li>
-                  ))}
-                </ul>
-                <p className="text-gray-700 leading-relaxed mt-3 mb-2">{budgetIntro.section2.outro}</p>
-                <ul className="list-disc list-inside text-gray-700 space-y-1 ml-4">
-                  {budgetIntro.section2.list2.map((li) => (
-                    <li key={li}>{li}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <hr className="border-gray-200" />
-
-              <div>
-                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">{budgetIntro.section3.title}</h3>
-                <div className="space-y-2 text-gray-700 leading-relaxed">
-                  {budgetIntro.section3.paragraphs.map((p) => (
-                    <p key={p}>{p}</p>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
           <Card className="shadow-lg border-2 border-gray-200">
             <CardContent className="p-4 sm:p-6 space-y-6">
               <BudgetSummaryCards
@@ -838,6 +807,103 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                 monthlyNetIncome={monthlyNetIncome}
               />
 
+              <BudgetCharts
+                startupChartData={startupChartData}
+                monthlyChartData={monthlyChartData}
+                currency={currency}
+              />
+            </CardContent>
+          </Card>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card className="shadow-lg lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="text-gray-900">Startup Costs (One-Time, Pre-Launch)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <StartupCostsTable
+                  items={startupCostItems}
+                  onChange={(nextStartupItems) => {
+                    const nextItems: BudgetItem[] = [
+                      ...nextStartupItems,
+                      ...cogsExpenseItems,
+                      ...operatingExpenseItems,
+                      ...payrollExpenseItems,
+                      ...revenues,
+                    ];
+                    handleBudgetUpdate({ items: nextItems });
+                  }}
+                  currency={currency}
+                  selectedItemIds={selectedItemIds}
+                  onToggleItemSelection={onToggleItemSelection}
+                  onToggleAllSelection={(isSelected) =>
+                    onToggleSectionSelection(startupCostItems.map((i) => i.id), isSelected)
+                  }
+                  onAddLineItem={openAddLineItemModal}
+                  onRemoveItem={openRemoveModal}
+                />
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-gray-900">Startup Funds (Initial Investment)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="rounded-lg bg-gray-50 border border-gray-200 p-4">
+                    <p className="text-sm text-gray-600">Initial Investment</p>
+                    <CurrencyInput
+                      value={budget.initial_investment}
+                      onChange={(value) => handleBudgetUpdate({ initial_investment: value })}
+                      min={0}
+                      step={100}
+                      getSmartStep={getSmartStepForInitialInvestment}
+                      className="w-full"
+                    />
+                  </div>
+
+                  <div className="rounded-lg bg-white border border-gray-200 p-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Expenses To Date</span>
+                      <span className="font-semibold text-gray-900">{formatMoney(startupActualTotal, currency)}</span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Remaining Funds</span>
+                      <span className={`font-semibold ${remainingStartupFunds >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                        {formatMoney(remainingStartupFunds, currency)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-gray-900">Monthly Revenue Projection</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingRevenueStreams ? (
+                <p>Loading revenue streams...</p>
+              ) : (
+                <RevenueTable
+                  items={dynamicRevenueStreams}
+                  onRevenueStreamsChange={handleRevenueStreamsChange}
+                  onTotalMonthlyRevenueChange={setTotalMonthlyRevenue}
+                  currency={currency}
+                  selectedItemIds={selectedItemIds}
+                  onToggleItemSelection={onToggleItemSelection}
+                  onToggleAllSelection={(itemIds, isSelected) => onToggleSectionSelection(itemIds, isSelected)}
+                  onAddLineItem={openAddLineItemModal}
+                />
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg border-2 border-gray-200">
+            <CardContent className="p-4 sm:p-6 space-y-6">
               <BreakEvenAnalysis
                 breakEven={breakEven}
                 effectiveMonthlyRevenueForBreakEven={effectiveMonthlyRevenueForBreakEven}
@@ -845,10 +911,133 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                 monthlyNetIncome={monthlyNetIncome}
               />
 
-              <BudgetCharts
-                startupChartData={[]}
-                monthlyChartData={[]}
+              <Card className="shadow-sm border border-gray-200">
+                <CardHeader>
+                  <CardTitle className="text-gray-900">2-Year Projection (Auto-Calculated)</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="rounded-lg bg-gray-50 border border-gray-200 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700">2-Year Revenue Projection (24 months)</span>
+                      <span className="font-bold text-gray-900">{formatMoney(twoYearProjection.revenue24, currency)}</span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg bg-gray-50 border border-gray-200 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700">2-Year Operating Costs (24 months)</span>
+                      <span className="font-bold text-gray-900">{formatMoney(twoYearProjection.costs24, currency)}</span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg bg-gray-50 border border-gray-200 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700">2-Year Net (Revenue - Costs)</span>
+                      <span className={`font-bold ${twoYearProjection.net24 >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                        {formatMoney(twoYearProjection.net24, currency)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg bg-white border border-gray-200 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700">Net After Startup Costs (24 months)</span>
+                      <span className={`font-bold ${twoYearProjection.netAfterStartup24 >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                        {formatMoney(twoYearProjection.netAfterStartup24, currency)}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-600">
+                      Uses: (24-month revenue - 24-month costs) - total startup costs.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-gray-900">Monthly Operating Expenses (Post-Launch)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <OperatingExpensesTable
+                items={operatingExpenseItems}
+                onChange={(nextOperatingItems) => {
+                  const nextItems: BudgetItem[] = [
+                    ...startupCostItems,
+                    ...cogsExpenseItems,
+                    ...nextOperatingItems,
+                    ...payrollExpenseItems,
+                    ...revenues,
+                  ];
+                  handleBudgetUpdate({ items: nextItems });
+                }}
                 currency={currency}
+                selectedItemIds={selectedItemIds}
+                onToggleItemSelection={onToggleItemSelection}
+                onToggleAllSelection={(isSelected) =>
+                  onToggleSectionSelection(operatingExpenseItems.map((i) => i.id), isSelected)
+                }
+                onAddLineItem={openAddLineItemModal}
+                onRemoveItem={openRemoveModal}
+              />
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-gray-900">Monthly Payroll, Contractor & Associated Costs</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <PayrollCostsTable
+                items={payrollExpenseItems}
+                onChange={(nextPayrollItems) => {
+                  const nextItems: BudgetItem[] = [
+                    ...startupCostItems,
+                    ...cogsExpenseItems,
+                    ...operatingExpenseItems,
+                    ...nextPayrollItems,
+                    ...revenues,
+                  ];
+                  handleBudgetUpdate({ items: nextItems });
+                }}
+                currency={currency}
+                selectedItemIds={selectedItemIds}
+                onToggleItemSelection={onToggleItemSelection}
+                onToggleAllSelection={(isSelected) =>
+                  onToggleSectionSelection(payrollExpenseItems.map((i) => i.id), isSelected)
+                }
+                onAddLineItem={openAddLineItemModal}
+                onRemoveItem={openRemoveModal}
+              />
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-gray-900">Monthly Cost of Goods Sold (COGS)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <COGSTable
+                items={cogsExpenseItems}
+                onChange={(nextCogsItems) => {
+                  const nextItems: BudgetItem[] = [
+                    ...startupCostItems,
+                    ...nextCogsItems,
+                    ...operatingExpenseItems,
+                    ...payrollExpenseItems,
+                    ...revenues,
+                  ];
+                  handleBudgetUpdate({ items: nextItems });
+                }}
+                currency={currency}
+                selectedItemIds={selectedItemIds}
+                onToggleItemSelection={onToggleItemSelection}
+                onToggleAllSelection={(isSelected) =>
+                  onToggleSectionSelection(cogsExpenseItems.map((i) => i.id), isSelected)
+                }
+                onAddLineItem={openAddLineItemModal}
+                onRemoveItem={openRemoveModal}
               />
             </CardContent>
           </Card>
@@ -880,8 +1069,8 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
               />
 
               <BudgetCharts
-                startupChartData={[]}
-                monthlyChartData={[]}
+                startupChartData={startupChartData}
+                monthlyChartData={monthlyChartData}
                 currency={currency}
               />
             </CardContent>
@@ -1130,11 +1319,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
             handleAddItem(item);
           }}
           onAddRevenueStream={(payload) => {
-            const uuid =
-              typeof crypto !== 'undefined' && 'randomUUID' in crypto
-                ? crypto.randomUUID()
-                : Date.now().toString();
-            const id = `custom-${uuid}`;
+            const id = `custom-${payload.name.trim().toLowerCase().replace(/\s+/g, '-')}-${dynamicRevenueStreams.length}`;
             const projection = payload.estimatedPrice * payload.estimatedVolume;
 
             const newStream: RevenueStream = {

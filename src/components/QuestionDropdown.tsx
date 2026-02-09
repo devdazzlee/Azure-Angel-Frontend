@@ -19,7 +19,8 @@ const QuestionDropdown: React.FC<QuestionDropdownProps> = ({
   const handleOptionSelect = (value: string) => {
     setSelectedValue(value);
     setIsOpen(false);
-    // Do NOT call onSubmit here - user must click "Submit" button to confirm selection
+    // Auto-submit when option is selected
+    onSubmit(value);
   };
 
   const getOptionIcon = (option: string) => {
@@ -116,8 +117,8 @@ const QuestionDropdown: React.FC<QuestionDropdownProps> = ({
         ))}
       </div>
 
-      {/* Submit Button */}
-      {selectedValue && (
+      {/* Submit Button - Hidden since options auto-submit */}
+      {false && selectedValue && (
         <div className="flex justify-center mt-4">
           <button
             onClick={() => onSubmit(selectedValue)}

@@ -242,18 +242,19 @@ const Implementation: React.FC<ImplementationProps> = ({
       if (response.success) {
         setBudget(response.result);
       } else {
-        // Create default budget if none exists
-        const defaultBudget: Budget = {
-          id: '',
+        const created = await budgetService.saveBudget(sessionId, {
           session_id: sessionId,
           initial_investment: 0,
           total_estimated_expenses: 0,
           total_estimated_revenue: 0,
           items: [],
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        setBudget(defaultBudget);
+        });
+        if (created.success) {
+          setBudget(created.result);
+        } else {
+          toast.error(created.message || 'Failed to initialize budget');
+          setBudget(null);
+        }
       }
     } catch (error) {
       console.error('Error loading budget:', error);
@@ -280,38 +281,50 @@ const Implementation: React.FC<ImplementationProps> = ({
     setBudget(updatedBudget);
   };
 
-  const handleAddItem = (item: Omit<BudgetItem, 'id' | 'created_at' | 'updated_at'>) => {
+  const handleAddItem = async (item: Omit<BudgetItem, 'id' | 'created_at' | 'updated_at'>) => {
     if (!budget) return;
     
-    const newItem: BudgetItem = {
-      ...item,
-      id: Date.now().toString(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    
-    handleUpdateBudget({
-      items: [...budget.items, newItem]
-    });
+    try {
+      const response = await budgetService.addBudgetItem(sessionId, item);
+      if (response.success) {
+        setBudget(response.result);
+      } else {
+        toast.error(response.message || 'Failed to add item');
+      }
+    } catch (error) {
+      console.error('Error adding budget item:', error);
+      toast.error('Failed to add item');
+    }
   };
 
-  const handleUpdateItem = (itemId: string, updates: Partial<BudgetItem>) => {
-    if (!budget) return;
-    
-    const updatedItems = budget.items.map(item =>
-      item.id === itemId
-        ? { ...item, ...updates, updated_at: new Date().toISOString() }
-        : item
-    );
-    
-    handleUpdateBudget({ items: updatedItems });
+  const handleUpdateItem = async (itemId: string, updates: Partial<BudgetItem>) => {
+    if (!sessionId) return;
+    try {
+      const response = await budgetService.updateBudgetItem(sessionId, itemId, updates);
+      if (response.success) {
+        setBudget(response.result);
+      } else {
+        toast.error(response.message || 'Failed to update item');
+      }
+    } catch (error) {
+      console.error('Error updating budget item:', error);
+      toast.error('Failed to update item');
+    }
   };
 
-  const handleDeleteItem = (itemId: string) => {
-    if (!budget) return;
-    
-    const updatedItems = budget.items.filter(item => item.id !== itemId);
-    handleUpdateBudget({ items: updatedItems });
+  const handleDeleteItem = async (itemId: string) => {
+    if (!sessionId) return;
+    try {
+      const response = await budgetService.deleteBudgetItem(sessionId, itemId);
+      if (response.success) {
+        setBudget(response.result);
+      } else {
+        toast.error(response.message || 'Failed to delete item');
+      }
+    } catch (error) {
+      console.error('Error deleting budget item:', error);
+      toast.error('Failed to delete item');
+    }
   };
 
   useEffect(() => {
@@ -1166,6 +1179,8 @@ const Implementation: React.FC<ImplementationProps> = ({
                     onUpdateItem={handleUpdateItem}
                     onDeleteItem={handleDeleteItem}
                     showActuals={true}
+                    sessionId={sessionId}
+                    businessType={businessContext?.business_type}
                   />
                 ) : (
                   <div className="text-center py-12">
@@ -1223,14 +1238,16 @@ const Implementation: React.FC<ImplementationProps> = ({
               progress={progress}
             />
 
-      {/* Floating Comprehensive Support - Always Visible */}
-      <FloatingComprehensiveSupport
-        taskContext={currentTask?.title || 'general business support'}
-        businessContext={businessContext}
-        angelCanHelp={currentTask?.angel_actions || []}
-        sessionId={sessionId}
-        currentTask={currentTask}
-      />
+      {/* Floating Comprehensive Support - Only show in business phases, not KYC */}
+      {currentTask && currentTask.phase_name && !currentTask.phase_name.toLowerCase().includes('kyc') && (
+        <FloatingComprehensiveSupport
+          taskContext={currentTask?.title || 'general business support'}
+          businessContext={businessContext}
+          angelCanHelp={currentTask?.angel_actions || []}
+          sessionId={sessionId}
+          currentTask={currentTask}
+        />
+      )}
       
       {/* Custom Animations */}
       <style>{`

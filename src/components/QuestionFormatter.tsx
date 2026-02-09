@@ -12,7 +12,6 @@ export function parseBusinessPlanQuestionParts(inputText: string): {
   thoughtStarters: string[];
 } {
   const rawLines = (inputText || '')
-    .replace(/\*\*(.*?)\*\*/g, '$1')
     .replace(/\r\n/g, '\n')
     .split('\n')
     .map((l) => l.trim())
@@ -41,7 +40,9 @@ export function parseBusinessPlanQuestionParts(inputText: string): {
   const fallbackIndex = nonThoughtLines.findIndex((line) => line && !line.endsWith(':'));
   const resolvedIndex = mainQuestionIndex >= 0 ? mainQuestionIndex : (fallbackIndex >= 0 ? fallbackIndex : 0);
   const mainQuestion = resolvedIndex >= 0 ? (nonThoughtLines[resolvedIndex] ?? '') : '';
-  const helperLines = nonThoughtLines.filter((_, idx) => idx !== resolvedIndex);
+  const helperLines = nonThoughtLines
+    .filter((_, idx) => idx !== resolvedIndex)
+    .filter((line) => !line.endsWith('?'));
 
   return { mainQuestion, helperLines, thoughtStarters };
 }
@@ -82,15 +83,22 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
           </div>
         ) : null}
 
-        {businessPlanParts.thoughtStarters.length ? (
-          <div className="mt-3 space-y-2">
-            {businessPlanParts.thoughtStarters.map((line, idx) => (
-              <div key={`${idx}-${line}`} className="text-sm italic text-gray-600 leading-relaxed">
-                {line}
-              </div>
-            ))}
+        {businessPlanParts.thoughtStarters.length > 0 && (
+          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="text-sm font-semibold text-blue-800 mb-2 flex items-center gap-2">
+              <span>🧠</span>
+              <span>Thought Starter</span>
+            </div>
+            <div className="text-sm text-gray-700 space-y-1">
+              {businessPlanParts.thoughtStarters.map((starter, index) => (
+                <div key={index} className="flex items-start gap-2">
+                  <span className="text-blue-500 mt-0.5">•</span>
+                  <span>{starter.replace(/^(🧠|💡|📌|📋|🚀|🧩|🌍)?\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip|Pro Tip|Pro-tip|Example|Consider|Reminder|Note|Watch out)\s*:\s*/iu, '')}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        ) : null}
+        )}
       </div>
     );
   }

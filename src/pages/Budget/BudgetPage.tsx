@@ -66,35 +66,41 @@ const BudgetPage: React.FC = () => {
       if (response.success) {
         setBudget(response.result);
       } else {
-        // If no budget exists, create a default one
-        const defaultBudget: Budget = {
-          id: '',
+        // If no budget exists, create an empty one via API so the UI stays API-driven
+        const created = await budgetService.saveBudget(id!, {
           session_id: id!,
           initial_investment: 0,
           total_estimated_expenses: 0,
           total_estimated_revenue: 0,
           items: [],
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        setBudget(defaultBudget);
+        });
+        if (created.success) {
+          setBudget(created.result);
+        } else {
+          toast.error(created.message || 'Failed to initialize budget');
+          setBudget(null);
+        }
       }
     } catch (error) {
       console.error('Error fetching budget:', error);
       toast.error('Failed to load budget');
-      
-      // Create default budget on error
-      const defaultBudget: Budget = {
-        id: '',
-        session_id: id!,
-        initial_investment: 0,
-        total_estimated_expenses: 0,
-        total_estimated_revenue: 0,
-        items: [],
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      setBudget(defaultBudget);
+
+      try {
+        const created = await budgetService.saveBudget(id!, {
+          session_id: id!,
+          initial_investment: 0,
+          total_estimated_expenses: 0,
+          total_estimated_revenue: 0,
+          items: [],
+        });
+        if (created.success) {
+          setBudget(created.result);
+        } else {
+          setBudget(null);
+        }
+      } catch {
+        setBudget(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -137,31 +143,19 @@ const BudgetPage: React.FC = () => {
     setBudget(updatedBudget);
   };
 
-  const handleAddItem = (item: Omit<BudgetItem, 'id' | 'created_at' | 'updated_at'>) => {
-    if (!budget) return;
-    
-    const newItem: BudgetItem = {
-      ...item,
-      id: Date.now().toString(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    
-    handleUpdateBudget({
-      items: [...budget.items, newItem]
-    });
-  };
-
-  const handleUpdateItem = (itemId: string, updates: Partial<BudgetItem>) => {
-    if (!budget) return;
-    
-    const updatedItems = budget.items.map(item =>
-      item.id === itemId
-        ? { ...item, ...updates, updated_at: new Date().toISOString() }
-        : item
-    );
-    
-    handleUpdateBudget({ items: updatedItems });
+  const handleUpdateItem = async (itemId: string, updates: Partial<BudgetItem>) => {
+    if (!id) return;
+    try {
+      const response = await budgetService.updateBudgetItem(id, itemId, updates);
+      if (response.success) {
+        setBudget(response.result);
+      } else {
+        toast.error(response.message || 'Failed to update item');
+      }
+    } catch (error) {
+      console.error('Error updating budget item:', error);
+      toast.error('Failed to update item');
+    }
   };
 
   const handleExportExcel = () => {
@@ -170,11 +164,19 @@ const BudgetPage: React.FC = () => {
     toast.success('Budget exported to Excel');
   };
 
-  const handleDeleteItem = (itemId: string) => {
-    if (!budget) return;
-    
-    const updatedItems = budget.items.filter(item => item.id !== itemId);
-    handleUpdateBudget({ items: updatedItems });
+  const handleDeleteItem = async (itemId: string) => {
+    if (!id) return;
+    try {
+      const response = await budgetService.deleteBudgetItem(id, itemId);
+      if (response.success) {
+        setBudget(response.result);
+      } else {
+        toast.error(response.message || 'Failed to delete item');
+      }
+    } catch (error) {
+      console.error('Error deleting budget item:', error);
+      toast.error('Failed to delete item');
+    }
   };
 
   const exportBudget = () => {
