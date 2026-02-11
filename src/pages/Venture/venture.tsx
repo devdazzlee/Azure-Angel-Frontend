@@ -4102,7 +4102,7 @@ export default function ChatPage() {
                 try {
                   toast.info("Saving your progress...");
                   const phase = progress.phase === 'KYC' ? 'KYC' : progress.phase === 'BUSINESS_PLAN' ? 'BUSINESS_PLAN' : 'IMPLEMENTATION';
-                  const askedTag = progress.currentTag || undefined;
+                  const askedTag = progress.asked_q || undefined;
                   await syncSessionProgress(sessionId!, {
                     phase,
                     answered_count: progress.answered ?? 0,
@@ -4732,7 +4732,7 @@ export default function ChatPage() {
                       try {
                         toast.info("Saving your progress...");
                         const phase = progress.phase === 'KYC' ? 'KYC' : progress.phase === 'BUSINESS_PLAN' ? 'BUSINESS_PLAN' : 'IMPLEMENTATION';
-                        const askedTag = progress.currentTag || undefined;
+                        const askedTag = progress.asked_q || undefined;
                         await syncSessionProgress(sessionId!, {
                           phase,
                           answered_count: progress.answered ?? 0,
