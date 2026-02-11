@@ -37,23 +37,23 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
   const [overallProgress, setOverallProgress] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
 
-  // Define business plan sections based on constant.py structure
+  // Define business plan sections aligned with constant.py structure
   const sections: BusinessPlanSection[] = [
     {
-      id: 'business-foundation',
-      title: 'Business Foundation',
-      icon: <Building2 className="w-4 h-4" />,
+      id: 'product-service',
+      title: 'Product/Service Details',
+      icon: <Package className="w-4 h-4" />,
       startQuestion: 1,
       endQuestion: 4,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50'
     },
     {
-      id: 'product-service',
-      title: 'Product/Service Details',
-      icon: <Package className="w-4 h-4" />,
+      id: 'business-overview',
+      title: 'Business Overview',
+      icon: <Building2 className="w-4 h-4" />,
       startQuestion: 5,
-      endQuestion: 8,
+      endQuestion: 7,
       color: 'text-purple-600',
       bgColor: 'bg-purple-50'
     },
@@ -61,8 +61,8 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
       id: 'market-research',
       title: 'Market Research',
       icon: <Users className="w-4 h-4" />,
-      startQuestion: 9,
-      endQuestion: 12,
+      startQuestion: 8,
+      endQuestion: 13,
       color: 'text-green-600',
       bgColor: 'bg-green-50'
     },
@@ -70,50 +70,50 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
       id: 'location-operations',
       title: 'Location & Operations',
       icon: <MapPin className="w-4 h-4" />,
-      startQuestion: 13,
+      startQuestion: 14,
       endQuestion: 17,
       color: 'text-orange-600',
       bgColor: 'bg-orange-50'
     },
     {
-      id: 'financial-planning',
-      title: 'Financial Planning',
-      icon: <DollarSign className="w-4 h-4" />,
-      startQuestion: 18,
-      endQuestion: 25,
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-50'
-    },
-    {
       id: 'marketing-sales',
-      title: 'Marketing & Sales',
+      title: 'Marketing & Sales Strategy',
       icon: <Megaphone className="w-4 h-4" />,
-      startQuestion: 26,
-      endQuestion: 31,
+      startQuestion: 18,
+      endQuestion: 23,
       color: 'text-pink-600',
       bgColor: 'bg-pink-50'
     },
     {
       id: 'legal-compliance',
-      title: 'Legal & Compliance',
+      title: 'Legal & Regulatory Compliance',
       icon: <Scale className="w-4 h-4" />,
-      startQuestion: 32,
-      endQuestion: 37,
+      startQuestion: 24,
+      endQuestion: 28,
       color: 'text-red-600',
       bgColor: 'bg-red-50'
+    },
+    {
+      id: 'financial-planning',
+      title: 'Revenue Model & Financials',
+      icon: <DollarSign className="w-4 h-4" />,
+      startQuestion: 29,
+      endQuestion: 34,
+      color: 'text-emerald-600',
+      bgColor: 'bg-emerald-50'
     },
     {
       id: 'growth-scaling',
       title: 'Growth & Scaling',
       icon: <TrendingUp className="w-4 h-4" />,
-      startQuestion: 38,
+      startQuestion: 35,
       endQuestion: 41,
       color: 'text-indigo-600',
       bgColor: 'bg-indigo-50'
     },
     {
-      id: 'risk-management',
-      title: 'Risk Management',
+      id: 'challenges-contingency',
+      title: 'Challenges & Contingency Planning',
       icon: <Shield className="w-4 h-4" />,
       startQuestion: 42,
       endQuestion: 45,

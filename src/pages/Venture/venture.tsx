@@ -106,7 +106,7 @@ const DISPLAY_FALLBACK_CONTEXT: Required<BusinessContextInfo> = {
 // Updated to include PLAN_TO_ROADMAP_TRANSITION phase
 
 const QUESTION_COUNTS = {
-  KYC: 6,  // Updated to 6 questions (kept only: 1, 3, 7, 14, 15, 17)
+  KYC: 6,  // 6 sequential questions: KYC.01 through KYC.06
   BUSINESS_PLAN: 45,  // Updated to 45 questions (9 sections restructured)
   ROADMAP: 1,
   IMPLEMENTATION: 10,
@@ -171,18 +171,9 @@ const deriveQuestionNumber = (
   replyText: string,
   progressPayload?: Record<string, any>
 ): number | null => {
-  // For KYC phase, use sequential numbering instead of backend question numbers
+  // For KYC phase, questions are now sequential (1-6), use directly
   if (progressPayload?.phase === 'KYC' && typeof backendQuestionNumber === "number" && !Number.isNaN(backendQuestionNumber)) {
-    // Map backend KYC question numbers to sequential numbers
-    const kycSequentialMap: Record<number, number> = {
-      1: 1,  // KYC.01 -> Question 1
-      3: 2,  // KYC.03 -> Question 2  
-      7: 3,  // KYC.07 -> Question 3
-      14: 4, // KYC.14 -> Question 4
-      15: 5, // KYC.15 -> Question 5
-      17: 6,  // KYC.17 -> Question 6
-    };
-    return kycSequentialMap[backendQuestionNumber] ?? backendQuestionNumber;
+    return backendQuestionNumber;
   }
 
   // For Business Plan phase, use sequential numbering starting from 1
@@ -375,7 +366,7 @@ export default function ChatPage() {
         return;
       }
       
-      // Extract location from KYC.10 or Business Plan location questions
+      // Extract location from Business Plan location questions
       if ((question.includes('where are you located') || question.includes('what city') || 
            question.includes('where will your business be located')) &&
           answerLower !== 'yes' && answerLower !== 'no' && answer.length > 2 && answer.length < 100) {
@@ -1102,7 +1093,7 @@ export default function ChatPage() {
   //   return false;
   // };
 
-  // Function to extract the actionable content from AI responses (removes question tags and tips)
+  // Function to extract the actionable content from AI responses (removes question tags, tips, markdown, thought starters)
   const extractGuidanceContent = (message: string): string | null => {
     if (!message || message.length < 100) return null;
     
@@ -1111,11 +1102,33 @@ export default function ChatPage() {
     // Remove question tags like [[Q:BUSINESS_PLAN.06]]
     cleanedContent = cleanedContent.replace(/\[\[Q:[A-Z_]+\.\d{2}\]\]/g, '').trim();
     
+    // Remove draft/support prefixes
+    cleanedContent = cleanedContent.replace(/^Here's a (research-backed )?draft for you:\s*/i, '').trim();
+    cleanedContent = cleanedContent.replace(/^Here's a draft based on.*?:\s*/i, '').trim();
+    
     // Remove trailing tips and verification prompts
     cleanedContent = cleanedContent.replace(/💡 \*\*Quick Tip\*\*:.*$/s, '').trim();
     cleanedContent = cleanedContent.replace(/💡 \*\*Pro Tip\*\*:.*$/s, '').trim();
+    cleanedContent = cleanedContent.replace(/💡\s*Quick Tip:.*$/s, '').trim();
     cleanedContent = cleanedContent.replace(/\n\nVerification:.*$/s, '').trim();
     cleanedContent = cleanedContent.replace(/🎯 \*\*Areas Where You May Need Additional Support:\*\*.*$/s, '').trim();
+    
+    // Remove Thought Starter lines (🧠 Thought Starter: ...)
+    cleanedContent = cleanedContent.replace(/🧠\s*Thought Starter:.*$/gm, '').trim();
+    cleanedContent = cleanedContent.replace(/💭\s*Thought Starter:.*$/gm, '').trim();
+    
+    // Remove "Follow-up prompts:" sections
+    cleanedContent = cleanedContent.replace(/\n\s*Follow-up prompts?:[\s\S]*$/i, '').trim();
+    cleanedContent = cleanedContent.replace(/\n\s*Follow-up questions?:[\s\S]*$/i, '').trim();
+    
+    // Remove "I'm sorry, but I can't accommodate" contradictory guardrail messages
+    cleanedContent = cleanedContent.replace(/I'm sorry, but I can't accommodate that request\..*$/s, '').trim();
+    
+    // Remove ** markdown bold markers for clean text display
+    cleanedContent = cleanedContent.replace(/\*\*/g, '').trim();
+    
+    // Clean up extra blank lines left by removals
+    cleanedContent = cleanedContent.replace(/\n{3,}/g, '\n\n').trim();
     
     // If the cleaned content is substantial, return it
     if (cleanedContent.length > 200) {
@@ -1825,6 +1838,9 @@ export default function ChatPage() {
     formatted = formatted.replace(/\n{3,}/g, "\n\n");
     formatted = formatted.replace(/\n\s*\n\s*\n/g, "\n\n"); // Remove empty lines between content
     formatted = formatted.replace(/[ \t]{2,}/g, " ");
+    
+    // Compact spacing between numbered list items (prevent large gaps between 1. ... and 2. ...)
+    formatted = formatted.replace(/(\d+\.\s+[^\n]+)\n\n(\d+\.\s+)/g, "$1\n$2");
     
     // Remove excessive spacing around specific phrases - be more aggressive
     formatted = formatted.replace(/\n{3,}\s*Are you ready to begin your journey\?\s*\n{3,}/g, "\n\nAre you ready to begin your journey?\n\n");
@@ -2793,6 +2809,23 @@ export default function ChatPage() {
         // Use backend's asked_q as the source of truth for current question
         const pendingNumber = numberFromTag ?? reconstructed.pendingNumber;
 
+        // Calculate phase_breakdown from actual data (don't rely on previous state which is empty on restore)
+        const kycTotal = QUESTION_COUNTS.KYC || 6;
+        const bpTotalCalc = QUESTION_COUNTS.BUSINESS_PLAN || 45;
+        let kycCompleted = 0;
+        let bpCompleted = 0;
+        
+        if (phase === "KYC") {
+          kycCompleted = Math.min(answeredPhase, kycTotal);
+          bpCompleted = 0;
+        } else if (phase === "BUSINESS_PLAN") {
+          kycCompleted = kycTotal; // KYC is complete if in BP
+          bpCompleted = Math.min(answeredPhase, bpTotalCalc);
+        } else {
+          kycCompleted = kycTotal;
+          bpCompleted = bpTotalCalc;
+        }
+        
         setProgress((prev) => ({
           ...prev,
           phase,
@@ -2804,8 +2837,12 @@ export default function ChatPage() {
             answered: overallAnswered,
             total: overallTotal,
             percent: overallPercent,
-            phase_breakdown:
-              prev.overall_progress?.phase_breakdown,
+            phase_breakdown: {
+              kyc_completed: kycCompleted,
+              kyc_total: kycTotal,
+              bp_completed: bpCompleted,
+              bp_total: bpTotalCalc,
+            },
           },
         }));
 
@@ -4056,6 +4093,42 @@ export default function ChatPage() {
             </button>
           )}
 
+          {/* Save Button */}
+          {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
+            progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) ||
+            (progress.phase === 'KYC' && history.length > 0)) && (
+            <button
+              onClick={async () => {
+                try {
+                  toast.info("Saving your progress...");
+                  const phase = progress.phase === 'KYC' ? 'KYC' : progress.phase === 'BUSINESS_PLAN' ? 'BUSINESS_PLAN' : 'IMPLEMENTATION';
+                  const askedTag = progress.currentTag || undefined;
+                  await syncSessionProgress(sessionId!, {
+                    phase,
+                    answered_count: progress.answered ?? 0,
+                    asked_q: askedTag,
+                  });
+                  toast.success("Progress saved successfully!");
+                } catch (err) {
+                  console.error("Failed to save progress:", err);
+                  toast.error("Failed to save progress");
+                }
+              }}
+              disabled={loading}
+              className="group relative bg-gradient-to-br from-violet-50 to-purple-50 hover:from-violet-100 hover:to-purple-100 border border-violet-200 hover:border-violet-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex flex-col items-center space-y-2"
+              title="Save - Save your progress"
+            >
+              <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xl group-hover:scale-110 transition-transform duration-300">
+                💾
+              </div>
+              <div className="text-center">
+                <div className="text-xs font-semibold text-violet-800 group-hover:text-violet-900">Save</div>
+                <div className="text-[10px] text-violet-600 group-hover:text-violet-700">Progress</div>
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-purple-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            </button>
+          )}
+
           {/* Previous Question Button - At bottom of list */}
       {history.length > 0 && (progress.phase === 'KYC' || progress.phase === 'BUSINESS_PLAN') && (
             <button
@@ -4604,7 +4677,7 @@ export default function ChatPage() {
                   <p className="text-gray-400 text-xs">Choose a tool to help with your response</p>
                 </div>
                 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-4 gap-3">
                   {/* Support Button */}
                   <button
                     onClick={() => handleNext("Support")}
@@ -4652,6 +4725,37 @@ export default function ChatPage() {
                       </div>
                     </div>
                 </button>
+
+                  {/* Save Button */}
+                  <button
+                    onClick={async () => {
+                      try {
+                        toast.info("Saving your progress...");
+                        const phase = progress.phase === 'KYC' ? 'KYC' : progress.phase === 'BUSINESS_PLAN' ? 'BUSINESS_PLAN' : 'IMPLEMENTATION';
+                        const askedTag = progress.currentTag || undefined;
+                        await syncSessionProgress(sessionId!, {
+                          phase,
+                          answered_count: progress.answered ?? 0,
+                          asked_q: askedTag,
+                        });
+                        toast.success("Progress saved successfully!");
+                      } catch (err) {
+                        console.error("Failed to save progress:", err);
+                        toast.error("Failed to save progress");
+                      }
+                    }}
+                    disabled={loading}
+                    className="group relative bg-gradient-to-br from-violet-50 to-purple-50 hover:from-violet-100 hover:to-purple-100 border border-violet-200 hover:border-violet-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                  >
+                    <div className="flex flex-col items-center space-y-1">
+                      <div className="w-8 h-8 bg-gradient-to-br from-violet-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm group-hover:scale-110 transition-transform duration-300">
+                        💾
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xs font-semibold text-violet-800 group-hover:text-violet-900">Save</div>
+                      </div>
+                    </div>
+                  </button>
                 </div>
                 </div>
               )}

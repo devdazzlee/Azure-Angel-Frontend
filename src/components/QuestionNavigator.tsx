@@ -97,14 +97,14 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
   const inferredBpTotal =
     bpBreakdown?.bp_total ??
     (currentPhase === 'BUSINESS_PLAN'
-      ? currentProgress.phase_total ?? currentProgress.total ?? 46
-      : 46);
+      ? currentProgress.phase_total ?? currentProgress.total ?? 45
+      : 45);
   const inferredBpCompleted =
     bpBreakdown?.bp_completed ??
     (currentPhase === 'BUSINESS_PLAN'
       ? currentProgress.phase_answered ?? currentProgress.answered ?? 0
       : 0);
-  const bpTotal = inferredBpTotal > 0 ? inferredBpTotal : 46;
+  const bpTotal = inferredBpTotal > 0 ? inferredBpTotal : 45;
   const bpCurrentQuestionNumber = currentPhase === 'BUSINESS_PLAN'
     ? Math.min(Math.max(inferredBpCompleted + 1, 1), bpTotal)
     : Math.min(Math.max(inferredBpCompleted, 1), bpTotal);
@@ -163,7 +163,7 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
                 <div className="flex items-center gap-1.5 bg-blue-50 px-2 py-1 rounded-lg border border-blue-200">
                   <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
                   <span className="text-xs font-medium text-blue-700 uppercase tracking-wide">
-                    KYC
+                    GKY
                   </span>
                   <span className="text-xs font-semibold text-blue-700 ml-1">
                     {bpBreakdown
@@ -212,7 +212,7 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
             <div className="mb-3 flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                <span className="text-sm font-semibold text-gray-700 uppercase tracking-wide">KYC Progress</span>
+                <span className="text-sm font-semibold text-gray-700 uppercase tracking-wide">GKY Progress</span>
               </div>
               <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg shadow-sm border border-gray-200">
                 <span className="text-lg font-bold text-gray-900">

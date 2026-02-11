@@ -619,11 +619,11 @@ export const UXGuidelinesManager: React.FC<{
   const navigationItems: NavigationItem[] = [
     {
       id: "kyc",
-      label: "KYC Intake Questionnaire",
+      label: "Get to Know You",
       phase: "KYC",
       status: "completed",
       icon: <Users className="h-4 w-4" />,
-      description: "Initial business information gathering"
+      description: "Understanding your entrepreneurial profile"
     },
     {
       id: "business_plan",

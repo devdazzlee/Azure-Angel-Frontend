@@ -29,32 +29,32 @@ A beautiful, animated progress tracking widget specifically designed for the Bus
 
 Based on the business plan structure from `constant.py`:
 
-1. **Business Foundation** (Questions 1-4)
-   - Business name, tagline, problem, unique value proposition
+1. **Product/Service Details** (Questions 1-4)
+   - Business idea, product/service, uniqueness, stage
 
-2. **Product/Service Details** (Questions 5-8)
-   - Core product description, features, IP, development timeline
+2. **Business Overview** (Questions 5-7)
+   - Business name, industry, short-term goals
 
-3. **Market Research** (Questions 9-12)
-   - Target market, market size, competitors, alternatives
+3. **Market Research** (Questions 8-13)
+   - Target customer, availability, problem solved, competitors, trends, differentiation
 
-4. **Location & Operations** (Questions 13-17)
-   - Business location, facilities, staffing, suppliers
+4. **Location & Operations** (Questions 14-17)
+   - Location, facilities, delivery method, operational needs
 
-5. **Financial Planning** (Questions 18-25)
-   - Pricing, sales projections, costs, funding, financial management
+5. **Marketing & Sales Strategy** (Questions 18-23)
+   - Mission, marketing plan, sales method, USP, promotions, marketing needs
 
-6. **Marketing & Sales** (Questions 26-31)
-   - Marketing channels, sales process, customer acquisition, partnerships
+6. **Legal & Regulatory Compliance** (Questions 24-28)
+   - Business structure, name registration, permits/licenses, insurance, compliance
 
-7. **Legal & Compliance** (Questions 32-38)
-   - Business structure, licenses, insurance, contracts, taxes
+7. **Revenue Model & Financials** (Questions 29-34)
+   - Revenue model, pricing, financial tracking, funding, goals, costs
 
-8. **Growth & Scaling** (Questions 39-42)
-   - Milestones, expansion plans, partnerships, scaling strategies
+8. **Growth & Scaling** (Questions 35-41)
+   - Scaling plans, long-term goals (operational, financial, marketing, administrative), expansion
 
-9. **Risk Management** (Questions 43-46)
-   - Risk identification, contingency plans, concerns, final considerations
+9. **Challenges & Contingency Planning** (Questions 42-45)
+   - Contingency plans, market adaptation, additional funding, 5-year vision
 
 ## Usage
 

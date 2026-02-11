@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import SkillRating from './SkillRating';
 
 interface SkillRatingFormProps {
@@ -19,8 +19,6 @@ const skills = [
 const SkillRatingForm: React.FC<SkillRatingFormProps> = ({ onSubmit, onCancel }) => {
   const [ratings, setRatings] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
   const [isComplete, setIsComplete] = useState(false);
-  const [hasAutoSubmitted, setHasAutoSubmitted] = useState(false);
-  const [isAutoSubmitting, setIsAutoSubmitting] = useState(false);
 
   const handleRatingChange = (index: number, value: number) => {
     const newRatings = [...ratings];
@@ -32,25 +30,12 @@ const SkillRatingForm: React.FC<SkillRatingFormProps> = ({ onSubmit, onCancel })
     setIsComplete(allRated);
   };
 
-  // Auto-submit when all ratings are complete
-  useEffect(() => {
-    if (isComplete && !hasAutoSubmitted) {
-      setIsAutoSubmitting(true);
-      // Delay to give users time to see the completion and feel natural
-      const timer = setTimeout(() => {
-        onSubmit(ratings);
-        setHasAutoSubmitted(true);
-        setIsAutoSubmitting(false);
-      }, 1000); // 1000ms (1 second) delay for better UX, matching other auto-actions in the app
-      
-      return () => clearTimeout(timer);
-    }
-  }, [isComplete, ratings, hasAutoSubmitted, onSubmit]);
+  // No auto-submit - let user click "Submit Ratings" manually
+  // This prevents the form from auto-submitting when using quick fill options
 
   const handleSubmit = () => {
     if (isComplete) {
       onSubmit(ratings);
-      setHasAutoSubmitted(true);
     }
   };
 
@@ -58,7 +43,7 @@ const SkillRatingForm: React.FC<SkillRatingFormProps> = ({ onSubmit, onCancel })
     const allRatings = [rating, rating, rating, rating, rating, rating, rating];
     setRatings(allRatings);
     setIsComplete(true);
-    // Auto-submit will be triggered by useEffect
+    // User must click Submit manually
   };
 
   const completedCount = ratings.filter(rating => rating > 0).length;
@@ -111,18 +96,16 @@ const SkillRatingForm: React.FC<SkillRatingFormProps> = ({ onSubmit, onCancel })
         </button>
         <button
           onClick={handleSubmit}
-          disabled={!isComplete || isAutoSubmitting}
+          disabled={!isComplete}
           className={`
             px-6 py-2 rounded-lg font-medium transition-all duration-200
-            ${isComplete && !isAutoSubmitting
+            ${isComplete
               ? 'bg-gradient-to-r from-teal-500 to-blue-500 hover:from-teal-600 hover:to-blue-600 text-white shadow-md hover:shadow-lg transform hover:scale-105' 
-              : isAutoSubmitting
-              ? 'bg-gradient-to-r from-teal-400 to-blue-400 text-white shadow-md'
               : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             }
           `}
         >
-          {isAutoSubmitting ? 'Submitting...' : isComplete ? 'Submit Ratings' : 'Complete All Ratings'}
+          {isComplete ? 'Submit Ratings' : 'Complete All Ratings'}
         </button>
       </div>
 

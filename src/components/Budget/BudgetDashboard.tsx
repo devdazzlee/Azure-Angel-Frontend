@@ -44,6 +44,22 @@ import PayrollCostsTable from './PayrollCostsTable';
 import COGSTable from './COGSTable';
 import RevenueTable from './RevenueTable';
 import { CurrencyInput } from './CurrencyInput'; 
+import BudgetDashboardHeader from './BudgetDashboardHeader';
+import SelectedItemsBanner from './SelectedItemsBanner';
+import BudgetWarnings from './BudgetWarnings';
+import MetricCard from './MetricCard';
+import BudgetOverview from './BudgetOverview';
+import StickyRoadmapButton from './StickyRoadmapButton';
+import { 
+  debounce, 
+  formatCurrency, 
+  useBudgetValidation, 
+  useAutoSaveIndicator,
+  getSmartStepForInitialInvestment,
+  classifyExpenseGroup,
+  handleExportPdf,
+  handleExportExcel
+} from './BudgetUtils'; 
 import { budgetService } from '@/services/budgetService';
 import { toast } from 'react-toastify';
 import httpClient from '../../api/httpClient';
@@ -76,26 +92,6 @@ interface BudgetDashboardProps {
   businessType?: string;
   sessionId?: string;
   businessContext?: any;
-}
-
-// Utility Functions
-const debounce = <T extends (...args: any[]) => void>(
-  func: T,
-  delay: number
-): ((...args: Parameters<T>) => void) => {
-  let timeoutId: NodeJS.Timeout;
-  return (...args: Parameters<T>) => {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => func(...args), delay);
-  };
-};
-
-const formatCurrency = (value: number, currency: string = '$') => {
-  return `${currency}${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-};
-
-const formatMoney = (value: number, currency: string = '$') => {
-  return formatCurrency(value, currency);
 };
 
 // Modern Color Palette
@@ -1409,102 +1405,23 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       <BudgetIntroduction />
 
       {/* Header Section */}
-      <div className="bg-white/80 backdrop-blur-xl border-b-2 border-gray-200 shadow-lg mb-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                Budget Dashboard
-              </h1>
-              <p className="text-gray-600 mt-1">
-                {viewMode === 'actual' ? 'Actual' : 'Estimated'} budget for Year 1
-              </p>
-            </div>
+      <BudgetDashboardHeader
+        viewMode={viewMode}
+        setViewMode={setViewMode}
+        saveStatus={saveStatus}
+        handleSaveBudget={handleSaveBudget}
+        handleExportPdf={handleExportPdf}
+        handleExportExcel={handleExportExcel}
+        budget={budget}
+        AutoSaveIndicator={AutoSaveIndicator}
+      />
 
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-xl">
-                <Button
-                  variant={viewMode === 'estimated' ? 'default' : 'ghost'}
-                  onClick={() => setViewMode('estimated')}
-                  className={viewMode === 'estimated' ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'text-gray-700'}
-                >
-                  Estimated
-                </Button>
-                <Button
-                  variant={viewMode === 'actual' ? 'default' : 'ghost'}
-                  onClick={() => setViewMode('actual')}
-                  disabled={!budget.items.some(item => item.actual_amount !== undefined)}
-                  className={viewMode === 'actual' ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'text-gray-700'}
-                >
-                  Actual
-                </Button>
-              </div>
-
-              <Button
-                onClick={handleSaveBudget}
-                disabled={saveStatus === 'saving'}
-                className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg"
-              >
-                {saveStatus === 'saving' ? (
-                  <>
-                    <Loader className="animate-spin w-4 h-4 mr-2" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4 mr-2" />
-                    Save Budget
-                  </>
-                )}
-              </Button>
-
-              <SaveStatusIndicator status={saveStatus} onRetry={handleSaveBudget} />
-
-              <AutoSaveIndicator />
-
-              <Button
-                onClick={handleExportPdf}
-                variant="outline"
-                className="border-2 border-gray-300 hover:border-gray-400"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Export PDF
-              </Button>
-
-              <Button
-                onClick={handleExportExcel}
-                variant="outline"
-                className="border-2 border-gray-300 hover:border-gray-400"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Export Excel
-              </Button>
-            </div>
-          </div>
-
-          {selectedItemIds.size > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-4 flex items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border-2 border-blue-200"
-            >
-              <div className="flex items-center gap-3">
-                <div className="px-3 py-1 bg-blue-600 text-white rounded-full text-sm font-bold">
-                  {selectedItemIds.size}
-                </div>
-                <p className="text-gray-700 font-medium">items selected for Angel chat</p>
-              </div>
-              
-              <Button
-                onClick={() => setIsChatModalOpen(true)}
-                className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-lg"
-              >
-                <MessageSquareText className="w-4 h-4 mr-2" />
-                Chat with Angel
-              </Button>
-            </motion.div>
-          )}
-        </div>
+      {/* Selected Items Banner */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <SelectedItemsBanner
+          selectedItemIds={selectedItemIds}
+          onChatOpen={() => setIsChatModalOpen(true)}
+        />
       </div>
 
       {/* Main Content */}
@@ -1540,70 +1457,17 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="mt-8 space-y-8">
-            {/* Budget Validation Warnings */}
-            {warnings.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="space-y-3"
-              >
-                {warnings.map(warning => (
-                  <div
-                    key={warning.id}
-                    className={`p-4 rounded-xl border-2 flex items-start gap-3 ${
-                      warning.type === 'error' 
-                        ? 'bg-red-50 border-red-200' 
-                        : warning.type === 'warning'
-                        ? 'bg-amber-50 border-amber-200'
-                        : 'bg-blue-50 border-blue-200'
-                    }`}
-                  >
-                    {warning.type === 'error' && <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />}
-                    {warning.type === 'warning' && <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />}
-                    {warning.type === 'info' && <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />}
-                    <p className="text-sm text-gray-700">{warning.message}</p>
-                  </div>
-                ))}
-              </motion.div>
-            )}
-
-            {/* Key Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <MetricCard
-                title="Total Startup Costs"
-                value={formatCurrency(startupCostsTotal, currency)}
-                icon={Zap}
-                color="blue"
-                delay={0}
-              />
-              <MetricCard
-                title="Monthly Revenue"
-                value={formatCurrency(effectiveMonthlyRevenueForBreakEven, currency)}
-                icon={TrendingUp}
-                color="green"
-                delay={0.1}
-              />
-              <MetricCard
-                title="Monthly Costs"
-                value={formatCurrency(totalMonthlyCosts, currency)}
-                icon={TrendingDown}
-                color="red"
-                delay={0.2}
-              />
-              <MetricCard
-                title="Monthly Net"
-                value={formatCurrency(monthlyNetIncome, currency)}
-                icon={Calculator}
-                color={monthlyNetIncome >= 0 ? 'green' : 'red'}
-                delay={0.3}
-              />
-            </div>
-
-            {/* Break-Even Analysis */}
-            <BreakEvenCard />
-
-            {/* Charts */}
-            <ModernCharts />
+            <BudgetOverview
+              warnings={warnings}
+              startupCostsTotal={startupCostsTotal}
+              effectiveMonthlyRevenueForBreakEven={effectiveMonthlyRevenueForBreakEven}
+              totalMonthlyCosts={totalMonthlyCosts}
+              monthlyNetIncome={monthlyNetIncome}
+              currency={currency}
+              formatCurrency={formatCurrency}
+              BreakEvenCard={BreakEvenCard}
+              ModernCharts={ModernCharts}
+            />
 
             {/* Budget Tables */}
             <div className="space-y-8">
@@ -1689,7 +1553,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                         <div className="p-4 bg-gradient-to-br from-blue-50 to-white rounded-2xl border-2 border-blue-200">
                           <p className="text-sm font-medium text-gray-600 mb-1">Expenses To Date</p>
                           <p className="text-2xl font-bold text-blue-700">
-                            {formatMoney(startupActualTotal, currency)}
+                            {formatCurrency(startupActualTotal, currency)}
                           </p>
                         </div>
 
@@ -1702,7 +1566,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                           <p className={`text-2xl font-bold ${
                             remainingStartupFunds >= 0 ? 'text-emerald-700' : 'text-red-700'
                           }`}>
-                            {formatMoney(remainingStartupFunds, currency)}
+                            {formatCurrency(remainingStartupFunds, currency)}
                           </p>
                         </div>
                       </div>
@@ -2058,14 +1922,14 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                     <div className="p-4 bg-gradient-to-br from-emerald-50 to-white rounded-2xl border-2 border-emerald-200">
                       <p className="text-sm font-medium text-gray-600 mb-1">24-Month Revenue</p>
                       <p className="text-2xl font-bold text-emerald-700">
-                        {formatMoney(twoYearProjection.revenue24, currency)}
+                        {formatCurrency(twoYearProjection.revenue24, currency)}
                       </p>
                     </div>
 
                     <div className="p-4 bg-gradient-to-br from-red-50 to-white rounded-2xl border-2 border-red-200">
                       <p className="text-sm font-medium text-gray-600 mb-1">24-Month Costs</p>
                       <p className="text-2xl font-bold text-red-700">
-                        {formatMoney(twoYearProjection.costs24, currency)}
+                        {formatCurrency(twoYearProjection.costs24, currency)}
                       </p>
                     </div>
 
@@ -2078,7 +1942,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                       <p className={`text-2xl font-bold ${
                         twoYearProjection.net24 >= 0 ? 'text-blue-700' : 'text-orange-700'
                       }`}>
-                        {formatMoney(twoYearProjection.net24, currency)}
+                        {formatCurrency(twoYearProjection.net24, currency)}
                       </p>
                     </div>
 
@@ -2091,7 +1955,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                       <p className={`text-2xl font-bold ${
                         twoYearProjection.netAfterStartup24 >= 0 ? 'text-emerald-700' : 'text-red-700'
                       }`}>
-                        {formatMoney(twoYearProjection.netAfterStartup24, currency)}
+                        {formatCurrency(twoYearProjection.netAfterStartup24, currency)}
                       </p>
                     </div>
                   </div>
@@ -2177,21 +2041,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       />
       
       {/* Sticky Go to Roadmap Button */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg p-4 z-50">
-        <div className="max-w-7xl mx-auto">
-          <Button
-            onClick={handleGoToRoadmap}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-6 font-medium rounded-lg transition-colors duration-200"
-          >
-            <div className="flex items-center justify-center gap-2">
-              <span>Continue to Roadmap</span>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-              </svg>
-            </div>
-          </Button>
-        </div>
-      </div>
+      <StickyRoadmapButton handleGoToRoadmap={handleGoToRoadmap} />
     </div>
   );
 };

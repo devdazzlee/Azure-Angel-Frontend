@@ -53,9 +53,9 @@ export default function KycForm() {
 
   // 🎯 Helper to detect if current question is a choice-based question
   const isChoiceQuestion = (questionText: string, questionNumber: number | null): boolean => {
-    // KYC choice questions: KYC.03, KYC.14, KYC.15, KYC.17
-    // Note: KYC.07 is a skill rating question (handled separately)
-    const choiceQuestionNumbers = [3, 14, 15, 17];
+    // KYC choice questions: KYC.02 (yes/no), KYC.04 (business type), KYC.06 (concerns)
+    // Note: KYC.05 is a skill rating question (handled separately)
+    const choiceQuestionNumbers = [2, 4, 6];
     if (questionNumber && choiceQuestionNumbers.includes(questionNumber)) {
       return true;
     }

@@ -21,7 +21,7 @@ const KycToBusinessPlanIntro: React.FC<KycToBusinessPlanIntroProps> = ({ onStart
           <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="text-3xl">🎉</span>
           </div>
-          <h2 className="text-2xl font-bold mb-1">KYC Process Complete!</h2>
+          <h2 className="text-2xl font-bold mb-1">Get to Know You Complete!</h2>
           <p className="text-sm opacity-90">Congratulations on completing your entrepreneurial profile.</p>
         </div>
 
