@@ -1,17 +1,12 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 
-interface KycToBusinessPlanIntroProps {
+interface GkyToBusinessPlanIntroProps {
   onStart: () => void;
   isLoading?: boolean;
 }
 
-const KycToBusinessPlanIntro: React.FC<KycToBusinessPlanIntroProps> = ({ onStart, isLoading }) => {
-  useEffect(() => {
-    const t = window.setTimeout(() => {
-      onStart();
-    }, 600);
-    return () => window.clearTimeout(t);
-  }, [onStart]);
+const GkyToBusinessPlanIntro: React.FC<GkyToBusinessPlanIntroProps> = ({ onStart, isLoading }) => {
+  // No auto-dismiss — user must click "Start Business Planning" to proceed
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
@@ -65,4 +60,4 @@ const KycToBusinessPlanIntro: React.FC<KycToBusinessPlanIntroProps> = ({ onStart
   );
 };
 
-export default KycToBusinessPlanIntro;
+export default GkyToBusinessPlanIntro;

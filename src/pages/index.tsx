@@ -21,7 +21,7 @@ export { default as Profile } from './Profile';
 export { default as NotFound } from './NotFound';
 export { default as ErrorBoundaryPage } from './ErrorBoundaryPage';
 
-export { default as KnowYourCustomer } from './KYC';
+export { default as GetToKnowYou } from './KYC';
 export { default as NewVenture } from './Venture/newVenture';
 export { default as RecentVenture } from './Venture/recentVentures';
 export { default as Chat } from './Venture/venture';

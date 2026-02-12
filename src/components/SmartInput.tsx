@@ -22,7 +22,7 @@ const SmartInput: React.FC<SmartInputProps> = ({
   disabled = false,
   loading = false,
   currentQuestion = "",
-  currentPhase = "KYC"
+  currentPhase = "GKY"
 }) => {
   const [showRatingForm, setShowRatingForm] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -115,7 +115,7 @@ const SmartInput: React.FC<SmartInputProps> = ({
       'how do you plan to generate revenue': ['Product sales', 'Service fees', 'Subscription/membership', 'Advertising revenue', 'Commission/fees', 'Licensing', 'Consulting', 'Other'],
       'will your business be primarily': ['Online only', 'Physical location only', 'Both online and physical', 'Unsure'],
       'would you like me to be proactive in suggesting next steps and improvements throughout our process': ['Yes, please be proactive', 'Only when I ask', 'Let me decide each time'],
-      // KYC Questions 15-19
+      // GKY Questions
       'what\'s your biggest concern about starting a business': ['Finding customers', 'Managing finances', 'Competition', 'Legal requirements', 'Time management', 'Not sure'],
       'biggest concern about starting': ['Finding customers', 'Managing finances', 'Competition', 'Legal requirements', 'Time management', 'Not sure'],
       'how do you prefer to learn new business skills': ['Reading articles/books', 'Watching videos/tutorials', 'Hands-on practice', 'Working with mentors', 'Taking courses', 'Other'],
@@ -232,6 +232,14 @@ const SmartInput: React.FC<SmartInputProps> = ({
     onSubmit(selectedValue);
   };
 
+  const handleDropdownCancel = () => {
+    // Clear selection and revert to text input so user can type instead
+    setShowDropdown(false);
+    setDropdownType(null);
+    setDropdownOptions([]);
+    onChange('');
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -265,6 +273,7 @@ const SmartInput: React.FC<SmartInputProps> = ({
         <QuestionDropdown
           options={dropdownOptions}
           onSubmit={handleDropdownSubmit}
+          onCancel={handleDropdownCancel}
           placeholder={`Select ${dropdownType === 'yesno' ? 'Yes or No' : 'an option'}...`}
           disabled={disabled}
         />

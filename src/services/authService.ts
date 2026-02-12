@@ -352,7 +352,7 @@ export async function uploadBusinessPlan(
 
 export async function fetchNextQuestion(
     userMessage: string,
-    contextData: { phase: 'kyc'; stepIndex: number; skipStep?: boolean }
+    contextData: { phase: 'gky'; stepIndex: number; skipStep?: boolean }
 ): Promise<ChatResponse> {
     const token = localStorage.getItem('sb_access_token');
     if (!token) throw new Error('Not authenticated');

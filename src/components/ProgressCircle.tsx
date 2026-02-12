@@ -6,15 +6,15 @@ interface ProgressCircleProps {
   position?: "left" | "right";
   combined?: boolean;
   phase_breakdown?: {
-    kyc_completed: number;
-    kyc_total: number;
+    gky_completed: number;
+    gky_total: number;
     bp_completed: number;
     bp_total: number;
   };
 }
 
 const phaseShortMap: Record<string, string> = {
-  KYC: "KYC",
+  GKY: "GKY",
   BUSINESS_PLAN: "BP",
   ROADMAP: "RD",
   IMPLEMENTATION: "IMPL",

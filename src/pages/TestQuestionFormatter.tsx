@@ -31,7 +31,7 @@ Let's start with the Getting to Know You questionnaire—so Angel can design a p
     },
     {
       name: "Question with machine tag",
-      text: "[[Q:KYC.01]] What's your name and preferred name or nickname?",
+      text: "[[Q:GKY.01]] What's your name and preferred name or nickname?",
     },
     {
       name: "Question with number",

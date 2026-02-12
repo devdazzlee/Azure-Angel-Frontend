@@ -9,7 +9,7 @@ interface ConversationPair {
   questionNumber?: number;
 }
 
-export default function KycForm() {
+export default function GkyForm() {
   const [history, setHistory] = useState<ConversationPair[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState('');
   const [currentQuestionNumber, setCurrentQuestionNumber] = useState<number | null>(null);
@@ -30,8 +30,8 @@ export default function KycForm() {
 
   // 🔢 Helper to extract question number from AI response
   const extractQuestionNumber = (text: string): number | null => {
-    // Look for patterns like [[Q:KYC.01]] or Question 1 of 20
-    const tagMatch = text.match(/\[\[Q:KYC\.(\d+)\]\]/);
+    // Look for patterns like [[Q:GKY.01]] or Question 1 of 20
+    const tagMatch = text.match(/\[\[Q:GKY\.(\d+)\]\]/);
     if (tagMatch) {
       return parseInt(tagMatch[1], 10);
     }
@@ -53,8 +53,8 @@ export default function KycForm() {
 
   // 🎯 Helper to detect if current question is a choice-based question
   const isChoiceQuestion = (questionText: string, questionNumber: number | null): boolean => {
-    // KYC choice questions: KYC.02 (yes/no), KYC.04 (business type), KYC.06 (concerns)
-    // Note: KYC.05 is a skill rating question (handled separately)
+    // GKY choice questions: GKY.02 (yes/no), GKY.04 (business type), GKY.06 (concerns)
+    // Note: GKY.05 is a skill rating question (handled separately)
     const choiceQuestionNumbers = [2, 4, 6];
     if (questionNumber && choiceQuestionNumbers.includes(questionNumber)) {
       return true;
@@ -107,7 +107,7 @@ export default function KycForm() {
       setLoading(true);
       try {
         const { result: { angelReply } } = await fetchNextQuestion('', {
-          phase: 'kyc',
+          phase: 'gky',
           stepIndex: 0,
         });
 
@@ -148,7 +148,7 @@ export default function KycForm() {
 
     try {
       const { result: { angelReply, progress } } = await fetchNextQuestion(input, {
-        phase: 'kyc',
+        phase: 'gky',
         stepIndex,
         skipStep
       });
@@ -303,6 +303,9 @@ export default function KycForm() {
                           onSubmit={(value) => {
                             // User must click "Submit" button - this is called only after submit
                             handleNext(value);
+                          }}
+                          onCancel={() => {
+                            // Clear selection — user can re-pick
                           }}
                           placeholder="Select an option..."
                           disabled={loading}

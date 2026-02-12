@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-interface KycToBusinessPlanTransitionProps {
+interface GkyToBusinessPlanTransitionProps {
   isOpen: boolean;
   onContinue: () => void;
   onReview: () => void;
-  kycSummary: string;
+  gkySummary: string;
 }
 
-const KycToBusinessPlanTransition: React.FC<KycToBusinessPlanTransitionProps> = ({
+const GkyToBusinessPlanTransition: React.FC<GkyToBusinessPlanTransitionProps> = ({
   isOpen,
   onContinue,
   onReview,
-  kycSummary
+  gkySummary
 }) => {
   const [isExiting, setIsExiting] = useState(false);
 
@@ -84,7 +84,7 @@ const KycToBusinessPlanTransition: React.FC<KycToBusinessPlanTransitionProps> = 
 
             {/* Scrollable Content */}
             <div className="overflow-y-auto max-h-[calc(90vh-300px)] p-8">
-              {/* KYC Summary Section */}
+              {/* GKY Summary Section */}
               <div className="mb-8">
                 <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
                   <span>🧭</span>
@@ -94,7 +94,7 @@ const KycToBusinessPlanTransition: React.FC<KycToBusinessPlanTransitionProps> = 
                 <div className="bg-blue-50 border-l-4 border-blue-500 p-6 rounded-r-lg mb-4">
                   <div className="prose prose-sm max-w-none">
                     <div className="whitespace-pre-wrap text-gray-800">
-                      {kycSummary}
+                      {gkySummary}
                     </div>
                   </div>
                 </div>
@@ -274,5 +274,5 @@ const KycToBusinessPlanTransition: React.FC<KycToBusinessPlanTransitionProps> = 
   );
 };
 
-export default KycToBusinessPlanTransition;
+export default GkyToBusinessPlanTransition;
 

@@ -38,14 +38,14 @@ import AngelThinkingLoader from "../../components/AngelThinkingLoader";
 import QuestionFormatter from "../../components/QuestionFormatter";
 import type { Budget, BudgetItem, APIResponse } from "../../types/apiTypes";
 import BusinessPlanningInstructions from "../../components/BusinessPlanningInstructions";
-import KycToBusinessPlanIntro from "../../components/KycToBusinessPlanIntro";
+// GkyToBusinessPlanIntro modal removed — transition happens inline in chat
 import { budgetService } from "../../services/budgetService";
 
 interface ConversationPair {
   question: string;
   answer: string;
   questionNumber?: number;
-  phase?: 'KYC' | 'BUSINESS_PLAN' | 'ROADMAP' | 'IMPLEMENTATION' | 'PLAN_TO_ROADMAP_TRANSITION' | 'PLAN_TO_SUMMARY_TRANSITION' | 'PLAN_TO_BUDGET_TRANSITION' | 'ROADMAP_TO_IMPLEMENTATION_TRANSITION';
+  phase?: 'GKY' | 'BUSINESS_PLAN' | 'ROADMAP' | 'IMPLEMENTATION' | 'PLAN_TO_ROADMAP_TRANSITION' | 'PLAN_TO_SUMMARY_TRANSITION' | 'PLAN_TO_BUDGET_TRANSITION' | 'ROADMAP_TO_IMPLEMENTATION_TRANSITION';
 }
 
 type RawChatRecord = {
@@ -57,27 +57,27 @@ type RawChatRecord = {
 };
 
 interface ProgressState {
-  phase: "KYC" | "BUSINESS_PLAN" | "PLAN_TO_ROADMAP_TRANSITION" | "PLAN_TO_SUMMARY_TRANSITION" | "PLAN_TO_BUDGET_TRANSITION" | "ROADMAP" | "ROADMAP_GENERATED" | "ROADMAP_TO_IMPLEMENTATION_TRANSITION" | "IMPLEMENTATION";
+  phase: "GKY" | "BUSINESS_PLAN" | "PLAN_TO_ROADMAP_TRANSITION" | "PLAN_TO_SUMMARY_TRANSITION" | "PLAN_TO_BUDGET_TRANSITION" | "ROADMAP" | "ROADMAP_GENERATED" | "ROADMAP_TO_IMPLEMENTATION_TRANSITION" | "IMPLEMENTATION";
   answered: number;
   phase_answered?: number;  // Phase-specific step count
   total: number;
   percent: number;
   asked_q?: string;  // Current question tag (e.g., "BUSINESS_PLAN.44")
   combined?: boolean;  // Flag for combined progress
-  overall_progress?: {  // Combined progress for KYC + Business Plan (65 total)
+  overall_progress?: {  // Combined progress for GKY + Business Plan (51 total)
     answered: number;
     total: number;
     percent: number;
     phase_breakdown?: {
-      kyc_completed: number;
-      kyc_total: number;
+      gky_completed: number;
+      gky_total: number;
       bp_completed: number;
       bp_total: number;
     };
   };
   phase_breakdown?: {
-    kyc_completed: number;
-    kyc_total: number;
+    gky_completed: number;
+    gky_total: number;
     bp_completed: number;
     bp_total: number;
   };
@@ -106,7 +106,7 @@ const DISPLAY_FALLBACK_CONTEXT: Required<BusinessContextInfo> = {
 // Updated to include PLAN_TO_ROADMAP_TRANSITION phase
 
 const QUESTION_COUNTS = {
-  KYC: 6,  // 6 sequential questions: KYC.01 through KYC.06
+  GKY: 6,  // 6 sequential questions: GKY.01 through GKY.06
   BUSINESS_PLAN: 45,  // Updated to 45 questions (9 sections restructured)
   ROADMAP: 1,
   IMPLEMENTATION: 10,
@@ -171,8 +171,8 @@ const deriveQuestionNumber = (
   replyText: string,
   progressPayload?: Record<string, any>
 ): number | null => {
-  // For KYC phase, questions are now sequential (1-6), use directly
-  if (progressPayload?.phase === 'KYC' && typeof backendQuestionNumber === "number" && !Number.isNaN(backendQuestionNumber)) {
+  // For GKY phase, questions are now sequential (1-6), use directly
+  if (progressPayload?.phase === 'GKY' && typeof backendQuestionNumber === "number" && !Number.isNaN(backendQuestionNumber)) {
     return backendQuestionNumber;
   }
 
@@ -376,7 +376,7 @@ export default function ChatPage() {
         console.log(`📊 Extracted location: ${businessInfo.location}`);
       }
       
-      // Extract business structure from KYC (LLC, Corporation, etc.)
+      // Extract business structure from GKY (LLC, Corporation, etc.)
       if (question.includes('legal business structure') || 
           (question.includes('register') && question.includes('business'))) {
         const structureTypes = ['llc', 'corporation', 'partnership', 'sole proprietorship', 'private limited', 'limited company'];
@@ -493,7 +493,7 @@ export default function ChatPage() {
       business_type: backendContext.business_type || historyDerivedBusinessInfo.business_type || DISPLAY_FALLBACK_CONTEXT.business_type,
     };
   }, [sessionBusinessContext, historyDerivedBusinessInfo]);
-  const renderKycSummaryContent = (summary: string) => {
+  const renderGkySummaryContent = (summary: string) => {
     if (!summary) return null;
 
     let cleanedSummary = summary
@@ -570,7 +570,7 @@ export default function ChatPage() {
     return groups.map((group, idx) => {
       if (group.type === "paragraph") {
         return (
-          <p key={`kyc-summary-paragraph-${idx}`} className="mb-4 text-gray-700">
+          <p key={`gky-summary-paragraph-${idx}`} className="mb-4 text-gray-700">
             {group.content}
           </p>
         );
@@ -578,7 +578,7 @@ export default function ChatPage() {
 
       return (
         <ul
-          key={`kyc-summary-list-${idx}`}
+          key={`gky-summary-list-${idx}`}
           className="space-y-2 text-gray-700"
         >
           {group.content.map((item, itemIdx) => {
@@ -586,7 +586,7 @@ export default function ChatPage() {
             const text = item.slice(1).trim();
             return (
               <li
-                key={`kyc-summary-list-item-${idx}-${itemIdx}`}
+                key={`gky-summary-list-item-${idx}-${itemIdx}`}
                 className="flex items-start gap-2"
               >
                 <span className="text-lg leading-6">{indicator}</span>
@@ -606,16 +606,27 @@ export default function ChatPage() {
   const [backButtonLoading, setBackButtonLoading] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [progress, setProgress] = useState<ProgressState>({
-    phase: "KYC",
+    phase: "GKY",
     answered: 0,
-    total: QUESTION_COUNTS.KYC,
+    total: QUESTION_COUNTS.GKY,
     percent: 0,
+    overall_progress: {
+      answered: 0,
+      total: 51, // 6 GKY + 45 Business Plan
+      percent: 0,
+      phase_breakdown: {
+        gky_completed: 0,
+        gky_total: 6,
+        bp_completed: 0,
+        bp_total: 45,
+      },
+    },
   });
   const [backendTotals, setBackendTotals] = useState({
     answered: 0,
-    total: QUESTION_COUNTS.KYC,
+    total: QUESTION_COUNTS.GKY,
     overallAnswered: 0,
-    overallTotal: 51, // 6 KYC + 45 Business Plan
+    overallTotal: 51, // 6 GKY + 45 Business Plan
   });
   const [transitionQuote, setTransitionQuote] = useState<MotivationalQuote | null>(null);
   const pickFallbackTransitionQuote = useCallback((exclude?: string) => {
@@ -693,20 +704,20 @@ export default function ChatPage() {
             ? progressData.answered
             : prev.answered;
       
-      // Calculate combined totals for KYC and BUSINESS_PLAN phases
+      // Calculate combined totals for GKY and BUSINESS_PLAN phases
       let combinedTotal: number;
       let combinedAnswered: number;
       let phaseAnsweredForDisplay: number;
       
-      if (progressData.phase === "KYC" || progressData.phase === "BUSINESS_PLAN") {
-        combinedTotal = 51; // 6 KYC + 45 Business Plan
+      if (progressData.phase === "GKY" || progressData.phase === "BUSINESS_PLAN") {
+        combinedTotal = 51; // 6 GKY + 45 Business Plan
         
-        if (progressData.phase === "KYC") {
+        if (progressData.phase === "GKY") {
           // Backend now sends completed questions count directly, no need to subtract 1
           phaseAnsweredForDisplay = phaseAnswered;
           combinedAnswered = phaseAnsweredForDisplay;
         } else {
-          // For Business Plan, add KYC total (6) to current answered
+          // For Business Plan, add GKY total (6) to current answered
           phaseAnsweredForDisplay = phaseAnswered;
           combinedAnswered = 6 + phaseAnswered;
         }
@@ -740,7 +751,7 @@ export default function ChatPage() {
     questionCount: number;
     lastQuestionNumber: number | null;
   }>({
-    currentPhase: "KYC",
+    currentPhase: "GKY",
     questionCount: 0,
     lastQuestionNumber: null,
   });
@@ -810,7 +821,7 @@ export default function ChatPage() {
       business_type?: string;
     };
   } | null>(null);
-  const [kycTransitionCompleted, setKycTransitionCompleted] = useState(false); // Track if user completed KYC transition
+  const [gkyTransitionCompleted, setGkyTransitionCompleted] = useState(false); // Track if user completed GKY transition
   const [modifyModal, setModifyModal] = useState<{
     isOpen: boolean;
     currentText: string;
@@ -853,7 +864,7 @@ export default function ChatPage() {
     businessPlanCompleted: false
   });
   const [showInstructions, setShowInstructions] = useState(false);
-  const [showKycToBusinessIntro, setShowKycToBusinessIntro] = useState(false);
+  // Modal state removed — GKY→BP transition is now fully inline
 
   const markUploadPromptAsSeen = useCallback(() => {
     if (hasSeenUploadPrompt) {
@@ -972,9 +983,9 @@ export default function ChatPage() {
     if (hasSeenUploadPrompt || hasUploadedPlan || uploadPlanModal.isOpen) {
       return;
     }
-    // CRITICAL: Don't show upload modal automatically if user just completed KYC transition
+    // CRITICAL: Don't show upload modal automatically if user just completed GKY transition
     // The upload modal will be shown by handleStartBusinessPlanning after user clicks Continue
-    if (!kycTransitionCompleted && progress.phase === "BUSINESS_PLAN") {
+    if (!gkyTransitionCompleted && progress.phase === "BUSINESS_PLAN") {
       // If we're in BUSINESS_PLAN but transition wasn't completed via Continue button,
       // it means user might have navigated directly or refreshed - allow upload modal
       // But if transition was just completed, wait for handleStartBusinessPlanning to show it
@@ -1002,14 +1013,14 @@ export default function ChatPage() {
       return;
     }
 
-    // Only show upload modal if we're NOT in the middle of KYC transition
+    // Only show upload modal if we're NOT in the middle of GKY transition
     // This prevents modal collision - upload will be shown after user clicks Continue
     openUploadPlanModal();
   }, [
     backendTotals.answered,
     hasSeenUploadPrompt,
     hasUploadedPlan,
-    kycTransitionCompleted,
+    gkyTransitionCompleted,
     openUploadPlanModal,
     progress.phase,
     progress.phase_answered,
@@ -1369,7 +1380,7 @@ export default function ChatPage() {
     }
   };
 
-  // Handle KYC to Business Plan transition
+  // Handle GKY to Business Plan transition
   const handleStartBusinessPlanning = async () => {
     try {
       setLoading(true);
@@ -1390,21 +1401,21 @@ export default function ChatPage() {
       
       toast.success("Welcome to the Business Planning phase!");
       
-      // Mark that KYC transition is completed (user clicked Continue)
-      setKycTransitionCompleted(true);
+      // Mark that GKY transition is completed (user clicked Continue)
+      setGkyTransitionCompleted(true);
       
-      // CRITICAL: Show upload modal AFTER KYC modal is closed and user has clicked Continue
-      // Wait a moment for the KYC modal to fully close, then show upload option
+      // Show upload modal after transition message is displayed
+      // Small delay to let the BP Q1 render first
       setTimeout(() => {
         // Only show upload modal if user hasn't already uploaded and we're at the start of business planning
         const progressWithPhaseAnswered = progress as ProgressState & { phase_answered?: number };
         const answeredCount = progressWithPhaseAnswered.phase_answered ?? 0;
         
         if (!hasUploadedPlan && !hasSeenUploadPrompt && answeredCount === 0) {
-          console.log("📄 Showing upload plan modal after KYC completion");
+          console.log("📄 Showing upload plan modal after GKY completion");
           openUploadPlanModal();
         }
-      }, 300); // Small delay to ensure KYC modal is fully closed
+      }, 300);
       
       // Smooth scroll to bottom after phase transition - increased delay to override other scroll effects
       setTimeout(() => {
@@ -1511,7 +1522,7 @@ export default function ChatPage() {
   //     return null; // Don't show question number for introductions
   //   }
     
-  //   // Look for patterns like [[Q:KYC.01]] or Question 1 of 20
+  //   // Look for patterns like [[Q:GKY.01]] or Question 1 of 20
   //   const tagMatch = text.match(/\[\[Q:[A-Z_]+\.(\d+)\]\]/);
   //   if (tagMatch) {
   //     return parseInt(tagMatch[1], 10);
@@ -1522,53 +1533,53 @@ export default function ChatPage() {
   //     return parseInt(questionMatch[1], 10);
   //   }
     
-  //   // If no tag found but this is a KYC question, try to determine the number from context
-  //   if (progress.phase === "KYC" && text.includes("?")) {
-  //     // Check for specific KYC questions and assign numbers
+  //   // If no tag found but this is a GKY question, try to determine the number from context
+  //   if (progress.phase === "GKY" && text.includes("?")) {
+  //     // Check for specific GKY questions and assign numbers
   //     if (text.toLowerCase().includes("what is your preferred communication style")) {
-  //       return 2; // This is KYC.02
+  //       return 2; // This is GKY.02
   //     }
   //     if (text.toLowerCase().includes("have you started a business before")) {
-  //       return 3; // This is KYC.03
+  //       return 3; // This is GKY.03
   //     }
   //     if (text.toLowerCase().includes("what's your current work situation")) {
-  //       return 4; // This is KYC.04
+  //       return 4; // This is GKY.04
   //     }
   //     if (text.toLowerCase().includes("do you already have a business idea")) {
-  //       return 5; // This is KYC.05
+  //       return 5; // This is GKY.05
   //     }
   //     if (text.toLowerCase().includes("have you shared any of your previous ideas or concepts with others")) {
-  //       return 6; // This is KYC.06
+  //       return 6; // This is GKY.06
   //     }
   //     if (text.toLowerCase().includes("how comfortable are you with these business skills")) {
-  //       return 7; // This is KYC.07
+  //       return 7; // This is GKY.07
   //     }
   //     if (text.toLowerCase().includes("what kind of business are you trying to build")) {
-  //       return 8; // This is KYC.08
+  //       return 8; // This is GKY.08
   //     }
   //     if (text.toLowerCase().includes("what motivates you to start this business")) {
-  //       return 9; // This is KYC.09
+  //       return 9; // This is GKY.09
   //     }
   //     if (text.toLowerCase().includes("where will your business operate")) {
-  //       return 10; // This is KYC.10
+  //       return 10; // This is GKY.10
   //     }
   //     if (text.toLowerCase().includes("what industry does your business fall into")) {
-  //       return 11; // This is KYC.11
+  //       return 11; // This is GKY.11
   //     }
   //     if (text.toLowerCase().includes("do you have any initial funding available")) {
-  //       return 12; // This is KYC.12
+  //       return 12; // This is GKY.12
   //     }
   //     if (text.toLowerCase().includes("are you planning to seek outside funding in the future")) {
-  //       return 13; // This is KYC.13
+  //       return 13; // This is GKY.13
   //     }
   //     if (text.toLowerCase().includes("how do you plan to generate revenue")) {
-  //       return 14; // This is KYC.14
+  //       return 14; // This is GKY.14
   //     }
   //     if (text.toLowerCase().includes("will your business be primarily:")) {
-  //       return 15; // This is KYC.15
+  //       return 15; // This is GKY.15
   //     }
   //     // Add fallback for questions that might not have tags
-  //     if (progress.phase === "KYC" && text.includes("?") && !text.toLowerCase().includes('welcome to founderport')) {
+  //     if (progress.phase === "GKY" && text.includes("?") && !text.toLowerCase().includes('welcome to founderport')) {
   //       // Try to determine question number from context or history
   //       const historyLength = history.length;
   //       if (historyLength >= 0 && historyLength < 19) {
@@ -1805,17 +1816,30 @@ export default function ChatPage() {
     // First, temporarily replace markdown bold with a placeholder
     const boldPlaceholder = "___MARKDOWN_BOLD___";
     const boldMatches: string[] = [];
-    formatted = formatted.replace(/\*\*(.+?)\*\*/g, (match, content) => {
+    formatted = formatted.replace(/\*\*([\s\S]+?)\*\*/g, (_match, content) => {
       boldMatches.push(content);
       return `${boldPlaceholder}${boldMatches.length - 1}${boldPlaceholder}`;
     });
+
+    // Preserve markdown italic (*text*) — single asterisks for quotes/emphasis
+    const italicPlaceholder = "___MARKDOWN_ITALIC___";
+    const italicMatches: string[] = [];
+    formatted = formatted.replace(/\*([^\s*][^*]*?[^\s*])\*/g, (_match, content) => {
+      italicMatches.push(content);
+      return `${italicPlaceholder}${italicMatches.length - 1}${italicPlaceholder}`;
+    });
     
-    // Remove remaining asterisks (single, triple, etc.)
+    // Remove remaining stray asterisks
     formatted = formatted.replace(/\*+/g, "");
     
     // Restore markdown bold
-    formatted = formatted.replace(new RegExp(`${boldPlaceholder}(\\d+)${boldPlaceholder}`, 'g'), (match, index) => {
+    formatted = formatted.replace(new RegExp(`${boldPlaceholder}(\\d+)${boldPlaceholder}`, 'g'), (_match, index) => {
       return `**${boldMatches[parseInt(index)]}**`;
+    });
+
+    // Restore markdown italic
+    formatted = formatted.replace(new RegExp(`${italicPlaceholder}(\\d+)${italicPlaceholder}`, 'g'), (_match, index) => {
+      return `*${italicMatches[parseInt(index)]}*`;
     });
 
     // Remove ALL hashes
@@ -1884,17 +1908,30 @@ export default function ChatPage() {
     // First, temporarily replace markdown bold with a placeholder
     const boldPlaceholder = "___MARKDOWN_BOLD___";
     const boldMatches: string[] = [];
-    formatted = formatted.replace(/\*\*(.+?)\*\*/g, (match, content) => {
+    formatted = formatted.replace(/\*\*([\s\S]+?)\*\*/g, (_match, content) => {
       boldMatches.push(content);
       return `${boldPlaceholder}${boldMatches.length - 1}${boldPlaceholder}`;
     });
+
+    // Preserve markdown italic (*text*) — single asterisks for quotes/emphasis
+    const italicPlaceholder = "___MARKDOWN_ITALIC___";
+    const italicMatches: string[] = [];
+    formatted = formatted.replace(/\*([^\s*][^*]*?[^\s*])\*/g, (_match, content) => {
+      italicMatches.push(content);
+      return `${italicPlaceholder}${italicMatches.length - 1}${italicPlaceholder}`;
+    });
     
-    // Remove remaining asterisks (single, triple, etc.)
+    // Remove remaining stray asterisks
     formatted = formatted.replace(/\*+/g, "");
     
     // Restore markdown bold
-    formatted = formatted.replace(new RegExp(`${boldPlaceholder}(\\d+)${boldPlaceholder}`, 'g'), (match, index) => {
+    formatted = formatted.replace(new RegExp(`${boldPlaceholder}(\\d+)${boldPlaceholder}`, 'g'), (_match, index) => {
       return `**${boldMatches[parseInt(index)]}**`;
+    });
+
+    // Restore markdown italic
+    formatted = formatted.replace(new RegExp(`${italicPlaceholder}(\\d+)${italicPlaceholder}`, 'g'), (_match, index) => {
+      return `*${italicMatches[parseInt(index)]}*`;
     });
 
     // Remove ALL hashes
@@ -2014,7 +2051,7 @@ export default function ChatPage() {
     // Find and format questions (sentences ending with ?)
     // Look for question patterns in the text
     const questionPatterns = [
-      // KYC Questions
+      // GKY Questions
       /(What's your name and preferred name or nickname\?)/gi,
       /(What is your preferred communication style\?)/gi,
       /(Have you started a business before\?)/gi,
@@ -2346,10 +2383,10 @@ export default function ChatPage() {
     
     // CRITICAL: Check if this is the very first intro message
     // Most reliable indicator: history.length === 0 (no conversation history yet)
-    // Also check: KYC phase and answered <= 1 (initial question might be counted as answered: 1)
+    // Also check: GKY phase and answered <= 1 (initial question might be counted as answered: 1)
     const isFirstQuestionInNewVenture = (
         history.length === 0 && 
-        progress.phase === 'KYC' &&
+        progress.phase === 'GKY' &&
       progress.answered <= 1  // Changed from === 0 to <= 1 to handle initial question being counted
     );
     
@@ -2381,7 +2418,7 @@ export default function ChatPage() {
       // Also prevent any delayed scrolls by checking again after render
       // Use more lenient check: history.length === 0 is the key indicator
       setTimeout(() => {
-        if (chatContainerRef.current && history.length === 0 && progress.phase === 'KYC') {
+        if (chatContainerRef.current && history.length === 0 && progress.phase === 'GKY') {
           chatContainerRef.current.scrollTop = 0;
           console.log('📜 Re-locked scroll to TOP after render (100ms)');
         }
@@ -2389,7 +2426,7 @@ export default function ChatPage() {
       
       // Additional check after a longer delay to catch any late scrolls
       setTimeout(() => {
-        if (chatContainerRef.current && history.length === 0 && progress.phase === 'KYC') {
+        if (chatContainerRef.current && history.length === 0 && progress.phase === 'GKY') {
           chatContainerRef.current.scrollTop = 0;
           console.log('📜 Re-locked scroll to TOP after render (300ms)');
         }
@@ -2397,7 +2434,7 @@ export default function ChatPage() {
       
       // One more check after content fully renders
       setTimeout(() => {
-        if (chatContainerRef.current && history.length === 0 && progress.phase === 'KYC') {
+        if (chatContainerRef.current && history.length === 0 && progress.phase === 'GKY') {
           chatContainerRef.current.scrollTop = 0;
           console.log('📜 Re-locked scroll to TOP after render (500ms)');
         }
@@ -2409,7 +2446,7 @@ export default function ChatPage() {
     
     // Also check the ref - if we've shown the intro and user hasn't answered yet, don't scroll
     // Use history.length === 0 as primary check (most reliable)
-    if (isInitialIntroShown.current && history.length === 0 && progress.phase === 'KYC') {
+    if (isInitialIntroShown.current && history.length === 0 && progress.phase === 'GKY') {
       chatContainerRef.current.scrollTop = 0;
       console.log('📜 Using ref check: Preventing scroll during initial intro');
       return;
@@ -2420,9 +2457,9 @@ export default function ChatPage() {
       isInitialIntroShown.current = false;
     }
     
-    // FINAL SAFEGUARD: If history is still empty and we're in KYC, this is definitely the intro
+    // FINAL SAFEGUARD: If history is still empty and we're in GKY, this is definitely the intro
     // Prevent ALL scrolling regardless of other checks
-    if (history.length === 0 && progress.phase === 'KYC') {
+    if (history.length === 0 && progress.phase === 'GKY') {
       chatContainerRef.current.scrollTop = 0;
       console.log('📜 FINAL SAFEGUARD: Preventing scroll - intro message detected');
       return;
@@ -2484,10 +2521,10 @@ export default function ChatPage() {
   // Handle phase transitions with smooth scrolling
   useEffect(() => {
     if (progress.phase && chatContainerRef.current) {
-      // CRITICAL: Do NOT scroll during initial KYC intro - let user read it
+      // CRITICAL: Do NOT scroll during initial GKY intro - let user read it
       // Use history.length === 0 as primary check (most reliable indicator)
-      if (progress.phase === "KYC" && history.length === 0) {
-        console.log('📜 NO SCROLL - Initial KYC intro phase, user should read naturally', {
+      if (progress.phase === "GKY" && history.length === 0) {
+        console.log('📜 NO SCROLL - Initial GKY intro phase, user should read naturally', {
           phase: progress.phase,
           answered: progress.answered,
           historyLength: history.length
@@ -2567,9 +2604,9 @@ export default function ChatPage() {
         setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
         setNeedsInitialQuestion(false);
         
-        // CRITICAL: If this is the initial intro (KYC phase, no history), immediately lock scroll to top
+        // CRITICAL: If this is the initial intro (GKY phase, no history), immediately lock scroll to top
         // Use history.length === 0 as the key indicator (most reliable)
-        if (progress.phase === 'KYC') {
+        if (progress.phase === 'GKY') {
           // Use requestAnimationFrame to ensure DOM is ready, then lock scroll
           requestAnimationFrame(() => {
             setTimeout(() => {
@@ -2636,7 +2673,8 @@ export default function ChatPage() {
             const formattedQuestion = formatAngelMessage(record.content);
             const tagMatch = record.content.match(/\[\[Q:([A-Z_]+)\.(\d{2})]]/);
             const rawPhase = tagMatch ? tagMatch[1] : record.phase;
-            const normalizedPhase = rawPhase ? rawPhase.toUpperCase() : 'KYC';
+            const rawUpper = rawPhase ? rawPhase.toUpperCase() : 'GKY';
+            const normalizedPhase = rawUpper === 'KYC' ? 'GKY' : rawUpper;
             const counter = phaseCounters[normalizedPhase] ?? 0;
             const parsedNumber = tagMatch ? parseInt(tagMatch[2], 10) : null;
 
@@ -2696,7 +2734,8 @@ export default function ChatPage() {
         // If backend says we're on a different question than what history shows,
         // trust the backend (e.g., after going back, backend knows the correct question)
         const numberFromTag = parseQuestionNumberFromTag(sessionMeta.asked_q);
-        const phase = ((sessionMeta.current_phase as ProgressState["phase"]) || "KYC").toUpperCase() as ProgressState['phase'];
+        const rawSessionPhase = ((sessionMeta.current_phase as string) || "GKY").toUpperCase();
+        const phase = (rawSessionPhase === 'KYC' ? 'GKY' : rawSessionPhase) as ProgressState['phase'];
         
         // Filter history to only include Q&A pairs up to the backend's asked_q
         // If backend says we're on Q2, we should only show Q1 as answered
@@ -2777,7 +2816,7 @@ export default function ChatPage() {
 
         const phaseQuestionSets: Record<string, Set<number>> = {};
         filteredPairs.forEach((pair) => {
-          const pairPhase = (pair.phase || 'KYC').toUpperCase();
+          const pairPhase = (pair.phase || 'GKY').toUpperCase();
           if (!phaseQuestionSets[pairPhase]) {
             phaseQuestionSets[pairPhase] = new Set<number>();
           }
@@ -2787,7 +2826,7 @@ export default function ChatPage() {
         });
 
         const answeredPhase = phaseQuestionSets[phase]?.size ?? 0;
-        const totalPhase = QUESTION_COUNTS[phase as keyof typeof QUESTION_COUNTS] || QUESTION_COUNTS.KYC;
+        const totalPhase = QUESTION_COUNTS[phase as keyof typeof QUESTION_COUNTS] || QUESTION_COUNTS.GKY;
         const phasePercent = totalPhase > 0 ? Math.min(Math.round((answeredPhase / totalPhase) * 100), 100) : 0;
 
         let overallAnswered = 0;
@@ -2810,19 +2849,19 @@ export default function ChatPage() {
         const pendingNumber = numberFromTag ?? reconstructed.pendingNumber;
 
         // Calculate phase_breakdown from actual data (don't rely on previous state which is empty on restore)
-        const kycTotal = QUESTION_COUNTS.KYC || 6;
+        const gkyTotal = QUESTION_COUNTS.GKY || 6;
         const bpTotalCalc = QUESTION_COUNTS.BUSINESS_PLAN || 45;
-        let kycCompleted = 0;
+        let gkyCompleted = 0;
         let bpCompleted = 0;
         
-        if (phase === "KYC") {
-          kycCompleted = Math.min(answeredPhase, kycTotal);
+        if (phase === "GKY") {
+          gkyCompleted = Math.min(answeredPhase, gkyTotal);
           bpCompleted = 0;
         } else if (phase === "BUSINESS_PLAN") {
-          kycCompleted = kycTotal; // KYC is complete if in BP
+          gkyCompleted = gkyTotal; // GKY is complete if in BP
           bpCompleted = Math.min(answeredPhase, bpTotalCalc);
         } else {
-          kycCompleted = kycTotal;
+          gkyCompleted = gkyTotal;
           bpCompleted = bpTotalCalc;
         }
         
@@ -2838,8 +2877,8 @@ export default function ChatPage() {
             total: overallTotal,
             percent: overallPercent,
             phase_breakdown: {
-              kyc_completed: kycCompleted,
-              kyc_total: kycTotal,
+              gky_completed: gkyCompleted,
+              gky_total: gkyTotal,
               bp_completed: bpCompleted,
               bp_total: bpTotalCalc,
             },
@@ -2852,7 +2891,9 @@ export default function ChatPage() {
           lastQuestionNumber: pendingNumber ?? null,
         });
 
-        const askedTag = sessionMeta.asked_q || (pendingNumber ? `${phase}.${pendingNumber.toString().padStart(2, '0')}` : undefined);
+        // Backward compat: normalize KYC.XX → GKY.XX for existing sessions
+        const rawAskedQ = sessionMeta.asked_q ? sessionMeta.asked_q.replace(/^KYC\./, 'GKY.') : null;
+        const askedTag = rawAskedQ || (pendingNumber ? `${phase}.${pendingNumber.toString().padStart(2, '0')}` : undefined);
 
         try {
           await syncSessionProgress(sessionId, {
@@ -3152,7 +3193,7 @@ export default function ChatPage() {
           });
           setHistory([]);
           setNeedsInitialQuestion(true);
-          setBackendTotals({ answered: 0, total: QUESTION_COUNTS.KYC, overallAnswered: 0, overallTotal: 51 });
+          setBackendTotals({ answered: 0, total: QUESTION_COUNTS.GKY, overallAnswered: 0, overallTotal: 51 });
         }
       }
     };
@@ -3275,11 +3316,17 @@ export default function ChatPage() {
         return;
       }
 
-        // Handle KYC to Business Plan transition
-        if (transition_phase === "KYC_TO_BUSINESS_PLAN" ||
-            (progress.phase === "BUSINESS_PLAN" && progress.answered === 0)) {
-          // Skip modal and go directly to business planning
-          handleStartBusinessPlanning();
+        // Handle GKY to Business Plan transition — display the congratulation /
+        // transition message as a normal question.  The user reads it and types
+        // a response (e.g. "yes, I'm ready").  Their response goes through the
+        // regular handleNext → fetchQuestion flow which returns BP Q1.
+        // NO modal, NO auto-start, NO upload popup.
+        if (transition_phase === "GKY_TO_BUSINESS_PLAN") {
+          const formatted = formatAngelMessage(reply);
+          setCurrentQuestion(formatted);
+          setCurrentQuestionNumber(null);  // Hide "Question X" badge for transition
+          applyProgressUpdate(progress);
+          setLoading(false);
           return;
         }      
       // Handle roadmap generation
@@ -3567,7 +3614,8 @@ export default function ChatPage() {
                 const formattedQuestion = formatAngelMessage(record.content);
                 const tagMatch = record.content.match(/\[\[Q:([A-Z_]+)\.(\d{2})]]/);
                 const rawPhase = tagMatch ? tagMatch[1] : record.phase;
-                const normalizedPhase = rawPhase ? rawPhase.toUpperCase() : 'KYC';
+                const rawUpper2 = rawPhase ? rawPhase.toUpperCase() : 'GKY';
+                const normalizedPhase = rawUpper2 === 'KYC' ? 'GKY' : rawUpper2;
                 const parsedNumber = tagMatch ? parseInt(tagMatch[2], 10) : null;
 
                 pendingQuestion = formattedQuestion;
@@ -3830,7 +3878,7 @@ export default function ChatPage() {
       />
     );
 
-  // Show KYC to Business Plan transition
+  // Show GKY to Business Plan transition
   if (transitionData && transitionData.transitionPhase === "PLAN_TO_SUMMARY") {
     return (
       <PlanToRoadmapTransition
@@ -4031,7 +4079,7 @@ export default function ChatPage() {
       {/* Left Sidebar - Quick Actions (Support, Draft, Scrapping, Previous Question) */}
       {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
         progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) ||
-        (progress.phase === 'KYC' && history.length > 0)) && (
+        (progress.phase === 'GKY' && history.length > 0)) && (
         <div className="hidden lg:flex flex-col gap-3 w-32 flex-shrink-0 border-r border-gray-200 bg-white/50 backdrop-blur-sm p-4 sticky top-0 h-screen overflow-y-auto">
           {/* Support Button */}
           {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
@@ -4096,12 +4144,12 @@ export default function ChatPage() {
           {/* Save Button */}
           {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
             progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) ||
-            (progress.phase === 'KYC' && history.length > 0)) && (
+            (progress.phase === 'GKY' && history.length > 0)) && (
             <button
               onClick={async () => {
                 try {
                   toast.info("Saving your progress...");
-                  const phase = progress.phase === 'KYC' ? 'KYC' : progress.phase === 'BUSINESS_PLAN' ? 'BUSINESS_PLAN' : 'IMPLEMENTATION';
+                  const phase = progress.phase === 'GKY' ? 'GKY' : progress.phase === 'BUSINESS_PLAN' ? 'BUSINESS_PLAN' : 'IMPLEMENTATION';
                   const askedTag = progress.asked_q || undefined;
                   await syncSessionProgress(sessionId!, {
                     phase,
@@ -4130,7 +4178,7 @@ export default function ChatPage() {
           )}
 
           {/* Previous Question Button - At bottom of list */}
-      {history.length > 0 && (progress.phase === 'KYC' || progress.phase === 'BUSINESS_PLAN') && (
+      {history.length > 0 && (progress.phase === 'GKY' || progress.phase === 'BUSINESS_PLAN') && (
             <button
           onClick={handleGoBack} 
               disabled={history.length === 0 || loading || backButtonLoading}
@@ -4509,7 +4557,7 @@ export default function ChatPage() {
                       <div className="font-semibold text-gray-800 mb-1 text-sm">
                         Angel
                       </div>
-                      {(progress.phase === "KYC" || progress.phase === "BUSINESS_PLAN") && pair.questionNumber && (
+                      {(progress.phase === "GKY" || progress.phase === "BUSINESS_PLAN") && pair.questionNumber && (
                         <div className="mb-2">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                             Question {pair.questionNumber}
@@ -4555,7 +4603,7 @@ export default function ChatPage() {
                     <div className="font-semibold text-gray-800 mb-1 text-sm">
                       Angel
                     </div>
-                    {!loading && (progress.phase === "KYC" || progress.phase === "BUSINESS_PLAN") && currentQuestionNumber && (
+                    {!loading && (progress.phase === "GKY" || progress.phase === "BUSINESS_PLAN") && currentQuestionNumber && (
                       <div className="mb-2">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                           Question {currentQuestionNumber}
@@ -4645,7 +4693,7 @@ export default function ChatPage() {
               </div>
             )}
             
-            {progress.phase !== 'KYC' && (
+            {progress.phase !== 'GKY' && (
               <div className="mb-3 flex justify-center">
                 <button
                   onClick={() => setShowInstructions(true)}
@@ -4731,7 +4779,7 @@ export default function ChatPage() {
                     onClick={async () => {
                       try {
                         toast.info("Saving your progress...");
-                        const phase = progress.phase === 'KYC' ? 'KYC' : progress.phase === 'BUSINESS_PLAN' ? 'BUSINESS_PLAN' : 'IMPLEMENTATION';
+                        const phase = progress.phase === 'GKY' ? 'GKY' : progress.phase === 'BUSINESS_PLAN' ? 'BUSINESS_PLAN' : 'IMPLEMENTATION';
                         const askedTag = progress.asked_q || undefined;
                         await syncSessionProgress(sessionId!, {
                           phase,
@@ -4760,7 +4808,7 @@ export default function ChatPage() {
                 </div>
               )}
 
-              {progress.phase === "KYC" && (
+              {progress.phase === "GKY" && (
                 <div className="mt-2.5">
                   <p className="text-gray-400 text-xs text-center">
                     💡 Press Enter to send or Shift+Enter for new line
@@ -5075,7 +5123,8 @@ export default function ChatPage() {
                           const formattedQuestion = formatAngelMessage(record.content);
                           const tagMatch = record.content.match(/\[\[Q:([A-Z_]+)\.(\d{2})]]/);
                           const rawPhase = tagMatch ? tagMatch[1] : record.phase;
-                          const normalizedPhase = rawPhase ? rawPhase.toUpperCase() : 'KYC';
+                          const rawUpper3 = rawPhase ? rawPhase.toUpperCase() : 'GKY';
+                          const normalizedPhase = rawUpper3 === 'KYC' ? 'GKY' : rawUpper3;
                           const counter = phaseCounters[normalizedPhase] ?? 0;
                           const parsedNumber = tagMatch ? parseInt(tagMatch[2], 10) : null;
 
@@ -5231,15 +5280,7 @@ export default function ChatPage() {
         businessContext={mergedBusinessContext}
       /> */}
 
-      {showKycToBusinessIntro && (
-        <KycToBusinessPlanIntro
-          onStart={() => {
-            setShowKycToBusinessIntro(false);
-            handleStartBusinessPlanning();
-          }}
-          isLoading={loading}
-        />
-      )}
+      {/* GKY-to-Business-Plan modal removed — transition happens inline in chat */}
 
       {showInstructions && (
         <BusinessPlanningInstructions onClose={() => setShowInstructions(false)} />

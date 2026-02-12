@@ -60,7 +60,7 @@ const RecentVenturePage = () => {
 
   const getPhaseColor = (phase: string) => {
     const phaseColors = {
-      'KYC': 'bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800 border border-blue-300',
+      'GKY': 'bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800 border border-blue-300',
       'BUSINESS_PLAN': 'bg-gradient-to-r from-purple-100 to-purple-200 text-purple-800 border border-purple-300',
       'ROADMAP': 'bg-gradient-to-r from-green-100 to-green-200 text-green-800 border border-green-300',
       'IMPLEMENTATION': 'bg-gradient-to-r from-orange-100 to-orange-200 text-orange-800 border border-orange-300',
@@ -71,7 +71,7 @@ const RecentVenturePage = () => {
   };
 
   const QUESTION_COUNTS: Record<string, number> = {
-    KYC: 6,
+    GKY: 6,
     BUSINESS_PLAN: 45,
     ROADMAP: 1,
     IMPLEMENTATION: 10,

@@ -1238,8 +1238,8 @@ const Implementation: React.FC<ImplementationProps> = ({
               progress={progress}
             />
 
-      {/* Floating Comprehensive Support - Only show in business phases, not KYC */}
-      {currentTask && currentTask.phase_name && !currentTask.phase_name.toLowerCase().includes('kyc') && (
+      {/* Floating Comprehensive Support - Only show in business phases, not GKY */}
+      {currentTask && currentTask.phase_name && !currentTask.phase_name.toLowerCase().includes('gky') && (
         <FloatingComprehensiveSupport
           taskContext={currentTask?.title || 'general business support'}
           businessContext={businessContext}

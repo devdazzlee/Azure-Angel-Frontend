@@ -26,15 +26,15 @@ interface QuestionNavigatorProps {
       total: number;
       percent: number;
       phase_breakdown?: {
-        kyc_completed: number;
-        kyc_total: number;
+        gky_completed: number;
+        gky_total: number;
         bp_completed: number;
         bp_total: number;
       };
     };
     phase_breakdown?: {
-      kyc_completed: number;
-      kyc_total: number;
+      gky_completed: number;
+      gky_total: number;
       bp_completed: number;
       bp_total: number;
     };
@@ -46,14 +46,14 @@ interface QuestionNavigatorProps {
 }
 
 const phaseColors = {
-  KYC: 'text-blue-600 bg-blue-50 border-blue-200',
+  GKY: 'text-blue-600 bg-blue-50 border-blue-200',
   BUSINESS_PLAN: 'text-purple-600 bg-purple-50 border-purple-200',
   ROADMAP: 'text-teal-600 bg-teal-50 border-teal-200',
   IMPLEMENTATION: 'text-green-600 bg-green-50 border-green-200'
 };
 
 const phaseNames = {
-  KYC: 'Getting to Know You',
+  GKY: 'Getting to Know You',
   BUSINESS_PLAN: 'Business Plan',
   ROADMAP: 'Roadmap',
   IMPLEMENTATION: 'Implementation'
@@ -126,11 +126,11 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
             </div>
             <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg shadow-sm border border-gray-200">
               <span className="text-lg font-bold text-gray-900">
-                {currentProgress.overall_progress?.answered || currentProgress.answered}
+                {currentProgress.overall_progress?.answered ?? currentProgress.answered}
               </span>
               <span className="text-sm text-gray-400 font-medium">/</span>
               <span className="text-lg font-bold text-gray-700">
-                {currentProgress.overall_progress?.total || currentProgress.total}
+                {currentProgress.overall_progress?.total ?? currentProgress.total}
               </span>
             </div>
           </div>
@@ -140,7 +140,7 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
             <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden shadow-inner border border-gray-200">
               <div
                 className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-teal-500 rounded-full transition-all duration-1000 ease-out relative overflow-hidden"
-                style={{ width: `${currentProgress.overall_progress?.percent || currentProgress.percent}%` }}
+                style={{ width: `${currentProgress.overall_progress?.percent ?? currentProgress.percent}%` }}
               >
                 {/* Shimmer Effect */}
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-40 animate-shimmer"></div>
@@ -150,7 +150,7 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
             {/* Progress Percentage */}
             <div className="mt-2 text-center">
               <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 bg-clip-text text-transparent animate-gradient">
-                {Math.round(currentProgress.overall_progress?.percent || currentProgress.percent)}%
+                {Math.round(currentProgress.overall_progress?.percent ?? currentProgress.percent)}%
               </span>
               <div className="text-xs text-gray-500 mt-0.5 font-medium uppercase tracking-wide">
                 Complete
@@ -168,8 +168,8 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
                   <span className="text-xs font-semibold text-blue-700 ml-1">
                     {bpBreakdown
                       ? Math.round(
-                          (bpBreakdown.kyc_completed /
-                            bpBreakdown.kyc_total) *
+                          (bpBreakdown.gky_completed /
+                            bpBreakdown.gky_total) *
                             100
                         )
                       : Math.round(currentProgress.percent)}
@@ -201,8 +201,8 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
         
       </div>
 
-      {/* KYC Progress Widget - Only show during KYC phase - BELOW OVERALL PROGRESS */}
-      {currentPhase === 'KYC' && (
+      {/* GKY Progress Widget - Only show during GKY phase - BELOW OVERALL PROGRESS */}
+      {currentPhase === 'GKY' && (
         <div className="bg-white shadow-xl rounded-xl overflow-hidden border border-gray-100">
           <div className="p-4 border-b border-gray-100">
             <h3 className="text-lg font-semibold text-gray-800">Getting to Know You</h3>

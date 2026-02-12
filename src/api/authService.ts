@@ -61,7 +61,7 @@ export interface ChatResponse {
 
 export async function fetchNextQuestion(
   userMessage: string,
-  contextData: { phase: 'kyc'; stepIndex: number }
+  contextData: { phase: 'gky'; stepIndex: number }
 ): Promise<ChatResponse> {
   try {
     const { data } = await httpClient.post<ChatResponse>('/angel/chat', { userMessage, contextData });

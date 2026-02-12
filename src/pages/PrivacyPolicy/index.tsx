@@ -55,7 +55,7 @@ const PrivacyPolicy: React.FC = () => {
 
             <div>
               <h3 className="text-lg font-semibold text-gray-900">Communications</h3>
-              <p>If you contact us for support or feedback, we collect the information you provide in those correspondences (email address, the content of your message, etc.). We also retain your responses to any surveys or questionnaires (like our initial Know Your Customer (KYC) onboarding questionnaire) that help us tailor Founderport's guidance to you.</p>
+              <p>If you contact us for support or feedback, we collect the information you provide in those correspondences (email address, the content of your message, etc.). We also retain your responses to any surveys or questionnaires (like our initial Get to Know You (GKY) onboarding questionnaire) that help us tailor Founderport's guidance to you.</p>
             </div>
           </div>
 

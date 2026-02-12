@@ -22,7 +22,7 @@ const ConfirmEmail = () => {
         return;
       }
       // Once confirmed, you can redirect the user to wherever you want:
-      navigate('/kyc');
+      navigate('/gky');
     }
     finishConfirmation();
   }, [search, navigate]);

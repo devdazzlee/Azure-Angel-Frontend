@@ -618,9 +618,9 @@ export const UXGuidelinesManager: React.FC<{
   // Navigation items
   const navigationItems: NavigationItem[] = [
     {
-      id: "kyc",
+      id: "gky",
       label: "Get to Know You",
-      phase: "KYC",
+      phase: "GKY",
       status: "completed",
       icon: <Users className="h-4 w-4" />,
       description: "Understanding your entrepreneurial profile"

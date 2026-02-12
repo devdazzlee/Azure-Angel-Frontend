@@ -110,7 +110,7 @@ const processSteps = [
   {
     step: "2",
     title: "Answer Key Questions",
-    description: "Complete our KYC questionnaire to help us understand your business needs and goals.",
+    description: "Complete our Get to Know You questionnaire to help us understand your business needs and goals.",
     icon: "📝",
   },
   {
