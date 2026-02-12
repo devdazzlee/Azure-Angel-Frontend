@@ -3761,8 +3761,10 @@ export default function ChatPage() {
     setLoading(true);
     try {
       // Determine transition type based on current phase
-      const currentTransitionType = transitionType || 
-        (transitionData?.transitionPhase === "PLAN_TO_SUMMARY" ? "summary_to_budget" : "plan_to_roadmap");
+      // COMMENTED OUT: Budget phase - always go to roadmap now
+      // const currentTransitionType = transitionType || 
+      //   (transitionData?.transitionPhase === "PLAN_TO_SUMMARY" ? "summary_to_budget" : "plan_to_roadmap");
+      const currentTransitionType = transitionType || "plan_to_roadmap";
       
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/transition-decision`, {
         method: 'POST',
@@ -3779,21 +3781,23 @@ export default function ChatPage() {
       const data = await response.json();
       
       if (data.success) {
-        if (data.result?.action === "transition_to_budget") {
-          // Summary approved - transition to budget
-          setTransitionData({
-            businessPlanSummary: data.result.business_plan_summary || transitionData?.businessPlanSummary || "",
-            businessPlanArtifact: data.result.business_plan_artifact || transitionData?.businessPlanArtifact || null,
-            transitionPhase: "PLAN_TO_BUDGET",
-            estimatedExpenses: data.result.estimated_expenses || "",
-            businessContext: data.result.business_context || {}
-          });
-          if (data.result?.progress) {
-            applyProgressUpdate(data.result.progress);
-          }
-          toast.success("Proceeding to budget setup");
-        } else {
-          // Budget approved - transition to roadmap (or other transitions)
+        // COMMENTED OUT: Budget phase transition - skip directly to roadmap
+        // if (data.result?.action === "transition_to_budget") {
+        //   // Summary approved - transition to budget
+        //   setTransitionData({
+        //     businessPlanSummary: data.result.business_plan_summary || transitionData?.businessPlanSummary || "",
+        //     businessPlanArtifact: data.result.business_plan_artifact || transitionData?.businessPlanArtifact || null,
+        //     transitionPhase: "PLAN_TO_BUDGET",
+        //     estimatedExpenses: data.result.estimated_expenses || "",
+        //     businessContext: data.result.business_context || {}
+        //   });
+        //   if (data.result?.progress) {
+        //     applyProgressUpdate(data.result.progress);
+        //   }
+        //   toast.success("Proceeding to budget setup");
+        // } else {
+        {
+          // Transition to roadmap (budget phase skipped)
           setTransitionData(null);
           if (data.result?.progress) {
             applyProgressUpdate(data.result.progress);
@@ -3956,81 +3960,82 @@ export default function ChatPage() {
       <PlanToRoadmapTransition
         businessPlanSummary={transitionData.businessPlanSummary}
         businessPlanArtifact={transitionData.businessPlanArtifact}
-        onApprove={() => handleApprovePlan("summary_to_budget")}
+        onApprove={() => handleApprovePlan("plan_to_roadmap")}
         onRevisit={handleRevisitPlan}
         loading={loading}
         sessionId={sessionId}
         initialQuote={transitionQuote}
-        nextStep="budget"
+        nextStep="roadmap"
       />
     );
   }
 
-  if (transitionData && transitionData.transitionPhase === "PLAN_TO_BUDGET") {
-    return (
-      <PlanToBudgetTransition
-        businessPlanSummary={transitionData.businessPlanSummary}
-        estimatedExpenses={transitionData.estimatedExpenses}
-        businessContext={transitionData.businessContext}
-        onComplete={async (budgetData) => {
-          // Budget is complete, now transition to roadmap
-          // Immediately switch UI into a global loading state to avoid a "stuck" feeling
-          setTransitionData(null);
-          setCurrentQuestion("");
-          setLoading(true);
-          try {
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/transition-decision`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`
-              },
-              body: JSON.stringify({ 
-                decision: 'approve',
-                transition_type: 'budget_to_roadmap'
-              })
-            });
-
-            const data = await response.json();
-            
-            if (data.success) {
-              if (data.result?.progress) {
-                applyProgressUpdate(data.result.progress);
-              }
-              if (data.result?.roadmap) {
-                const roadmapContent = data.result.roadmap;
-                setRoadmapData({
-                  roadmapContent: roadmapContent,
-                  isGenerated: true
-                });
-                setRoadmapState({
-                  showModal: true,
-                  plan: roadmapContent,
-                  loading: false,
-                  error: ""
-                });
-                toast.success("Roadmap Generated");
-              }
-            } else {
-              if (data.requires_subscription) {
-                toast.error(data.message || "Subscription required to proceed to Roadmap phase");
-              } else {
-                toast.error(data.message || "Failed to proceed to roadmap");
-              }
-            }
-          } catch (error: any) {
-            console.error("❌ Failed to proceed to roadmap:", error);
-            toast.error("Failed to proceed to roadmap. Please try again.");
-          } finally {
-            setLoading(false);
-          }
-        }}
-        onRevisit={handleRevisitPlan}
-        loading={loading}
-        sessionId={sessionId}
-      />
-    );
-  }
+  // COMMENTED OUT: Budget phase - skipping directly to roadmap
+  // if (transitionData && transitionData.transitionPhase === "PLAN_TO_BUDGET") {
+  //   return (
+  //     <PlanToBudgetTransition
+  //       businessPlanSummary={transitionData.businessPlanSummary}
+  //       estimatedExpenses={transitionData.estimatedExpenses}
+  //       businessContext={transitionData.businessContext}
+  //       onComplete={async (budgetData) => {
+  //         // Budget is complete, now transition to roadmap
+  //         // Immediately switch UI into a global loading state to avoid a "stuck" feeling
+  //         setTransitionData(null);
+  //         setCurrentQuestion("");
+  //         setLoading(true);
+  //         try {
+  //           const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/transition-decision`, {
+  //             method: 'POST',
+  //             headers: {
+  //               'Content-Type': 'application/json',
+  //               'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`
+  //             },
+  //             body: JSON.stringify({ 
+  //               decision: 'approve',
+  //               transition_type: 'budget_to_roadmap'
+  //             })
+  //           });
+  //
+  //           const data = await response.json();
+  //           
+  //           if (data.success) {
+  //             if (data.result?.progress) {
+  //               applyProgressUpdate(data.result.progress);
+  //             }
+  //             if (data.result?.roadmap) {
+  //               const roadmapContent = data.result.roadmap;
+  //               setRoadmapData({
+  //                 roadmapContent: roadmapContent,
+  //                 isGenerated: true
+  //               });
+  //               setRoadmapState({
+  //                 showModal: true,
+  //                 plan: roadmapContent,
+  //                 loading: false,
+  //                 error: ""
+  //               });
+  //               toast.success("Roadmap Generated");
+  //             }
+  //           } else {
+  //             if (data.requires_subscription) {
+  //               toast.error(data.message || "Subscription required to proceed to Roadmap phase");
+  //             } else {
+  //               toast.error(data.message || "Failed to proceed to roadmap");
+  //             }
+  //           }
+  //         } catch (error: any) {
+  //           console.error("❌ Failed to proceed to roadmap:", error);
+  //           toast.error("Failed to proceed to roadmap. Please try again.");
+  //         } finally {
+  //           setLoading(false);
+  //         }
+  //       }}
+  //       onRevisit={handleRevisitPlan}
+  //       loading={loading}
+  //       sessionId={sessionId}
+  //     />
+  //   );
+  // }
 
   if (transitionData && transitionData.transitionPhase === "PLAN_TO_ROADMAP") {
     return (

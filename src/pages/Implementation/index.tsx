@@ -1029,6 +1029,7 @@ const Implementation: React.FC<ImplementationProps> = ({
                 />
               )}
             </motion.button>
+            {/* COMMENTED OUT: Budget tab - temporarily disabled
             <motion.button
               onClick={() => handleTabChange('budget')}
               className={`relative py-4 px-6 font-semibold text-sm rounded-t-xl transition-all duration-300 ${
@@ -1054,6 +1055,7 @@ const Implementation: React.FC<ImplementationProps> = ({
                 />
               )}
             </motion.button>
+            */}
           </div>
         </div>
       </div>
@@ -1154,6 +1156,7 @@ const Implementation: React.FC<ImplementationProps> = ({
             </motion.div>
           )}
           
+          {/* COMMENTED OUT: Budget tab content - temporarily disabled
           {activeTab === 'budget' && mountedTabs.budget && (
             <motion.div
               key="budget"
@@ -1202,6 +1205,7 @@ const Implementation: React.FC<ImplementationProps> = ({
               </div>
             </motion.div>
           )}
+          */}
         </AnimatePresence>
       </div>
 

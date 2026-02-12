@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" sizes="512x512" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" sizes="256x256" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" sizes="192x192" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" sizes="180x180" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" sizes="32x32" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Founderport</title>
+    <script>
+      // Handle Supabase auth redirects before React loads
+      (function() {
+        const hash = window.location.hash;
+        if (hash) {
+          try {
+            const hashParams = new URLSearchParams(hash.substring(1));
+            const accessToken = hashParams.get('access_token');
+            const type = hashParams.get('type');
+            const error = hashParams.get('error');
+            const errorCode = hashParams.get('error_code');
+            
+            // If it's a recovery token or has recovery-related errors, redirect to reset-password page
+            if ((accessToken && type === 'recovery') || error || errorCode) {
+              const currentPath = window.location.pathname;
+              
+              // Only redirect if we're not already on the reset-password page
+              if (currentPath !== '/reset-password' && currentPath !== '/reset-password/') {
+                // Preserve the hash when redirecting
+                window.location.replace('/reset-password' + hash);
+              }
+            }
+          } catch (e) {
+            // Silently fail if there's an error parsing
+            console.error('Error handling auth redirect:', e);
+          }
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-CO4j2oa3.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-C_YFlNAw.js">
+    <link rel="modulepreload" crossorigin href="/assets/ui-CAVmXrmB.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-Dz3A-C1b.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
