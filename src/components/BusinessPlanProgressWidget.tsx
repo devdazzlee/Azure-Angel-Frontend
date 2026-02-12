@@ -21,6 +21,20 @@ interface BusinessPlanSection {
   bgColor: string;
 }
 
+/**
+ * Convert internal BP question number to client-spec display number.
+ * Must match the mapping in venture.tsx getClientDisplayNumber.
+ */
+const CLIENT_DISPLAY_TOTAL = 46;
+
+const getClientDisplayNumber = (internalNumber: number): number => {
+  if (internalNumber <= 7) return internalNumber;        // S1-S2: Q1-Q7
+  if (internalNumber <= 17) return internalNumber + 3;   // S3-S4: Q11-Q20
+  if (internalNumber <= 35) return internalNumber + 10;  // S5-S8 main: Q28-Q45
+  if (internalNumber <= 41) return 45;                   // S8 subs: Q45
+  return 46;                                             // S9: Q46
+};
+
 interface BusinessPlanProgressWidgetProps {
   currentQuestionNumber: number;
   totalQuestions: number;
@@ -32,6 +46,7 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
   totalQuestions,
   className = ""
 }) => {
+  const clientDisplayNumber = getClientDisplayNumber(currentQuestionNumber);
   const [currentSection, setCurrentSection] = useState<BusinessPlanSection | null>(null);
   const [sectionProgress, setSectionProgress] = useState(0);
   const [overallProgress, setOverallProgress] = useState(0);
@@ -167,7 +182,7 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
         <div className="text-center">
           <h3 className="text-sm font-semibold text-gray-900 mb-2">Business Plan Progress</h3>
           <div className="text-xs text-gray-500">
-            Question {currentQuestionNumber} of {totalQuestions}
+            Question {clientDisplayNumber} of {CLIENT_DISPLAY_TOTAL}
           </div>
           <div className="mt-2 text-xs text-gray-400">
             Preparing progress tracking...
@@ -186,7 +201,7 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-gray-900">Business Plan Progress</h3>
         <div className="text-xs text-gray-500">
-          {currentQuestionNumber} of {totalQuestions}
+          {clientDisplayNumber} of {CLIENT_DISPLAY_TOTAL}
         </div>
       </div>
 

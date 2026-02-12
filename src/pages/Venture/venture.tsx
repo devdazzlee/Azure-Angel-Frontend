@@ -166,6 +166,41 @@ const parseQuestionNumberFromTag = (tag?: string | null): number | null => {
   return match ? parseInt(match[1], 10) : null;
 };
 
+/**
+ * Convert internal BP question number to client-spec display number.
+ * The client spec has different numbering than our internal BP.01-BP.45:
+ *   - Sections 1-2 (BP.01-07): No offset → Q1-Q7
+ *   - Sections 3-4 (BP.08-17): +3 offset → Q11-Q20
+ *   - Sections 5-8 (BP.18-35): +10 offset → Q28-Q45
+ *   - Section 8 subs (BP.36-41): All display as Q45 (sub-questions of scaling plan)
+ *   - Section 9 (BP.42-45): All display as Q46 (contingency + sub-questions)
+ * GKY questions: displayed as-is (1-6)
+ */
+const CLIENT_DISPLAY_TOTAL = 46; // Client spec goes up to Q46
+
+const getClientDisplayNumber = (
+  internalNumber: number | null | undefined,
+  phase?: string
+): number | null => {
+  if (internalNumber === null || internalNumber === undefined) return null;
+  if (phase !== 'BUSINESS_PLAN') return internalNumber;
+
+  // Sections 1-2: Product/Service Details (BP.01-04) + Business Overview (BP.05-07)
+  if (internalNumber <= 7) return internalNumber;
+
+  // Sections 3-4: Market Research (BP.08-13) + Location & Operations (BP.14-17)
+  if (internalNumber <= 17) return internalNumber + 3;
+
+  // Sections 5-7 + Section 8 main: Marketing & Sales thru Growth main (BP.18-35)
+  if (internalNumber <= 35) return internalNumber + 10;
+
+  // Section 8 sub-questions: Scaling subs (BP.36-41) → all display as Q45
+  if (internalNumber <= 41) return 45;
+
+  // Section 9: Challenges & Contingency (BP.42-45) → all display as Q46
+  return 46;
+};
+
 const deriveQuestionNumber = (
   backendQuestionNumber: number | null | undefined,
   replyText: string,
@@ -178,7 +213,7 @@ const deriveQuestionNumber = (
 
   // For Business Plan phase, use sequential numbering starting from 1
   if (progressPayload?.phase === 'BUSINESS_PLAN' && typeof backendQuestionNumber === "number" && !Number.isNaN(backendQuestionNumber)) {
-    // Business Plan questions are sequential (1, 2, 3, etc.)
+    // Business Plan questions are sequential (1, 2, 3, etc.) — internal numbering
     return backendQuestionNumber;
   }
 
@@ -3671,7 +3706,7 @@ export default function ChatPage() {
         }, 100);
       
         // User feedback
-      toast.success(`Returned to Question ${previousQuestionNumber ?? 'previous'}`, {
+      toast.success(`Returned to Question ${getClientDisplayNumber(previousQuestionNumber, progress.phase) ?? 'previous'}`, {
         autoClose: 2000
       });
       } else {
@@ -4183,7 +4218,7 @@ export default function ChatPage() {
           onClick={handleGoBack} 
               disabled={history.length === 0 || loading || backButtonLoading}
               className="group relative bg-gradient-to-br from-teal-50 to-blue-50 hover:from-teal-100 hover:to-blue-100 border border-teal-200 hover:border-teal-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex flex-col items-center space-y-2 mt-auto"
-              title={currentQuestionNumber ? `Go back to Question ${currentQuestionNumber - 1}` : "Go back to previous question"}
+              title={currentQuestionNumber ? `Go back to Question ${getClientDisplayNumber(currentQuestionNumber - 1, progress.phase)}` : "Go back to previous question"}
             >
               {backButtonLoading ? (
                 <div className="w-12 h-12 bg-gradient-to-br from-teal-500 to-blue-600 rounded-full flex items-center justify-center">
@@ -4560,7 +4595,7 @@ export default function ChatPage() {
                       {(progress.phase === "GKY" || progress.phase === "BUSINESS_PLAN") && pair.questionNumber && (
                         <div className="mb-2">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            Question {pair.questionNumber}
+                            Question {getClientDisplayNumber(pair.questionNumber, progress.phase)}
                           </span>
                         </div>
                       )}
@@ -4606,7 +4641,7 @@ export default function ChatPage() {
                     {!loading && (progress.phase === "GKY" || progress.phase === "BUSINESS_PLAN") && currentQuestionNumber && (
                       <div className="mb-2">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          Question {currentQuestionNumber}
+                          Question {getClientDisplayNumber(currentQuestionNumber, progress.phase)}
                         </span>
                       </div>
                     )}
@@ -5230,9 +5265,9 @@ export default function ChatPage() {
                 applyProgressUpdate(updatedProgress);
                 
                 if (questionNumber === firstMissingNumber) {
-                  toast.success(`Starting from Question ${firstMissingNumber} - ${analysisToUse.missingQuestions.length} questions to answer!`);
+                  toast.success(`Starting from Question ${getClientDisplayNumber(firstMissingNumber, 'BUSINESS_PLAN')} - ${analysisToUse.missingQuestions.length} questions to answer!`);
                 } else {
-                  toast.warning(`Expected Question ${firstMissingNumber} but got Question ${questionNumber}. Please check the backend logs.`);
+                  toast.warning(`Expected Question ${getClientDisplayNumber(firstMissingNumber, 'BUSINESS_PLAN')} but got Question ${getClientDisplayNumber(questionNumber, 'BUSINESS_PLAN')}. Please check the backend logs.`);
                 }
               } catch (fetchError) {
                 console.error("❌ Error fetching question:", fetchError);

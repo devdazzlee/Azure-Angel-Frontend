@@ -1,6 +1,18 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+/**
+ * Convert internal BP question number to client-spec display number.
+ * Must match the mapping in venture.tsx getClientDisplayNumber.
+ */
+const getClientDisplayNumber = (internalNumber: number): number => {
+  if (internalNumber <= 7) return internalNumber;        // S1-S2: Q1-Q7
+  if (internalNumber <= 17) return internalNumber + 3;   // S3-S4: Q11-Q20
+  if (internalNumber <= 35) return internalNumber + 10;  // S5-S8 main: Q28-Q45
+  if (internalNumber <= 41) return 45;                   // S8 subs: Q45
+  return 46;                                             // S9: Q46
+};
+
 interface MissingQuestion {
   question_number: number;
   question_text: string;
@@ -250,7 +262,7 @@ const PlanAnalysisModal: React.FC<PlanAnalysisModalProps> = ({
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
                               <span className="text-xs font-semibold text-purple-600 bg-purple-100 px-2 py-1 rounded">
-                                Q{question.question_number}
+                                Q{getClientDisplayNumber(question.question_number)}
                               </span>
                               <span
                                 className={`text-xs font-medium px-2 py-1 rounded border ${getPriorityColor(
@@ -301,7 +313,7 @@ const PlanAnalysisModal: React.FC<PlanAnalysisModalProps> = ({
                 <div className="space-y-3 text-sm text-gray-700">
                   <div className="flex items-start gap-2">
                     <span className="text-blue-600 font-bold">1.</span>
-                    <p>We'll start from the <strong>first missing question</strong> (Question {analysis.missing_questions[0]?.question_number || 'N/A'})</p>
+                    <p>We'll start from the <strong>first missing question</strong> (Question {analysis.missing_questions[0]?.question_number ? getClientDisplayNumber(analysis.missing_questions[0].question_number) : 'N/A'})</p>
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="text-blue-600 font-bold">2.</span>

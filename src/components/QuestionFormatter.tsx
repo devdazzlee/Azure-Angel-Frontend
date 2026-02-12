@@ -60,11 +60,35 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
     return next;
   }, [text]);
 
+  // Detect draft/command/auto-research responses that should NOT be parsed/reordered
+  // These are responses to Draft/Support/Scrapping commands or auto-research questions
+  // that have their own structure and should be rendered as-is to preserve order
+  const isDraftOrCommandResponse = useMemo(() => {
+    const commandPrefixes = [
+      /^Here's a (research-backed )?draft/i,
+      /^Here's a draft based on/i,
+      /^Let's work through this together/i,
+      /^Here's a refined version/i,
+      /^I'll create additional content/i,
+      /^Verification:/i,
+      /^Here's what I've captured so far/i,
+    ];
+    const isCommandPrefix = commandPrefixes.some(regex => regex.test(processedText.trim()));
+    
+    // Also detect auto-research responses (contain 🔍 research result sections)
+    const hasAutoResearch = /🔍\s*\*\*.*(?:Research|Suggested|Estimated).*\*\*/i.test(processedText);
+    
+    return isCommandPrefix || hasAutoResearch;
+  }, [processedText]);
+
   const businessPlanParts = useMemo(() => {
     if (phase !== 'BUSINESS_PLAN') return null;
+    // Skip parsing for draft/command responses - they have their own structure
+    // and should be rendered as-is to preserve the original order
+    if (isDraftOrCommandResponse) return null;
 
     return parseBusinessPlanQuestionParts(processedText);
-  }, [phase, processedText]);
+  }, [phase, processedText, isDraftOrCommandResponse]);
 
   if (businessPlanParts) {
     return (
