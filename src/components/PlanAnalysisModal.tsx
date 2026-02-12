@@ -2,15 +2,23 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 /**
- * Convert internal BP question number to client-spec display number.
- * Must match the mapping in venture.tsx getClientDisplayNumber.
+ * Direct lookup table: internal BP question number → client spec display number.
+ * Must match the mapping in venture.tsx BP_TO_CLIENT.
  */
-const getClientDisplayNumber = (internalNumber: number): number => {
-  if (internalNumber <= 7) return internalNumber;        // S1-S2: Q1-Q7
-  if (internalNumber <= 17) return internalNumber + 3;   // S3-S4: Q11-Q20
-  if (internalNumber <= 35) return internalNumber + 10;  // S5-S8 main: Q28-Q45
-  if (internalNumber <= 41) return 45;                   // S8 subs: Q45
-  return 46;                                             // S9: Q46
+const BP_TO_CLIENT: Record<number, string> = {
+  1: '1', 2: '1.1', 3: '2', 4: '3',
+  5: '5', 6: '6', 7: '7',
+  8: '11', 9: '12', 10: '13', 11: '14', 12: '15', 13: '16',
+  14: '15', 15: '16', 16: '17', 17: '18',
+  18: '28', 19: '29', 20: '30', 21: '31', 22: '32', 23: '33',
+  24: '34', 25: '35', 26: '36', 27: '37', 28: '38',
+  29: '39', 30: '40', 31: '41', 32: '42', 33: '43', 34: '44',
+  35: '45', 36: '45.1', 37: '45.2', 38: '45.3', 39: '45.4', 40: '45.5', 41: '45.6',
+  42: '46', 43: '46.1', 44: '46.2', 45: '46.3',
+};
+
+const getClientDisplayNumber = (internalNumber: number): string => {
+  return BP_TO_CLIENT[internalNumber] ?? String(internalNumber);
 };
 
 interface MissingQuestion {

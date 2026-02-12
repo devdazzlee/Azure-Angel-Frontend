@@ -167,38 +167,75 @@ const parseQuestionNumberFromTag = (tag?: string | null): number | null => {
 };
 
 /**
- * Convert internal BP question number to client-spec display number.
- * The client spec has different numbering than our internal BP.01-BP.45:
- *   - Sections 1-2 (BP.01-07): No offset → Q1-Q7
- *   - Sections 3-4 (BP.08-17): +3 offset → Q11-Q20
- *   - Sections 5-8 (BP.18-35): +10 offset → Q28-Q45
- *   - Section 8 subs (BP.36-41): All display as Q45 (sub-questions of scaling plan)
- *   - Section 9 (BP.42-45): All display as Q46 (contingency + sub-questions)
- * GKY questions: displayed as-is (1-6)
+ * Direct lookup table: internal BP question number → client spec display string.
+ * Sub-questions use dot notation (e.g. "1.1", "45.1") so the user can see
+ * they belong to a parent question without duplicate numbers.
+ * Matches the client's exact document numbering (Q1-Q46).
  */
-const CLIENT_DISPLAY_TOTAL = 46; // Client spec goes up to Q46
+const BP_TO_CLIENT: Record<number, string> = {
+  // Section 1: Product/Service Details
+  1: '1',      // Describe your business idea in detail
+  2: '1.1',    // What product or service will you offer? (sub of Q1)
+  3: '2',      // What makes your product or service unique?
+  4: '3',      // What is the current stage of your business?
+  // Section 2: Business Overview
+  5: '5',      // Business Name
+  6: '6',      // What industry?
+  7: '7',      // Short-term business goals
+  // Section 3: Market Research
+  8: '11',     // Who is your target customer?
+  9: '12',     // Where will products be available for purchase?
+  10: '13',    // What problem(s) are you solving?
+  11: '14',    // Competitor research [WEB SEARCH]
+  12: '15',    // Industry trends [WEB SEARCH]
+  13: '16',    // How will you differentiate?
+  // Section 4: Location & Operations
+  14: '15',    // Where will your business be located?
+  15: '16',    // What facilities or resources will you need?
+  16: '17',    // Primary method of delivering product/service?
+  17: '18',    // Short-term operational needs [WEB SEARCH]
+  // Section 5: Marketing & Sales Strategy
+  18: '28',    // Business Mission Statement
+  19: '29',    // How do you plan to market?
+  20: '30',    // Sales team / marketing firm / self-market?
+  21: '31',    // What is your USP?
+  22: '32',    // Promotional strategies to launch?
+  23: '33',    // Short-term marketing needs [WEB SEARCH]
+  // Section 6: Legal & Regulatory Compliance
+  24: '34',    // Business structure (LLC, sole proprietorship, etc.)
+  25: '35',    // Have you registered your business name?
+  26: '36',    // Permits and licenses [WEB SEARCH]
+  27: '37',    // Insurance policies [WEB SEARCH]
+  28: '38',    // How to ensure adherence / compliance?
+  // Section 7: Revenue Model & Financials
+  29: '39',    // How will your business make money?
+  30: '40',    // Pricing strategy
+  31: '41',    // Track financials and accounting
+  32: '42',    // Initial funding source
+  33: '43',    // Financial goals for first year
+  34: '44',    // Main costs [WEB SEARCH]
+  // Section 8: Growth & Scaling
+  35: '45',    // Scaling plan / decision tree [WEB SEARCH]
+  36: '45.1',  // Sub: Long-term business goals
+  37: '45.2',  // Sub: Long-term operational needs
+  38: '45.3',  // Sub: Long-term financial needs
+  39: '45.4',  // Sub: Long-term marketing goals
+  40: '45.5',  // Sub: Expanding product/service lines
+  41: '45.6',  // Sub: Long-term administrative goals
+  // Section 9: Challenges & Contingency Planning
+  42: '46',    // Contingency plans [WEB SEARCH]
+  43: '46.1',  // Sub: How will you adapt?
+  44: '46.2',  // Sub: Will you seek additional funding?
+  45: '46.3',  // Sub: Overall vision
+};
 
 const getClientDisplayNumber = (
   internalNumber: number | null | undefined,
   phase?: string
-): number | null => {
+): string | number | null => {
   if (internalNumber === null || internalNumber === undefined) return null;
   if (phase !== 'BUSINESS_PLAN') return internalNumber;
-
-  // Sections 1-2: Product/Service Details (BP.01-04) + Business Overview (BP.05-07)
-  if (internalNumber <= 7) return internalNumber;
-
-  // Sections 3-4: Market Research (BP.08-13) + Location & Operations (BP.14-17)
-  if (internalNumber <= 17) return internalNumber + 3;
-
-  // Sections 5-7 + Section 8 main: Marketing & Sales thru Growth main (BP.18-35)
-  if (internalNumber <= 35) return internalNumber + 10;
-
-  // Section 8 sub-questions: Scaling subs (BP.36-41) → all display as Q45
-  if (internalNumber <= 41) return 45;
-
-  // Section 9: Challenges & Contingency (BP.42-45) → all display as Q46
-  return 46;
+  return BP_TO_CLIENT[internalNumber] ?? String(internalNumber);
 };
 
 const deriveQuestionNumber = (
