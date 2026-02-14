@@ -1870,22 +1870,32 @@ export default function ChatPage() {
     
     // Remove machine tags
     let formatted = text.replace(/\[\[Q:[A-Z_]+\.\d{2}]]\s*/g, "");
+
+    // ── Section summaries: preserve full markdown for ReactMarkdown rendering ──
+    const isSectionSummary =
+      /Section Complete/i.test(formatted) ||
+      (/Summary of Your Information/i.test(formatted) && /Educational Insights|Critical Considerations/i.test(formatted));
+
+    if (isSectionSummary) {
+      // Only do light cleanup — keep **bold**, bullets, numbered lists intact
+      formatted = formatted.replace(/\[\[ACCEPT_MODIFY_BUTTONS\]\]/g, '');
+      formatted = formatted.replace(/\n{3,}/g, "\n\n");
+      return formatted.trim();
+    }
+
+    // ── Regular messages: aggressive formatting cleanup ──
     
     // Special handling for Angel introduction text
     if (formatted.toLowerCase().includes('welcome to founderport') && formatted.toLowerCase().includes('are you ready to begin your journey')) {
-      // Aggressively clean up spacing around the journey question
-      formatted = formatted.replace(/\n{3,}/g, "\n\n"); // Replace 3+ newlines with 2
-      formatted = formatted.replace(/\n\s*\n\s*\n/g, "\n\n"); // Remove empty lines between content
+      formatted = formatted.replace(/\n{3,}/g, "\n\n");
+      formatted = formatted.replace(/\n\s*\n\s*\n/g, "\n\n");
       formatted = formatted.replace(/\s*\n\s*\n\s*Are you ready to begin your journey\?\s*\n\s*\n\s*/g, "\n\nAre you ready to begin your journey?\n\n");
-      
-      // Additional specific cleanup for the journey question - be very aggressive
       formatted = formatted.replace(/\n\s*\n\s*\n\s*Are you ready to begin your journey\?\s*\n\s*\n\s*\n/g, "\n\nAre you ready to begin your journey?\n\n");
       formatted = formatted.replace(/\n{2,}\s*Are you ready to begin your journey\?\s*\n{2,}/g, "\n\nAre you ready to begin your journey?\n\n");
       formatted = formatted.replace(/\n\s*\n\s*Are you ready to begin your journey\?\s*\n\s*\n\s*\n/g, "\n\nAre you ready to begin your journey?\n\n");
     }
 
     // Preserve markdown bold (**text**) but remove other asterisks
-    // First, temporarily replace markdown bold with a placeholder
     const boldPlaceholder = "___MARKDOWN_BOLD___";
     const boldMatches: string[] = [];
     formatted = formatted.replace(/\*\*([\s\S]+?)\*\*/g, (_match, content) => {
@@ -1893,7 +1903,7 @@ export default function ChatPage() {
       return `${boldPlaceholder}${boldMatches.length - 1}${boldPlaceholder}`;
     });
 
-    // Preserve markdown italic (*text*) — single asterisks for quotes/emphasis
+    // Preserve markdown italic (*text*)
     const italicPlaceholder = "___MARKDOWN_ITALIC___";
     const italicMatches: string[] = [];
     formatted = formatted.replace(/\*([^\s*][^*]*?[^\s*])\*/g, (_match, content) => {
@@ -1930,23 +1940,22 @@ export default function ChatPage() {
     // Remove any remaining standalone formatting symbols
     formatted = formatted.replace(/^[*#\-–—•]+\s*$/gm, "");
 
-    // Clean up excessive whitespace - be more aggressive with line breaks
+    // Clean up excessive whitespace
     formatted = formatted.replace(/\n{3,}/g, "\n\n");
-    formatted = formatted.replace(/\n\s*\n\s*\n/g, "\n\n"); // Remove empty lines between content
+    formatted = formatted.replace(/\n\s*\n\s*\n/g, "\n\n");
     formatted = formatted.replace(/[ \t]{2,}/g, " ");
     
-    // Compact spacing between numbered list items (prevent large gaps between 1. ... and 2. ...)
+    // Compact spacing between numbered list items
     formatted = formatted.replace(/(\d+\.\s+[^\n]+)\n\n(\d+\.\s+)/g, "$1\n$2");
     
-    // Remove excessive spacing around specific phrases - be more aggressive
+    // Remove excessive spacing around specific phrases
     formatted = formatted.replace(/\n{3,}\s*Are you ready to begin your journey\?\s*\n{3,}/g, "\n\nAre you ready to begin your journey?\n\n");
     formatted = formatted.replace(/\n\s*\n\s*\n\s*Are you ready to begin your journey\?\s*\n\s*\n\s*\n/g, "\n\nAre you ready to begin your journey?\n\n");
     formatted = formatted.replace(/\n\s*\n\s*Let's start with the Getting to Know You questionnaire/g, "\n\nLet's start with the Getting to Know You questionnaire");
     
     // Additional cleanup for Angel introduction text
     if (formatted.toLowerCase().includes('welcome to founderport')) {
-      // Clean up excessive spacing in the introduction
-      formatted = formatted.replace(/\n\s*\n\s*\n/g, "\n\n"); // Remove triple+ line breaks
+      formatted = formatted.replace(/\n\s*\n\s*\n/g, "\n\n");
       formatted = formatted.replace(/\n{2,}\s*Are you ready to begin your journey\?\s*\n{2,}/g, "\n\nAre you ready to begin your journey?\n\n");
     }
 

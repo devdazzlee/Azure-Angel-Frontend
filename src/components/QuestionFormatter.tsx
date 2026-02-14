@@ -81,14 +81,61 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
     return isCommandPrefix || hasAutoResearch;
   }, [processedText]);
 
+  // Detect section summary responses (e.g. "🎯 **Product/Service Details Section Complete**")
+  // These must be rendered via ReactMarkdown, NOT the business-plan question parser
+  const isSectionSummary = useMemo(() => {
+    const trimmed = processedText.trim();
+    return (
+      /Section Complete/i.test(trimmed) ||
+      /Summary of Your Information/i.test(trimmed) ||
+      /Ready to Continue\??/i.test(trimmed) && /Educational Insights|Critical Considerations/i.test(trimmed)
+    );
+  }, [processedText]);
+
   const businessPlanParts = useMemo(() => {
     if (phase !== 'BUSINESS_PLAN') return null;
     // Skip parsing for draft/command responses - they have their own structure
     // and should be rendered as-is to preserve the original order
     if (isDraftOrCommandResponse) return null;
+    // Skip parsing for section summaries - they need full ReactMarkdown rendering
+    if (isSectionSummary) return null;
 
     return parseBusinessPlanQuestionParts(processedText);
-  }, [phase, processedText, isDraftOrCommandResponse]);
+  }, [phase, processedText, isDraftOrCommandResponse, isSectionSummary]);
+
+  // Section summary: render via ReactMarkdown with clean styling (no destructive stripping)
+  if (isSectionSummary) {
+    // Light cleanup: remove [[ACCEPT_MODIFY_BUTTONS]] tag if it leaked through
+    const cleanedSummary = processedText
+      .replace(/\[\[ACCEPT_MODIFY_BUTTONS\]\]/g, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    return (
+      <div className="question-formatter section-summary">
+        <ReactMarkdown
+          components={{
+            strong: ({ children }) => (
+              <strong className="font-bold text-gray-900" style={{ fontWeight: 700 }}>
+                {children}
+              </strong>
+            ),
+            p: ({ children }) => (
+              <p className="mb-2 leading-relaxed text-gray-800">{children}</p>
+            ),
+            ul: ({ children }) => (
+              <ul className="list-disc list-inside mb-2 text-gray-700 space-y-1">{children}</ul>
+            ),
+            li: ({ children }) => (
+              <li className="text-gray-700 leading-relaxed">{children}</li>
+            ),
+          }}
+        >
+          {cleanedSummary}
+        </ReactMarkdown>
+      </div>
+    );
+  }
 
   if (businessPlanParts) {
     return (
