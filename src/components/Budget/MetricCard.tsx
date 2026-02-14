@@ -21,56 +21,49 @@ const MetricCard: React.FC<MetricCardProps> = ({
   color = 'blue', 
   delay = 0 
 }) => {
-  const colorClasses = {
-    blue: 'from-blue-500 to-cyan-500',
-    green: 'from-emerald-500 to-teal-500',
-    red: 'from-red-500 to-pink-500',
-    purple: 'from-purple-500 to-indigo-500',
-    amber: 'from-amber-500 to-orange-500',
-    orange: 'from-orange-500 to-red-500',
+  const colorMap: Record<string, { gradient: string; ring: string }> = {
+    blue:   { gradient: 'from-teal-500 to-cyan-600',    ring: 'ring-teal-200' },
+    green:  { gradient: 'from-emerald-500 to-green-600', ring: 'ring-emerald-200' },
+    red:    { gradient: 'from-red-500 to-rose-600',     ring: 'ring-red-200' },
+    purple: { gradient: 'from-teal-500 to-cyan-600',  ring: 'ring-teal-200' },
+    amber:  { gradient: 'from-amber-500 to-orange-600', ring: 'ring-amber-200' },
+    orange: { gradient: 'from-orange-500 to-red-500',   ring: 'ring-orange-200' },
   };
-
-  const bgGradientClass = colorClasses[color as keyof typeof colorClasses] || colorClasses.blue;
+  const c = colorMap[color] || colorMap.blue;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay }}
-      whileHover={{ scale: 1.02, y: -2 }}
-      className="relative overflow-hidden rounded-2xl bg-white p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-300"
+      transition={{ duration: 0.45, delay }}
+      whileHover={{ y: -4, scale: 1.02 }}
+      className="group"
     >
-      {/* Gradient Background */}
-      <div className={`absolute inset-0 bg-gradient-to-br ${bgGradientClass} opacity-5`} />
-      
-      {/* Content */}
-      <div className="relative z-10">
-        <div className="flex items-center justify-between mb-4">
-          <div className={`p-3 rounded-xl bg-gradient-to-r ${bgGradientClass} text-white shadow-lg`}>
-            <Icon className="w-6 h-6" />
+      <div className={`relative overflow-hidden rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-md hover:shadow-xl transition-all duration-300 ring-1 ${c.ring}`}>
+        {/* decorative blob */}
+        <div className={`absolute -top-8 -right-8 w-28 h-28 rounded-full bg-gradient-to-br ${c.gradient} opacity-[0.08] group-hover:scale-125 transition-transform duration-500`} />
+
+        <div className="p-5 relative">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">{title}</p>
+            <div className={`p-2.5 rounded-xl bg-gradient-to-br ${c.gradient} shadow-lg shadow-teal-500/10`}>
+              <Icon className="w-5 h-5 text-white" />
+            </div>
           </div>
+
+          <p className="text-2xl font-extrabold text-gray-900 tracking-tight">{value}</p>
+          {subtitle && <p className="text-[11px] text-gray-500 mt-1">{subtitle}</p>}
+
           {trend && (
-            <div className={`text-sm font-medium ${
-              trend.startsWith('+') ? 'text-emerald-600' : 
-              trend.startsWith('-') ? 'text-red-600' : 'text-gray-600'
+            <div className={`mt-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+              trend.startsWith('+') ? 'bg-emerald-100 text-emerald-700' :
+              trend.startsWith('-') ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'
             }`}>
               {trend}
             </div>
           )}
         </div>
-        
-        <div>
-          <h3 className="text-sm font-medium text-gray-600 mb-1">{title}</h3>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
-          {subtitle && (
-            <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
-          )}
-        </div>
       </div>
-
-      {/* Decorative Elements */}
-      <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-white to-transparent rounded-full -mr-10 -mt-10 opacity-50" />
-      <div className="absolute bottom-0 left-0 w-16 h-16 bg-gradient-to-tr from-white to-transparent rounded-full -ml-8 -mb-8 opacity-30" />
     </motion.div>
   );
 };

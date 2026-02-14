@@ -16,13 +16,14 @@ export const debounce = <T extends (...args: any[]) => void>(
   };
 };
 
-export const formatCurrency = (value: number, currency: string = '$') => {
+export const formatCurrency = (value: number | null | undefined, currency: string = '$') => {
+  const safeValue = Number(value) || 0;
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(value);
+  }).format(safeValue);
 };
 
 // Budget Validation Hook

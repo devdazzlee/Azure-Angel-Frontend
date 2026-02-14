@@ -1,14 +1,12 @@
-import React, { useState } from 'react';
-import { Trash2, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import type { BudgetItem } from '@/types/apiTypes';
-import { formatMoney } from '@/lib/formatters';
 
 interface RemoveItemModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: () => Promise<void> | void;
   itemName: string;
   isCustom?: boolean;
 }
@@ -20,8 +18,27 @@ const RemoveItemModal: React.FC<RemoveItemModalProps> = ({
   itemName,
   isCustom = false
 }) => {
+  const [isRemoving, setIsRemoving] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsRemoving(false);
+    }
+  }, [isOpen]);
+
+  const handleConfirm = async () => {
+    setIsRemoving(true);
+    try {
+      await onConfirm();
+    } catch (error) {
+      console.error('Failed to remove item:', error);
+    } finally {
+      setIsRemoving(false);
+    }
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open && !isRemoving) onClose(); }}>
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
           <DialogTitle>Remove Item</DialogTitle>
@@ -36,15 +53,26 @@ const RemoveItemModal: React.FC<RemoveItemModalProps> = ({
           </p>
           
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={onClose} disabled={isRemoving}>
               Cancel
             </Button>
             <Button 
               variant="destructive" 
-              onClick={onConfirm}
-              className="bg-red-600 hover:bg-red-700"
+              onClick={handleConfirm}
+              disabled={isRemoving}
+              className="bg-red-600 hover:bg-red-700 min-w-[100px]"
             >
-              Remove
+              {isRemoving ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Removing...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Trash2 className="w-4 h-4" />
+                  Remove
+                </span>
+              )}
             </Button>
           </div>
         </div>

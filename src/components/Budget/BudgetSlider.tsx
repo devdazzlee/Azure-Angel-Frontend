@@ -25,8 +25,9 @@ const BudgetSlider: React.FC<BudgetSliderProps> = ({
   className,
   disabled = false
 }) => {
-  const formatCurrency = (val: number) => {
-    return `${currency}${val.toLocaleString()}`;
+  const formatCurrency = (val: number | null | undefined) => {
+    const safeVal = Number(val) || 0;
+    return `${currency}${safeVal.toLocaleString()}`;
   };
 
   return (
@@ -48,7 +49,7 @@ const BudgetSlider: React.FC<BudgetSliderProps> = ({
           min={min}
           step={step}
           disabled={disabled}
-          className="w-full [&_[data-slot=slider-track]]:bg-gray-200 [&_[data-slot=slider-track]]:h-3 [&_[data-slot=slider-range]]:bg-gradient-to-r [&_[data-slot=slider-range]]:from-blue-500 [&_[data-slot=slider-range]]:to-indigo-600 [&_[data-slot=slider-thumb]]:bg-blue-600 [&_[data-slot=slider-thumb]]:border-blue-700 [&_[data-slot=slider-thumb]]:w-6 [&_[data-slot=slider-thumb]]:h-6 [&_[data-slot=slider-thumb]]:shadow-lg [&_[data-slot=slider-thumb]]:ring-2 [&_[data-slot=slider-thumb]]:ring-blue-300 [&_[data-slot=slider-thumb]]:cursor-pointer"
+          className="w-full [&_[data-slot=slider-track]]:bg-gray-200 [&_[data-slot=slider-track]]:h-3 [&_[data-slot=slider-range]]:bg-gradient-to-r [&_[data-slot=slider-range]]:from-teal-500 [&_[data-slot=slider-range]]:to-cyan-600 [&_[data-slot=slider-thumb]]:bg-teal-600 [&_[data-slot=slider-thumb]]:border-teal-700 [&_[data-slot=slider-thumb]]:w-6 [&_[data-slot=slider-thumb]]:h-6 [&_[data-slot=slider-thumb]]:shadow-lg [&_[data-slot=slider-thumb]]:ring-2 [&_[data-slot=slider-thumb]]:ring-teal-300 [&_[data-slot=slider-thumb]]:cursor-pointer"
         />
         
         <div className="flex justify-between mt-3">

@@ -22,35 +22,11 @@ interface BusinessPlanSection {
 }
 
 /**
- * Direct lookup table: internal BP question number → client spec display number.
- * Must match the mapping in venture.tsx BP_TO_CLIENT.
+ * Total number of internal sequential Business Plan questions.
+ * This matches the backend TOTALS_BY_PHASE["BUSINESS_PLAN"] = 45.
+ * We use this consistent number everywhere for progress tracking.
  */
-const CLIENT_DISPLAY_TOTAL = 46;
-
-const BP_TO_CLIENT: Record<number, string> = {
-  // Section 1: Product/Service Details
-  1: '1', 2: '1.1', 3: '2', 4: '3',
-  // Section 2: Business Overview
-  5: '5', 6: '6', 7: '7',
-  // Section 3: Market Research
-  8: '11', 9: '12', 10: '13', 11: '14', 12: '15', 13: '16',
-  // Section 4: Location & Operations
-  14: '15', 15: '16', 16: '17', 17: '18',
-  // Section 5: Marketing & Sales Strategy
-  18: '28', 19: '29', 20: '30', 21: '31', 22: '32', 23: '33',
-  // Section 6: Legal & Regulatory Compliance
-  24: '34', 25: '35', 26: '36', 27: '37', 28: '38',
-  // Section 7: Revenue Model & Financials
-  29: '39', 30: '40', 31: '41', 32: '42', 33: '43', 34: '44',
-  // Section 8: Growth & Scaling
-  35: '45', 36: '45.1', 37: '45.2', 38: '45.3', 39: '45.4', 40: '45.5', 41: '45.6',
-  // Section 9: Challenges & Contingency Planning
-  42: '46', 43: '46.1', 44: '46.2', 45: '46.3',
-};
-
-const getClientDisplayNumber = (internalNumber: number): string => {
-  return BP_TO_CLIENT[internalNumber] ?? String(internalNumber);
-};
+const BP_TOTAL_QUESTIONS = 45;
 
 interface BusinessPlanProgressWidgetProps {
   currentQuestionNumber: number;
@@ -63,7 +39,8 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
   totalQuestions,
   className = ""
 }) => {
-  const clientDisplayNumber = getClientDisplayNumber(currentQuestionNumber);
+  // Use a consistent total: always 45 internal questions
+  const consistentTotal = BP_TOTAL_QUESTIONS;
   const [currentSection, setCurrentSection] = useState<BusinessPlanSection | null>(null);
   const [sectionProgress, setSectionProgress] = useState(0);
   const [overallProgress, setOverallProgress] = useState(0);
@@ -165,18 +142,20 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
       setIsAnimating(true);
       
       // Calculate section progress
-      // currentQuestionNumber represents the question we're ON (not completed)
-      // For section progress bar: if on question 1 of 4, we're 0% through (haven't completed it yet)
-      // For display: if on question 1, show "Question 1 of 4"
+      // currentQuestionNumber represents the question we're currently ON
+      // "Question X of Y" shows X = position within section
+      // Section progress bar should match: X/Y * 100
+      // e.g., on Q3 of 4 → progress = 3/4 = 75% (user has reached Q3 out of 4)
       const questionsInSection = activeSection.endQuestion - activeSection.startQuestion + 1;
-      const questionsCompletedInSection = Math.max(0, currentQuestionNumber - activeSection.startQuestion);
-      const progress = (questionsCompletedInSection / questionsInSection) * 100;
+      const currentPositionInSection = currentQuestionNumber - activeSection.startQuestion + 1;
+      const progress = (currentPositionInSection / questionsInSection) * 100;
       
       setCurrentSection(activeSection);
       setSectionProgress(Math.min(100, Math.max(0, progress)));
       
-      // Calculate overall progress - percentage based on current question
-      const overallProgress = Math.min(100, Math.max(0, ((currentQuestionNumber - 1) / totalQuestions) * 100));
+      // Calculate overall progress — how far through all 45 questions
+      // On Q3 of 45 → 3/45 ≈ 7%
+      const overallProgress = Math.min(100, Math.max(0, (currentQuestionNumber / consistentTotal) * 100));
       setOverallProgress(overallProgress);
 
       // Reset animation after transition
@@ -187,10 +166,10 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
       if (nextSection) {
         setCurrentSection(nextSection);
         setSectionProgress(0);
-        setOverallProgress(Math.min(100, Math.max(0, (currentQuestionNumber / totalQuestions) * 100)));
+        setOverallProgress(Math.min(100, Math.max(0, (currentQuestionNumber / consistentTotal) * 100)));
       }
     }
-  }, [currentQuestionNumber, totalQuestions]);
+  }, [currentQuestionNumber, consistentTotal]);
 
   if (!currentSection) {
     // Fallback for when question number is outside expected range
@@ -199,7 +178,7 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
         <div className="text-center">
           <h3 className="text-sm font-semibold text-gray-900 mb-2">Business Plan Progress</h3>
           <div className="text-xs text-gray-500">
-            Question {clientDisplayNumber} of {CLIENT_DISPLAY_TOTAL}
+            {currentQuestionNumber} of {consistentTotal}
           </div>
           <div className="mt-2 text-xs text-gray-400">
             Preparing progress tracking...
@@ -218,7 +197,7 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-gray-900">Business Plan Progress</h3>
         <div className="text-xs text-gray-500">
-          {clientDisplayNumber} of {CLIENT_DISPLAY_TOTAL}
+          {currentQuestionNumber} of {consistentTotal}
         </div>
       </div>
 
@@ -336,7 +315,7 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
       </div>
 
       {/* Next Section Preview */}
-      {currentQuestionNumber < totalQuestions && (
+      {currentQuestionNumber < consistentTotal && (
         <div className="mt-4 pt-4 border-t border-gray-100">
           <div className="text-xs text-gray-500 mb-2">Next up:</div>
           {(() => {

@@ -135,7 +135,9 @@ const BudgetChatModal: React.FC<BudgetChatModalProps> = ({
   };
 
   const formatBudgetItem = (item: BudgetItem) => {
-    return `${item.name} (${item.category === 'expense' ? 'Expense' : 'Revenue'}): Est. $${item.estimated_amount.toLocaleString()}${item.actual_amount ? `, Actual $${item.actual_amount.toLocaleString()}` : ''}`;
+    const estAmount = Number(item.estimated_amount) || 0;
+    const actAmount = item.actual_amount ? Number(item.actual_amount) || 0 : null;
+    return `${item.name} (${item.category === 'expense' ? 'Expense' : 'Revenue'}): Est. $${estAmount.toLocaleString()}${actAmount ? `, Actual $${actAmount.toLocaleString()}` : ''}`;
   };
 
   return (

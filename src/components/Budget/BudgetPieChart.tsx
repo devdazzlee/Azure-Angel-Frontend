@@ -29,8 +29,9 @@ const BudgetPieChart: React.FC<BudgetPieChartProps> = ({
   height = 300,
   currency = '$'
 }) => {
-  const formatCurrency = (value: number) => {
-    return `${currency}${value.toLocaleString()}`;
+  const formatCurrency = (value: number | null | undefined) => {
+    const safeValue = Number(value) || 0;
+    return `${currency}${safeValue.toLocaleString()}`;
   };
 
   const CustomTooltip = ({ active, payload }: any) => {
@@ -175,13 +176,13 @@ const BudgetPieChart: React.FC<BudgetPieChartProps> = ({
         transition={{ delay: 0.4 }}
         className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 text-sm"
       >
-        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200 shadow-sm">
+        <div className="bg-gradient-to-br from-teal-50 to-cyan-50 p-4 rounded-lg border border-teal-200/60 shadow-sm">
           <p className="text-gray-600 mb-1">Total Budget</p>
           <p className="text-xl font-bold text-gray-900">
             {formatCurrency(total)}
           </p>
         </div>
-        <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-4 rounded-lg border border-purple-200 shadow-sm">
+        <div className="bg-gradient-to-br from-emerald-50 to-green-50 p-4 rounded-lg border border-emerald-200/60 shadow-sm">
           <p className="text-gray-600 mb-1">Categories</p>
           <p className="text-xl font-bold text-gray-900">{data.length}</p>
         </div>

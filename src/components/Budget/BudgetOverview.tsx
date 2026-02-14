@@ -21,8 +21,8 @@ interface BudgetOverviewProps {
   monthlyNetIncome: number;
   currency: string;
   formatCurrency: (value: number, currency?: string) => string;
-  BreakEvenCard: React.ComponentType;
-  ModernCharts: React.ComponentType;
+  breakEvenCard: React.ReactNode;
+  modernCharts: React.ReactNode;
 }
 
 const BudgetOverview: React.FC<BudgetOverviewProps> = ({
@@ -33,8 +33,8 @@ const BudgetOverview: React.FC<BudgetOverviewProps> = ({
   monthlyNetIncome,
   currency,
   formatCurrency,
-  BreakEvenCard,
-  ModernCharts
+  breakEvenCard,
+  modernCharts
 }) => {
   return (
     <div className="space-y-8">
@@ -74,10 +74,10 @@ const BudgetOverview: React.FC<BudgetOverviewProps> = ({
       </div>
 
       {/* Break-Even Analysis */}
-      <BreakEvenCard />
+      {breakEvenCard}
 
       {/* Charts */}
-      <ModernCharts />
+      {modernCharts}
     </div>
   );
 };

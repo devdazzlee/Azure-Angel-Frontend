@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button } from '@/components/ui/button';
+import { ArrowRight, Map } from 'lucide-react';
 
 interface StickyRoadmapButtonProps {
   handleGoToRoadmap: () => void;
@@ -7,21 +7,33 @@ interface StickyRoadmapButtonProps {
 
 const StickyRoadmapButton: React.FC<StickyRoadmapButtonProps> = ({ handleGoToRoadmap }) => {
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg p-4 z-50">
-      <div className="max-w-7xl mx-auto">
-        <Button
-          onClick={handleGoToRoadmap}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-6 font-medium rounded-lg transition-colors duration-200"
-        >
-          <div className="flex items-center justify-center gap-2">
-            <span>Continue to Roadmap</span>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-          </div>
-        </Button>
+    <button
+      onClick={handleGoToRoadmap}
+      className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white pl-4 pr-5 py-3 rounded-full shadow-[0_8px_30px_rgba(16,185,129,0.35)] hover:shadow-[0_8px_40px_rgba(16,185,129,0.5)] hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer group animate-[fadeSlideUp_0.5s_ease-out_0.8s_both]"
+      style={{
+        animation: 'fadeSlideUp 0.5s ease-out 0.8s both',
+      }}
+    >
+      <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+        <Map className="w-4 h-4 text-white" />
       </div>
-    </div>
+      <span className="font-semibold text-sm whitespace-nowrap tracking-wide">Continue to Roadmap</span>
+      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-200" />
+
+      {/* Inline keyframe for the entry animation */}
+      <style>{`
+        @keyframes fadeSlideUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px) scale(0.9);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+      `}</style>
+    </button>
   );
 };
 

@@ -131,12 +131,16 @@ export interface BudgetItem {
   id: string;
   name: string;
   category: 'expense' | 'revenue';
+  subcategory?: 'startup_cost' | 'operating_expense' | 'payroll' | 'cogs' | 'revenue';
   estimated_amount: number;
   actual_amount?: number;
+  estimated_price?: number;    // revenue items: unit price
+  estimated_volume?: number;   // revenue items: unit count
   description?: string;
   is_custom?: boolean;
-  isSelected?: boolean;
-  is_active?: boolean; // Added for soft delete
+  is_selected?: boolean;
+  isSelected?: boolean;        // kept for backwards compat
+  is_active?: boolean;
   created_at?: string;
   updated_at?: string;
 }

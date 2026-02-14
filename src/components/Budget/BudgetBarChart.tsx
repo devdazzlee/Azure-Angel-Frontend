@@ -23,8 +23,9 @@ const BudgetBarChart: React.FC<BudgetBarChartProps> = ({
   height = 400,
   showActuals = false
 }) => {
-  const formatCurrency = (value: number) => {
-    return `${currency}${value.toLocaleString()}`;
+  const formatCurrency = (value: number | null | undefined) => {
+    const safeValue = Number(value) || 0;
+    return `${currency}${safeValue.toLocaleString()}`;
   };
 
   // Prepare data for comparison chart

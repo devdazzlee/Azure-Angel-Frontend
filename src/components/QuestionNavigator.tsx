@@ -90,24 +90,30 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
   const bpBreakdown =
     currentProgress.overall_progress?.phase_breakdown ?? currentProgress.phase_breakdown;
   
-  console.log('🔍 QuestionNavigator - Full currentProgress object:', currentProgress);
-  console.log('🔍 QuestionNavigator - overall_progress:', currentProgress.overall_progress);
-  console.log('🔍 QuestionNavigator - phase_breakdown path:', currentProgress.overall_progress?.phase_breakdown);
-  console.log('🔍 QuestionNavigator - bpBreakdown:', bpBreakdown);
-  const inferredBpTotal =
-    bpBreakdown?.bp_total ??
-    (currentPhase === 'BUSINESS_PLAN'
-      ? currentProgress.phase_total ?? currentProgress.total ?? 45
-      : 45);
-  const inferredBpCompleted =
-    bpBreakdown?.bp_completed ??
-    (currentPhase === 'BUSINESS_PLAN'
-      ? currentProgress.phase_answered ?? currentProgress.answered ?? 0
-      : 0);
-  const bpTotal = inferredBpTotal > 0 ? inferredBpTotal : 45;
-  const bpCurrentQuestionNumber = currentPhase === 'BUSINESS_PLAN'
-    ? Math.min(Math.max(inferredBpCompleted + 1, 1), bpTotal)
-    : Math.min(Math.max(inferredBpCompleted, 1), bpTotal);
+  // Use a consistent BP total of 45 (matching backend TOTALS_BY_PHASE)
+  const bpTotal = 45;
+  
+  // Determine the current BP question number (internal, 1-based)
+  // Priority: phase_answered (phase-specific from backend) > answered > fallback from breakdown
+  let bpCurrentQuestionNumber: number;
+  if (currentPhase === 'BUSINESS_PLAN') {
+    // phase_answered and answered from the backend both represent the current question number
+    // (the question the user is ON), not "completed count"
+    const directQuestionNum = currentProgress.phase_answered ?? currentProgress.answered ?? 0;
+    if (directQuestionNum > 0) {
+      bpCurrentQuestionNumber = Math.min(directQuestionNum, bpTotal);
+    } else if (bpBreakdown?.bp_completed != null) {
+      // Fallback: bp_completed is "completed" count, so add 1 for "current"
+      bpCurrentQuestionNumber = Math.min(Math.max(bpBreakdown.bp_completed + 1, 1), bpTotal);
+    } else {
+      bpCurrentQuestionNumber = 1;
+    }
+  } else {
+    // Not in BP phase — use breakdown completed count
+    bpCurrentQuestionNumber = bpBreakdown?.bp_completed
+      ? Math.min(Math.max(bpBreakdown.bp_completed, 1), bpTotal)
+      : 1;
+  }
 
   return (
     <div className="w-80 space-y-4">
@@ -166,13 +172,13 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
                     GKY
                   </span>
                   <span className="text-xs font-semibold text-blue-700 ml-1">
-                    {bpBreakdown
+                    {bpBreakdown && bpBreakdown.gky_total > 0
                       ? Math.round(
                           (bpBreakdown.gky_completed /
                             bpBreakdown.gky_total) *
                             100
                         )
-                      : Math.round(currentProgress.percent)}
+                      : (currentPhase === 'GKY' ? Math.round(currentProgress.percent) : 0)}
                     %
                   </span>
                 </div>
@@ -182,13 +188,13 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
                     BP
                   </span>
                   <span className="text-xs font-semibold text-purple-700 ml-1">
-                    {bpBreakdown
+                    {bpBreakdown && bpBreakdown.bp_total > 0
                       ? Math.round(
                           (bpBreakdown.bp_completed /
                             bpBreakdown.bp_total) *
                             100
                         )
-                      : 0}
+                      : (currentPhase === 'BUSINESS_PLAN' ? Math.round(currentProgress.percent) : 0)}
                     %
                   </span>
                 </div>

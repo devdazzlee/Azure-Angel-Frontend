@@ -1,7 +1,7 @@
 // Azure-Angel-Frontend/src/lib/currency-utils.ts
 
-export const formatCurrency = (amount: number, currencySymbol: string = '$'): string => {
-  if (isNaN(amount)) {
+export const formatCurrency = (amount: number | null | undefined, currencySymbol: string = '$'): string => {
+  if (amount === null || amount === undefined || isNaN(amount)) {
     return `${currencySymbol}0.00`;
   }
   return `${currencySymbol}${amount.toLocaleString('en-US', {

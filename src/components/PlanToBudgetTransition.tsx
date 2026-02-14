@@ -1,9 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
-import { TrendingUp, TrendingDown, DollarSign, PieChart as PieChartIcon, X } from 'lucide-react';
+import {
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
+  BarChart3,
+  Target,
+  Sparkles,
+  ArrowRight,
+  RefreshCw,
+  CheckCircle2,
+  Loader2,
+  Rocket,
+  Shield,
+  LineChart,
+  Layers,
+  Lightbulb,
+  Calculator,
+  X,
+} from 'lucide-react';
 import type { BudgetItem } from '../types/apiTypes';
 import { budgetService } from '../services/budgetService';
 import { budgetIntro } from './Budget/budgetIntroContent';
@@ -29,25 +47,79 @@ interface PlanToBudgetTransitionProps {
   sessionId?: string;
 }
 
+/* ── tiny floating particle ── */
+const FloatingParticle = ({ delay, x, y, size }: { delay: number; x: string; y: string; size: number }) => (
+  <motion.div
+    className="absolute rounded-full bg-teal-400/20"
+    style={{ left: x, top: y, width: size, height: size }}
+    animate={{ y: [0, -20, 0], opacity: [0.3, 0.7, 0.3], scale: [1, 1.2, 1] }}
+    transition={{ duration: 4, repeat: Infinity, delay, ease: 'easeInOut' }}
+  />
+);
+
+/* ── feature card for "What's Next" ── */
+const FeatureCard = ({
+  icon: Icon,
+  title,
+  desc,
+  delay,
+}: {
+  icon: React.ElementType;
+  title: string;
+  desc: string;
+  delay: number;
+}) => (
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.5, delay }}
+    className="relative group bg-white/80 backdrop-blur-sm border border-teal-100 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:border-teal-300 transition-all duration-300"
+  >
+    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center mb-3 shadow-md group-hover:scale-110 transition-transform">
+      <Icon className="w-5 h-5 text-white" />
+    </div>
+    <h4 className="font-semibold text-gray-800 mb-1">{title}</h4>
+    <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
+  </motion.div>
+);
+
+/* ── numbered step pill for budget sections ── */
+const StepPill = ({ n, text }: { n: number; text: string }) => (
+  <div className="flex items-start gap-3">
+    <span className="flex-shrink-0 w-7 h-7 rounded-full bg-gradient-to-br from-teal-500 to-emerald-500 text-white text-xs font-bold flex items-center justify-center shadow">
+      {n}
+    </span>
+    <span className="text-gray-700 text-sm leading-relaxed pt-0.5">{text}</span>
+  </div>
+);
+
+/* ════════════════════════════════════════════════════════════════════════════ */
+
 const PlanToBudgetTransition: React.FC<PlanToBudgetTransitionProps> = ({
   businessPlanSummary: businessPlanSummaryProp,
-  estimatedExpenses: estimatedExpensesProp = "",
+  estimatedExpenses: estimatedExpensesProp = '',
   businessContext = {},
   onComplete,
   onRevisit,
   loading = false,
-  sessionId
+  sessionId,
 }) => {
-  // Ensure values are strings - react-markdown requires string children
-  const businessPlanSummary = typeof businessPlanSummaryProp === 'string' 
-    ? businessPlanSummaryProp 
-    : (businessPlanSummaryProp ? String(businessPlanSummaryProp) : '');
-  const estimatedExpenses = typeof estimatedExpensesProp === 'string' 
-    ? estimatedExpensesProp 
-    : (estimatedExpensesProp ? String(estimatedExpensesProp) : '');
-  
+  const businessPlanSummary =
+    typeof businessPlanSummaryProp === 'string'
+      ? businessPlanSummaryProp
+      : businessPlanSummaryProp
+        ? String(businessPlanSummaryProp)
+        : '';
+  const estimatedExpenses =
+    typeof estimatedExpensesProp === 'string'
+      ? estimatedExpensesProp
+      : estimatedExpensesProp
+        ? String(estimatedExpensesProp)
+        : '';
+
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [budgetCompleted, setBudgetCompleted] = useState(false);
+  const [budgetLoading, setBudgetLoading] = useState(false);
   const [budget, setBudget] = useState<Budget>({
     id: '',
     session_id: sessionId || '',
@@ -56,12 +128,87 @@ const PlanToBudgetTransition: React.FC<PlanToBudgetTransitionProps> = ({
     total_estimated_revenue: 0,
     items: [],
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+    updated_at: new Date().toISOString(),
   });
 
-  const handleStartBudget = () => {
-    setShowBudgetModal(true);
-  };
+  // ── Load budget from DB when modal opens ──
+  useEffect(() => {
+    if (!showBudgetModal || !sessionId) return;
+    let cancelled = false;
+
+    const loadBudgetFromDB = async () => {
+      try {
+        setBudgetLoading(true);
+        console.log('[PlanToBudgetTransition] Loading budget from DB for session:', sessionId);
+        const response = await budgetService.getBudget(sessionId);
+        if (cancelled) return;
+        console.log('[PlanToBudgetTransition] Budget loaded:', {
+          success: response.success,
+          itemsCount: response.result?.items?.length ?? 0,
+          budgetId: response.result?.id,
+        });
+
+        if (response.success && response.result && response.result.id) {
+          setBudget(response.result);
+        }
+        // If no budget in DB yet, keep the default local state — items will be
+        // created via add_budget_item which calls _ensure_budget_exists
+      } catch (err) {
+        console.error('[PlanToBudgetTransition] Failed to load budget:', err);
+      } finally {
+        if (!cancelled) setBudgetLoading(false);
+      }
+    };
+
+    loadBudgetFromDB();
+    return () => { cancelled = true; };
+  }, [showBudgetModal, sessionId]);
+
+  const handleStartBudget = () => setShowBudgetModal(true);
+
+  // ── DB-backed callbacks (same pattern as Implementation/index.tsx) ──
+  const handleUpdateBudget = useCallback((updates: Partial<Budget>) => {
+    setBudget((prev) => {
+      if (!prev) return prev;
+      return { ...prev, ...updates, updated_at: new Date().toISOString() };
+    });
+    // Persist header changes (e.g. initial_investment) to DB
+    if (sessionId && updates.initial_investment !== undefined) {
+      budgetService.updateBudgetHeader(sessionId, {
+        initial_investment: updates.initial_investment,
+      }).catch((err) => console.error('Failed to update budget header:', err));
+    }
+  }, [sessionId]);
+
+  const handleUpdateItem = useCallback(async (itemId: string, updates: Partial<BudgetItem>) => {
+    if (!sessionId) return;
+    try {
+      const response = await budgetService.updateBudgetItem(sessionId, itemId, updates);
+      if (response.success && response.result) {
+        setBudget(response.result);
+      } else {
+        toast.error(response.message || 'Failed to update item');
+      }
+    } catch (err) {
+      console.error('Failed to update budget item:', err);
+      toast.error('Failed to update item');
+    }
+  }, [sessionId]);
+
+  const handleDeleteItem = useCallback(async (itemId: string) => {
+    if (!sessionId) return;
+    try {
+      const response = await budgetService.deleteBudgetItem(sessionId, itemId);
+      if (response.success && response.result) {
+        setBudget(response.result);
+      } else {
+        toast.error(response.message || 'Failed to delete item');
+      }
+    } catch (err) {
+      console.error('Failed to delete budget item:', err);
+      toast.error('Failed to delete item');
+    }
+  }, [sessionId]);
 
   const handleBudgetComplete = async (budgetData: {
     initialInvestment: number;
@@ -69,23 +216,18 @@ const PlanToBudgetTransition: React.FC<PlanToBudgetTransitionProps> = ({
     estimatedRevenue: BudgetItem[];
   }) => {
     try {
-      // Save budget to backend
+      // Budget data is already saved to DB via individual CRUD operations.
+      // Just save the final header totals.
       if (sessionId) {
-        const totalExpenses = budgetData.estimatedExpenses.reduce(
-          (sum, item) => sum + item.estimated_amount,
-          0
-        );
-        const totalRevenue = budgetData.estimatedRevenue.reduce(
-          (sum, item) => sum + item.estimated_amount,
-          0
-        );
+        const totalExpenses = budgetData.estimatedExpenses.reduce((s, i) => s + i.estimated_amount, 0);
+        const totalRevenue = budgetData.estimatedRevenue.reduce((s, i) => s + i.estimated_amount, 0);
 
         await budgetService.saveBudget(sessionId, {
           session_id: sessionId,
           initial_investment: budgetData.initialInvestment,
           total_estimated_expenses: totalExpenses,
           total_estimated_revenue: totalRevenue,
-          items: [...budgetData.estimatedExpenses, ...budgetData.estimatedRevenue].map(item => ({
+          items: [...budgetData.estimatedExpenses, ...budgetData.estimatedRevenue].map((item) => ({
             id: item.id,
             name: item.name,
             category: item.category,
@@ -93,13 +235,11 @@ const PlanToBudgetTransition: React.FC<PlanToBudgetTransitionProps> = ({
             actual_amount: item.actual_amount,
             description: item.description,
             is_custom: item.is_custom,
-            isSelected: item.isSelected
-          }))
+            isSelected: item.isSelected,
+          })),
         });
-
         toast.success('Budget saved successfully!');
       }
-
       setBudgetCompleted(true);
       setShowBudgetModal(false);
       onComplete(budgetData);
@@ -109,257 +249,368 @@ const PlanToBudgetTransition: React.FC<PlanToBudgetTransitionProps> = ({
     }
   };
 
+  /* ──────────────── RENDER ──────────────── */
   return (
     <>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50 to-blue-50 flex items-center justify-center px-4 py-8">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5 }}
-          className="w-full max-w-5xl bg-white/95 backdrop-blur-xl border border-white/30 shadow-2xl rounded-3xl p-8"
-        >
-          {/* Header */}
+      {/* 
+        FIX: replaced `items-center` with `items-start` so content is never
+        clipped at the top when it's taller than the viewport.
+      */}
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/60 to-cyan-50 overflow-y-auto">
+        {/* decorative floating particles */}
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <FloatingParticle delay={0} x="10%" y="15%" size={8} />
+          <FloatingParticle delay={1.2} x="85%" y="10%" size={6} />
+          <FloatingParticle delay={0.6} x="70%" y="80%" size={10} />
+          <FloatingParticle delay={1.8} x="20%" y="75%" size={7} />
+          <FloatingParticle delay={2.4} x="50%" y="5%" size={5} />
+          <FloatingParticle delay={0.3} x="90%" y="50%" size={9} />
+        </div>
+
+        <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-12">
+          {/* ─── Hero ─── */}
           <motion.div
-            initial={{ opacity: 0, y: -20 }}
+            initial={{ opacity: 0, y: -30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="text-center mb-8"
+            transition={{ duration: 0.7 }}
+            className="text-center mb-12"
           >
+            {/* animated money-bag icon */}
             <motion.div
-              animate={{ 
-                rotate: [0, 10, -10, 0],
-                scale: [1, 1.1, 1]
-              }}
-              transition={{ 
-                duration: 2, 
-                repeat: Infinity, 
-                repeatDelay: 3 
-              }}
-              className="w-24 h-24 bg-gradient-to-r from-green-400 via-emerald-500 to-teal-500 rounded-full flex items-center justify-center text-white text-5xl mx-auto mb-4 shadow-lg"
+              animate={{ rotate: [0, 8, -8, 0], scale: [1, 1.08, 1] }}
+              transition={{ duration: 3, repeat: Infinity, repeatDelay: 4, ease: 'easeInOut' }}
+              className="relative w-28 h-28 mx-auto mb-6"
             >
-              💰
+              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 shadow-xl shadow-teal-300/40" />
+              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-teal-400/50 to-emerald-500/50 animate-ping opacity-20" />
+              <span className="absolute inset-0 flex items-center justify-center text-5xl select-none">💰</span>
             </motion.div>
-            <h1 className="text-3xl md:text-5xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-3">
-              Budget Planning Time!
+
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold mb-4">
+              <span className="bg-gradient-to-r from-teal-600 via-emerald-500 to-cyan-500 bg-clip-text text-transparent">
+                Budget Planning Time!
+              </span>
             </h1>
-            <p className="text-lg text-gray-600 mb-6">
-              Great work completing your business plan! Now let's create a comprehensive budget for your business.
+            <p className="text-lg md:text-xl text-gray-500 max-w-2xl mx-auto leading-relaxed">
+              Great work completing your business plan! Now let's build a realistic financial
+              picture — your roadmap to sustainability.
             </p>
           </motion.div>
 
-          {/* Business Plan Summary */}
+          {/* ─── Business Plan Summary ─── */}
           {businessPlanSummary && (
-            <div className="mb-8 bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Business Plan Summary</h2>
-              <div className="prose prose-sm max-w-none">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.15 }}
+              className="mb-8 bg-white/90 backdrop-blur border border-teal-100 rounded-2xl shadow-sm overflow-hidden"
+            >
+              <div className="bg-gradient-to-r from-teal-500 to-emerald-500 px-6 py-3 flex items-center gap-2">
+                <Layers className="w-5 h-5 text-white" />
+                <h2 className="text-lg font-bold text-white tracking-wide">Business Plan Summary</h2>
+              </div>
+              <div className="px-6 py-5 prose prose-sm max-w-none text-gray-700">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {businessPlanSummary.length > 500 ? businessPlanSummary.substring(0, 500) + '...' : businessPlanSummary}
+                  {businessPlanSummary.length > 500
+                    ? businessPlanSummary.substring(0, 500) + '...'
+                    : businessPlanSummary}
                 </ReactMarkdown>
               </div>
-            </div>
-          )}
-
-          {/* Estimated Expenses */}
-          {estimatedExpenses && (
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="mb-8 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl p-6 shadow-lg"
-            >
-              <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <TrendingDown className="w-6 h-6 text-red-500" />
-                Estimated Expenses (Based on Your Business Plan)
-              </h2>
-              <p className="text-gray-700 mb-4">
-                I've analyzed your business plan and prepared estimated expenses for Year 1. These are tailored to your{' '}
-                <span className="font-semibold text-blue-700">{businessContext.industry || 'industry'}</span> business in{' '}
-                <span className="font-semibold text-blue-700">{businessContext.location || 'your location'}</span>:
-              </p>
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="bg-white rounded-lg p-5 border border-blue-100 shadow-sm"
-              >
-                <div className="text-gray-700 prose prose-sm max-w-none">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {estimatedExpenses}
-                  </ReactMarkdown>
-                </div>
-              </motion.div>
             </motion.div>
           )}
 
-          <div className="mb-8 bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-3">{budgetIntro.section1.title}</h2>
-            <div className="space-y-2 text-gray-700">
-              {budgetIntro.section1.paragraphs.map((p) => (
-                <p key={p}>{p}</p>
-              ))}
-            </div>
-            <div className="my-6 h-px bg-gray-200" />
-            <h3 className="text-lg font-bold text-gray-900 mb-2">{budgetIntro.section2.title}</h3>
-            <p className="text-gray-700 mb-3">{budgetIntro.section2.intro}</p>
-            <ul className="list-disc list-inside space-y-1 text-gray-700 mb-4">
-              {budgetIntro.section2.list1.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-            <p className="text-gray-700 mb-3">{budgetIntro.section2.outro}</p>
-            <ul className="list-disc list-inside space-y-1 text-gray-700">
-              {budgetIntro.section2.list2.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-            <div className="my-6 h-px bg-gray-200" />
-            <h3 className="text-lg font-bold text-gray-900 mb-2">{budgetIntro.section3.title}</h3>
-            <div className="space-y-2 text-gray-700">
-              {budgetIntro.section3.paragraphs.map((p) => (
-                <p key={p}>{p}</p>
-              ))}
-            </div>
-          </div>
+          {/* ─── Estimated Expenses ─── */}
+          {estimatedExpenses && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.25 }}
+              className="mb-8 bg-white/90 backdrop-blur border border-rose-100 rounded-2xl shadow-sm overflow-hidden"
+            >
+              <div className="bg-gradient-to-r from-rose-500 to-orange-400 px-6 py-3 flex items-center gap-2">
+                <TrendingDown className="w-5 h-5 text-white" />
+                <h2 className="text-lg font-bold text-white tracking-wide">
+                  Estimated Expenses (from Your Business Plan)
+                </h2>
+              </div>
+              <div className="px-6 py-5">
+                <p className="text-gray-600 mb-4 text-sm">
+                  I've analyzed your business plan and prepared estimated expenses tailored to your{' '}
+                  <span className="font-semibold text-teal-700">{businessContext.industry || 'industry'}</span>{' '}
+                  business in{' '}
+                  <span className="font-semibold text-teal-700">{businessContext.location || 'your location'}</span>.
+                </p>
+                <div className="bg-gradient-to-br from-rose-50/80 to-orange-50/60 rounded-xl p-5 border border-rose-100">
+                  <div className="text-gray-700 prose prose-sm max-w-none">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{estimatedExpenses}</ReactMarkdown>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
 
-          {/* What's Next */}
-          <div className="mb-8 bg-gradient-to-r from-teal-50 to-blue-50 border border-teal-200 rounded-xl p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">🎯 What's Next</h2>
-            <p className="text-gray-700 mb-4">
-              Once you provide your initial investment amount, I'll:
-            </p>
-            <ul className="list-disc list-inside space-y-2 text-gray-700 mb-4">
-              <li>Show you a detailed budget breakdown with estimated expenses and revenues</li>
-              <li>Allow you to adjust amounts using sliders</li>
-              <li>Let you add custom expenses or revenue sources</li>
-              <li>Display your budget in a pie chart or table format</li>
-              <li>Save this budget so I can reference it throughout our conversation</li>
-            </ul>
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <p className="text-sm text-yellow-800">
-                <strong>Ready to set up your budget?</strong> Click the button below to start!
-              </p>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
+          {/* ─── Budget Intro Sections ─── */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.6 }}
-            className="text-center"
+            transition={{ duration: 0.5, delay: 0.35 }}
+            className="mb-8 bg-white/90 backdrop-blur border border-teal-100 rounded-2xl shadow-sm overflow-hidden"
           >
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <motion.button
-                onClick={handleStartBudget}
-                disabled={loading || budgetCompleted}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="group relative bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 hover:from-green-600 hover:via-emerald-600 hover:to-teal-600 text-white px-10 py-5 rounded-xl text-xl font-bold shadow-2xl hover:shadow-3xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-green-400"
-              >
-                {loading ? (
-                  <div className="flex items-center justify-center gap-3">
-                    <svg className="animate-spin h-7 w-7 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span>Setting up budget...</span>
-                  </div>
-                ) : budgetCompleted ? (
-                  <div className="flex items-center justify-center gap-3">
-                    <span className="text-2xl">✅</span>
-                    <span>Budget Completed</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center gap-3">
-                    <span className="text-2xl">💰</span>
-                    <span>Start Budget Setup</span>
-                  </div>
-                )}
-                <motion.div
-                  className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                  animate={{ opacity: loading ? 0.3 : 0 }}
-                />
-              </motion.button>
-
-              <motion.button
-                onClick={onRevisit}
-                disabled={loading}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="group relative bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-8 py-4 rounded-xl text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <div className="flex items-center justify-center gap-3">
-                  <span className="text-xl">🔄</span>
-                  <span>Modify Business Plan</span>
+            {/* Section 1 — What is budgeting? */}
+            <div className="px-6 pt-6 pb-4">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-500 flex items-center justify-center shadow">
+                  <Lightbulb className="w-5 h-5 text-white" />
                 </div>
-                <motion.div
-                  className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                />
-              </motion.button>
+                <h2 className="text-xl font-bold text-gray-800">{budgetIntro.section1.title}</h2>
+              </div>
+              <div className="space-y-2 text-gray-600 text-sm leading-relaxed pl-[52px]">
+                {budgetIntro.section1.paragraphs.map((p) => (
+                  <p key={p}>{p}</p>
+                ))}
+              </div>
+            </div>
+
+            <div className="mx-6 h-px bg-gradient-to-r from-transparent via-teal-200 to-transparent" />
+
+            {/* Section 2 — Three parts */}
+            <div className="px-6 py-4">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-500 flex items-center justify-center shadow">
+                  <Calculator className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-800">{budgetIntro.section2.title}</h3>
+              </div>
+              <div className="pl-[52px]">
+                <p className="text-gray-600 text-sm mb-3">{budgetIntro.section2.intro}</p>
+                <div className="space-y-2.5 mb-4">
+                  {budgetIntro.section2.list1.map((item, i) => (
+                    <StepPill key={item} n={i + 1} text={item} />
+                  ))}
+                </div>
+                <p className="text-gray-600 text-sm mb-3">{budgetIntro.section2.outro}</p>
+                <div className="space-y-2.5">
+                  {budgetIntro.section2.list2.map((item, i) => (
+                    <StepPill key={item} n={i + 1} text={item} />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mx-6 h-px bg-gradient-to-r from-transparent via-teal-200 to-transparent" />
+
+            {/* Section 3 — A Living Budget */}
+            <div className="px-6 pt-4 pb-6">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center shadow">
+                  <Sparkles className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-800">{budgetIntro.section3.title}</h3>
+              </div>
+              <div className="space-y-2 text-gray-600 text-sm leading-relaxed pl-[52px]">
+                {budgetIntro.section3.paragraphs.map((p) => (
+                  <p key={p}>{p}</p>
+                ))}
+              </div>
             </div>
           </motion.div>
-        </motion.div>
-      </div>
 
-      {/* Budget Setup Modal */}
-      {showBudgetModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-2xl font-bold text-gray-900">Budget Setup</h2>
-              <button
-                onClick={() => setShowBudgetModal(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
+          {/* ─── What's Next — feature grid ─── */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.45 }}
+            className="mb-10"
+          >
+            <div className="flex items-center gap-2 mb-5">
+              <Target className="w-6 h-6 text-teal-500" />
+              <h2 className="text-xl font-bold text-gray-800">What's Next</h2>
             </div>
-            <div className="p-6 overflow-y-auto max-h-[calc(90vh-100px)]">
-              <BudgetDashboard
-                budget={budget}
-                onUpdateBudget={(updates) => setBudget(prev => ({ ...prev, ...updates }))}
-                onUpdateItem={async (id, updates) => {
-                  setBudget(prev => ({
-                    ...prev,
-                    items: prev.items.map(item => 
-                      item.id === id ? { ...item, ...updates } : item
-                    )
-                  }));
-                }}
-                onDeleteItem={async (id) => {
-                  setBudget(prev => ({
-                    ...prev,
-                    items: prev.items.filter(item => item.id !== id)
-                  }));
-                }}
-                businessContext={businessContext}
-                sessionId={sessionId}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <FeatureCard
+                icon={BarChart3}
+                title="Detailed Breakdown"
+                desc="See a full budget breakdown with estimated expenses and revenue projections."
+                delay={0.5}
+              />
+              <FeatureCard
+                icon={DollarSign}
+                title="Adjust Amounts"
+                desc="Type dollar amounts or use sliders to fine-tune every line item."
+                delay={0.6}
+              />
+              <FeatureCard
+                icon={TrendingUp}
+                title="Add Custom Items"
+                desc="Add or remove expense and revenue categories unique to your business."
+                delay={0.7}
+              />
+              <FeatureCard
+                icon={LineChart}
+                title="Break-Even Analysis"
+                desc="Auto-calculated break-even timeline to see when your venture becomes profitable."
+                delay={0.8}
+              />
+              <FeatureCard
+                icon={Shield}
+                title="Chat with Angel"
+                desc="Discuss budget items with Angel — she reads your plan and numbers together."
+                delay={0.9}
+              />
+              <FeatureCard
+                icon={Rocket}
+                title="Save & Continue"
+                desc="Your budget is saved and referenced throughout the rest of your journey."
+                delay={1.0}
               />
             </div>
-            <div className="flex justify-end gap-4 p-6 border-t border-gray-200">
+
+            {/* Ready prompt */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.1, duration: 0.5 }}
+              className="mt-6 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3"
+            >
+              <Sparkles className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-amber-800">
+                <strong>Ready to set up your budget?</strong> Click the button below to begin building a comprehensive
+                financial plan for your business.
+              </p>
+            </motion.div>
+          </motion.div>
+
+          {/* ─── Action Buttons ─── */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.7 }}
+            className="flex flex-col sm:flex-row gap-4 justify-center pb-8"
+          >
+            {/* Primary CTA */}
+            <motion.button
+              onClick={handleStartBudget}
+              disabled={loading || budgetCompleted}
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.97 }}
+              className="group relative bg-gradient-to-r from-teal-500 via-emerald-500 to-green-500 hover:from-teal-600 hover:via-emerald-600 hover:to-green-600 text-white px-10 py-5 rounded-2xl text-xl font-bold shadow-xl shadow-teal-300/30 hover:shadow-2xl hover:shadow-teal-400/40 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-3">
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                  Setting up budget…
+                </span>
+              ) : budgetCompleted ? (
+                <span className="flex items-center justify-center gap-3">
+                  <CheckCircle2 className="w-6 h-6" />
+                  Budget Completed
+                </span>
+              ) : (
+                <span className="flex items-center justify-center gap-3">
+                  <DollarSign className="w-6 h-6" />
+                  Start Budget Setup
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </span>
+              )}
+            </motion.button>
+
+            {/* Secondary */}
+            <motion.button
+              onClick={onRevisit}
+              disabled={loading}
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.97 }}
+              className="group bg-white border-2 border-gray-200 hover:border-teal-300 text-gray-700 hover:text-teal-700 px-8 py-4 rounded-2xl text-lg font-semibold shadow-sm hover:shadow-md transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className="flex items-center justify-center gap-2">
+                <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
+                Modify Business Plan
+              </span>
+            </motion.button>
+          </motion.div>
+        </div>
+      </div>
+
+      {/* ─── Budget Setup Modal ─── */}
+      {showBudgetModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
+            className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden"
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-teal-500 to-emerald-500">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <DollarSign className="w-5 h-5" />
+                Budget Setup
+              </h2>
               <button
                 onClick={() => setShowBudgetModal(false)}
-                className="px-6 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                className="text-white/80 hover:text-white transition-colors rounded-full p-1 hover:bg-white/20"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-130px)]">
+              {budgetLoading ? (
+                <div className="flex flex-col items-center justify-center py-16">
+                  <Loader2 className="w-8 h-8 animate-spin text-teal-500 mb-3" />
+                  <p className="text-gray-500">Loading your budget…</p>
+                </div>
+              ) : (
+                <BudgetDashboard
+                  budget={budget}
+                  onUpdateBudget={handleUpdateBudget}
+                  onUpdateItem={handleUpdateItem}
+                  onDeleteItem={handleDeleteItem}
+                  businessType={businessContext?.business_type}
+                  businessContext={businessContext}
+                  sessionId={sessionId}
+                />
+              )}
+            </div>
+            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/80">
+              <button
+                onClick={() => setShowBudgetModal(false)}
+                className="px-5 py-2.5 text-gray-500 border border-gray-200 rounded-xl hover:bg-gray-100 hover:text-gray-700 transition-all font-medium text-sm"
               >
                 Cancel
               </button>
-              <button
-                onClick={() => {
-                  const expenses = budget.items.filter(item => item.category === 'expense');
-                  const revenue = budget.items.filter(item => item.category === 'revenue');
-                  
-                  handleBudgetComplete({
-                    initialInvestment: budget.initial_investment,
-                    estimatedExpenses: expenses,
-                    estimatedRevenue: revenue
-                  });
-                }}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-              >
-                Complete Budget Setup
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    const expenses = budget.items.filter((item) => item.category === 'expense');
+                    const revenue = budget.items.filter((item) => item.category === 'revenue');
+                    handleBudgetComplete({
+                      initialInvestment: budget.initial_investment,
+                      estimatedExpenses: expenses,
+                      estimatedRevenue: revenue,
+                    });
+                  }}
+                  className="px-5 py-2.5 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white rounded-xl font-medium shadow-md hover:shadow-lg transition-all text-sm"
+                >
+                  Complete Budget Setup
+                </button>
+                <button
+                  onClick={() => {
+                    const expenses = budget.items.filter((item) => item.category === 'expense');
+                    const revenue = budget.items.filter((item) => item.category === 'revenue');
+                    handleBudgetComplete({
+                      initialInvestment: budget.initial_investment,
+                      estimatedExpenses: expenses,
+                      estimatedRevenue: revenue,
+                    });
+                  }}
+                  className="group flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 via-green-500 to-teal-500 hover:from-emerald-600 hover:via-green-600 hover:to-teal-600 text-white rounded-xl font-semibold shadow-md shadow-emerald-500/20 hover:shadow-lg hover:shadow-emerald-500/30 transition-all text-sm"
+                >
+                  Continue to Roadmap
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-200" />
+                </button>
+              </div>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
     </>

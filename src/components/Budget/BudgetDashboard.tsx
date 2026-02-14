@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { motion } from 'framer-motion';
 import { 
   AlertTriangle, 
   Info, 
@@ -29,12 +29,14 @@ import {
   Award,
   Clock,
   Calendar,
-  FileText
+  FileText,
+  HelpCircle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip as UITooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, Area, AreaChart } from 'recharts';
 import type { BudgetItem, Budget, APIResponse } from '@/types/apiTypes'; 
 import StartupCostsTable from './StartupCostsTable';
@@ -49,12 +51,11 @@ import SelectedItemsBanner from './SelectedItemsBanner';
 import BudgetWarnings from './BudgetWarnings';
 import MetricCard from './MetricCard';
 import BudgetOverview from './BudgetOverview';
-import StickyRoadmapButton from './StickyRoadmapButton';
+// StickyRoadmapButton removed — Roadmap CTA is now in the header
 import { 
   debounce, 
   formatCurrency, 
-  useBudgetValidation, 
-  useAutoSaveIndicator,
+  useBudgetValidation,
   getSmartStepForInitialInvestment,
   classifyExpenseGroup,
   handleExportPdf,
@@ -66,7 +67,7 @@ import httpClient from '../../api/httpClient';
 import BudgetChatModal from './BudgetChatModal';
 import AddLineItemModal from './AddLineItemModal'; 
 import RemoveItemModal from './RemoveItemModal'; 
-import SaveStatusIndicator, { type SaveStatus } from '../ui/SaveStatusIndicator'; 
+import type { SaveStatus } from './BudgetDashboardHeader'; 
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -94,17 +95,17 @@ interface BudgetDashboardProps {
   businessContext?: any;
 };
 
-// Modern Color Palette
+// Modern Color Palette — consistent teal / blue / emerald theme
 const COLORS = {
-  primary: '#6366f1', // Indigo
-  secondary: '#8b5cf6', // Purple
-  success: '#10b981', // Emerald
-  danger: '#ef4444', // Red
-  warning: '#f59e0b', // Amber
-  info: '#3b82f6', // Blue
+  primary: '#0d9488',   // Teal-600
+  secondary: '#3b82f6', // Blue-500
+  success: '#10b981',   // Emerald-500
+  danger: '#ef4444',    // Red-500
+  warning: '#f59e0b',   // Amber-500
+  info: '#06b6d4',      // Cyan-500
   chart: {
-    startup: ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#fb923c', '#fbbf24', '#a3e635', '#4ade80'],
-    monthly: ['#3b82f6', '#06b6d4', '#14b8a6', '#10b981', '#84cc16', '#eab308', '#f97316', '#ef4444'],
+    startup: ['#0d9488', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#f59e0b', '#10b981'],
+    monthly: ['#0d9488', '#06b6d4', '#3b82f6', '#10b981', '#14b8a6', '#f59e0b', '#f97316', '#ef4444'],
     revenue: '#10b981',
     expense: '#ef4444',
   }
@@ -194,31 +195,33 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
     }
   };
 
+  // Legacy delete handler (unused — replaced by openRemoveModal + confirmRemoveItem)
+  // Kept for compatibility if any child component calls it directly
   const handleDeleteItem = useCallback(async (id: string) => {
     const item = budget.items.find((i) => i.id === id);
-    const name = item?.name || 'this item';
-    if (window.confirm(`Are you sure you want to remove "${name}"? This action cannot be undone.`)) {
-      try {
-        await onDeleteItem(id);
-        toast.success(`"${name}" removed successfully`);
-      } catch (error) {
-        console.error('Error deleting item:', error);
-        toast.error('Failed to remove item');
-      }
-    }
-  }, [budget.items, onDeleteItem]);
+    openRemoveModal(id, item?.name || 'this item', item?.is_custom ?? false);
+  }, [budget.items]);
 
-  const handleAddItem = useCallback(async (item: Omit<BudgetItem, 'id' | 'created_at' | 'updated_at'>): Promise<BudgetItem> => {
+  const handleAddItem = useCallback(async (
+    item: Omit<BudgetItem, 'id' | 'created_at' | 'updated_at'>,
+    subcategory?: 'startup_cost' | 'operating_expense' | 'payroll' | 'cogs'
+  ): Promise<BudgetItem> => {
     if (!sessionId) {
-      toast.error("Session ID is missing, cannot add item.");
-      throw new Error("Session ID is missing.");
+      toast.error('Session not found. Cannot add item.');
+      throw new Error('Session not found');
     }
+
+    const itemWithSubcategory = {
+      ...item,
+      subcategory,
+    };
+
     try {
-      const response: APIResponse<Budget> = await budgetService.addBudgetItem(sessionId, item);
+      const response: APIResponse<Budget> = await budgetService.addBudgetItem(sessionId, itemWithSubcategory);
       if (response.success && response.result) {
-        const addedItem = response.result.items[response.result.items.length - 1];
         onUpdateBudget(response.result);
-        toast.success(`Item "${addedItem.name}" added successfully!`);
+        const addedItem = response.result.items[response.result.items.length - 1];
+        toast.success(`Item "${addedItem?.name || item.name}" added successfully!`);
         return addedItem;
       } else {
         toast.error(response.message || "Failed to add budget item.");
@@ -226,7 +229,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       }
     } catch (error) {
       console.error("Error adding budget item:", error);
-      toast.error("An unexpected error occurred while adding the budget item.");
+      toast.error('Failed to add item to database.');
       throw error;
     }
   }, [sessionId, onUpdateBudget]);
@@ -235,8 +238,21 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
     debounce(async (streamsToSave: RevenueStream[]) => {
       if (sessionId) {
         try {
-          await budgetService.saveRevenueStreams(sessionId, streamsToSave);
-          console.log("Revenue streams saved successfully!");
+          const res = await budgetService.saveRevenueStreams(sessionId, streamsToSave);
+          // Sync IDs from DB so subsequent saves can match records
+          if (res.result && Array.isArray(res.result) && res.result.length > 0) {
+            const synced: RevenueStream[] = res.result.map((item: any) => ({
+              id: item.id,
+              name: item.name,
+              estimatedPrice: item.estimated_price ?? item.estimated_amount ?? 0,
+              estimatedVolume: item.estimated_volume ?? 1,
+              revenueProjection: item.estimated_amount ?? 0,
+              isSelected: item.is_selected !== false,
+              isCustom: item.is_custom ?? false,
+              category: 'revenue' as const,
+            }));
+            setDynamicRevenueStreams(synced);
+          }
         } catch (error) {
           console.error("Failed to save revenue streams:", error);
         }
@@ -245,79 +261,137 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
     [sessionId]
   );
 
-  // Load Revenue Streams
+  // Load Revenue Streams — DB first, AI generate only if none saved
+  const revenueLoadedRef = useRef(false);
   useEffect(() => {
-    const fetchInitialRevenueStreams = async () => {
-      if (sessionId && businessType) {
-        setLoadingRevenueStreams(true);
-        try {
-          const response = await budgetService.generateInitialRevenueStreams(sessionId);
-          if (response.success) {
-            const apiGeneratedStreams: RevenueStream[] = response.result.map((stream: any, index: number) => ({
-              ...stream,
-              id: `api-${String(stream.name || 'stream').trim().toLowerCase().replace(/\s+/g, '-')}-${index}`,
-              estimatedPrice: stream.estimated_price,
-              estimatedVolume: stream.estimated_volume,
-              revenueProjection: stream.estimated_price * stream.estimated_volume,
+    if (revenueLoadedRef.current) return;
+    const loadRevenueStreams = async () => {
+      if (!sessionId) { setLoadingRevenueStreams(false); return; }
+      setLoadingRevenueStreams(true);
+      try {
+        // 1. Try loading from DB first
+        const dbResponse = await budgetService.getRevenueStreams(sessionId);
+        if (dbResponse.success && dbResponse.result && dbResponse.result.length > 0) {
+          const fromDb: RevenueStream[] = dbResponse.result.map((item: any) => ({
+            id: item.id,
+            name: item.name,
+            estimatedPrice: item.estimated_price ?? item.estimated_amount ?? 0,
+            estimatedVolume: item.estimated_volume ?? 1,
+            revenueProjection: item.estimated_amount ?? 0,
+            isSelected: item.is_selected !== false,
+            isCustom: item.is_custom ?? false,
+            category: 'revenue' as const,
+          }));
+          setDynamicRevenueStreams(fromDb);
+          revenueLoadedRef.current = true;
+          setLoadingRevenueStreams(false);
+          return;
+        }
+
+        // 2. Also check budget.items for saved revenue items
+        const savedRevenueItems = budget.items.filter(item => item.category === 'revenue');
+        if (savedRevenueItems.length > 0) {
+          const fromBudget: RevenueStream[] = savedRevenueItems.map(item => ({
+            id: item.id,
+            name: item.name,
+            estimatedPrice: item.estimated_price ?? item.estimated_amount ?? 0,
+            estimatedVolume: item.estimated_volume ?? 1,
+            revenueProjection: item.estimated_amount ?? 0,
+            isSelected: item.is_selected !== false,
+            isCustom: item.is_custom ?? false,
+            category: 'revenue' as const,
+          }));
+          setDynamicRevenueStreams(fromBudget);
+          revenueLoadedRef.current = true;
+          setLoadingRevenueStreams(false);
+          return;
+        }
+
+        // 3. Nothing in DB — generate from AI, save to DB, and load back
+        if (businessType) {
+          const genResponse = await budgetService.generateInitialRevenueStreams(sessionId);
+          if (genResponse.success && genResponse.result && genResponse.result.length > 0) {
+            const aiStreams: RevenueStream[] = genResponse.result.map((stream: any, index: number) => ({
+              id: `gen-${Date.now()}-${index}`,
+              name: stream.name,
+              estimatedPrice: stream.estimated_price ?? 0,
+              estimatedVolume: stream.estimated_volume ?? 0,
+              revenueProjection: (stream.estimated_price ?? 0) * (stream.estimated_volume ?? 0),
               isSelected: true,
               isCustom: false,
+              category: 'revenue' as const,
             }));
 
-            const savedRevenueItems = budget.items.filter(item => item.category === 'revenue');
-            
-            const hydratedStreams: RevenueStream[] = apiGeneratedStreams.map(apiStream => {
-              const savedMatch = savedRevenueItems.find(savedItem => savedItem.name === apiStream.name);
-              if (savedMatch) {
-                return {
-                  ...apiStream,
-                  id: savedMatch.id || apiStream.id,
-                  estimatedPrice: savedMatch.estimated_amount,
-                  estimatedVolume: savedMatch.estimated_amount / (apiStream.estimatedPrice || 1),
-                  revenueProjection: savedMatch.estimated_amount,
-                  isSelected: savedMatch.isSelected !== undefined ? savedMatch.isSelected : true,
-                  isCustom: savedMatch.is_custom || false,
-                };
+            // Save to DB immediately
+            try {
+              await budgetService.saveRevenueStreams(sessionId, aiStreams);
+              // Re-fetch from DB to get proper IDs
+              const refreshed = await budgetService.getRevenueStreams(sessionId);
+              if (refreshed.success && refreshed.result && refreshed.result.length > 0) {
+                const final: RevenueStream[] = refreshed.result.map((item: any) => ({
+                  id: item.id,
+                  name: item.name,
+                  estimatedPrice: item.estimated_price ?? item.estimated_amount ?? 0,
+                  estimatedVolume: item.estimated_volume ?? 1,
+                  revenueProjection: item.estimated_amount ?? 0,
+                  isSelected: item.is_selected !== false,
+                  isCustom: item.is_custom ?? false,
+                  category: 'revenue' as const,
+                }));
+                setDynamicRevenueStreams(final);
+              } else {
+                setDynamicRevenueStreams(aiStreams);
               }
-              return apiStream;
-            });
-
-            const uniqueSavedCustomStreams = savedRevenueItems.filter(savedItem => 
-              savedItem.is_custom && !apiGeneratedStreams.some((apiStream: any) => apiStream.name === savedItem.name)
-            ).map(savedItem => ({
-                id: savedItem.id,
-                name: savedItem.name,
-                estimatedPrice: savedItem.estimated_amount,
-                estimatedVolume: 1,
-                revenueProjection: savedItem.estimated_amount,
-                isSelected: savedItem.isSelected !== undefined ? savedItem.isSelected : true,
-                isCustom: true,
-                category: 'revenue' as const,
-            }));
-
-            setDynamicRevenueStreams([...hydratedStreams, ...uniqueSavedCustomStreams]);
+            } catch {
+              setDynamicRevenueStreams(aiStreams);
+            }
           } else {
-            console.error("Failed to fetch initial revenue streams:", response.message);
             setDynamicRevenueStreams([]);
           }
-        } catch (error) {
-          console.error("Error fetching initial revenue streams:", error);
+        } else {
           setDynamicRevenueStreams([]);
-        } finally {
-          setLoadingRevenueStreams(false);
         }
-      } else {
-        // If sessionId or businessType is missing, don't show loading
-        setLoadingRevenueStreams(false);
+        revenueLoadedRef.current = true;
+      } catch (error) {
+        console.error("Error loading revenue streams:", error);
         setDynamicRevenueStreams([]);
+      } finally {
+        setLoadingRevenueStreams(false);
       }
     };
-    fetchInitialRevenueStreams();
-  }, [sessionId, businessType]);
+    loadRevenueStreams();
+  }, [sessionId, businessType, budget.items]);
 
   const handleRevenueStreamsChange = useCallback((updatedStreams: RevenueStream[]) => {
     setDynamicRevenueStreams(updatedStreams);
+    // Save to DB (debounced to avoid hammering on every keystroke)
     saveRevenueStreamsDebounced(updatedStreams);
   }, [saveRevenueStreamsDebounced]);
+
+  // Direct DB save for revenue streams (non-debounced, for add/remove)
+  const saveRevenueStreamsDirect = useCallback(async (streams: RevenueStream[]) => {
+    if (!sessionId) return;
+    try {
+      const res = await budgetService.saveRevenueStreams(sessionId, streams);
+      // Sync IDs from DB so subsequent saves can match records
+      if (res.result && Array.isArray(res.result) && res.result.length > 0) {
+        const synced: RevenueStream[] = res.result.map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          estimatedPrice: item.estimated_price ?? item.estimated_amount ?? 0,
+          estimatedVolume: item.estimated_volume ?? 1,
+          revenueProjection: item.estimated_amount ?? 0,
+          isSelected: item.is_selected !== false,
+          isCustom: item.is_custom ?? false,
+          category: 'revenue' as const,
+        }));
+        setDynamicRevenueStreams(synced);
+      }
+    } catch (error) {
+      console.error("Failed to save revenue streams:", error);
+      toast.error('Failed to save revenue stream to database');
+    }
+  }, [sessionId]);
 
   // Selection Management
   const onToggleItemSelection = useCallback((itemId: string, isSelected: boolean) => {
@@ -342,12 +416,32 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
 
   // Classification
   const classifyExpenseGroup = useCallback((item: BudgetItem): 'startup' | 'operating' | 'payroll' | 'cogs' | 'other' => {
+    // 1. Check explicit subcategory field first (most reliable)
+    if (item.subcategory) {
+      const map: Record<string, 'startup' | 'operating' | 'payroll' | 'cogs'> = {
+        startup_cost: 'startup',
+        operating_expense: 'operating',
+        payroll: 'payroll',
+        cogs: 'cogs',
+      };
+      if (map[item.subcategory]) return map[item.subcategory];
+    }
+
+    // 2. Check ID prefix
     const id = String(item.id || '');
     if (id.startsWith('startup_')) return 'startup';
     if (id.startsWith('operating_')) return 'operating';
     if (id.startsWith('payroll_')) return 'payroll';
     if (id.startsWith('cogs_')) return 'cogs';
 
+    // 3. Check description for encoded subcategory (persisted from backend)
+    const desc = String(item.description || '');
+    if (desc.startsWith('[startup_cost]')) return 'startup';
+    if (desc.startsWith('[operating_expense]')) return 'operating';
+    if (desc.startsWith('[payroll]')) return 'payroll';
+    if (desc.startsWith('[cogs]')) return 'cogs';
+
+    // 4. Fallback to name hints
     const name = String(item.name || '').trim().toLowerCase();
 
     const startupHints = [
@@ -728,72 +822,59 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
     }
   }, [sessionId]);
 
-  // Save Budget
+  // Save Budget — only expense items; revenue streams saved separately
+  const isSavingRef = useRef(false);
+
   const handleSaveBudget = useCallback(async () => {
     if (!sessionId || !budget) return;
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
     setSaveStatus('saving');
 
-    const updatedBudgetItems: BudgetItem[] = [...startupCostItems, ...operatingExpenseItems, ...payrollExpenseItems, ...cogsExpenseItems, ...otherExpenses];
-    const updatedRevenueItems: RevenueStream[] = dynamicRevenueStreams;
-
-    const allItemsForSave: BudgetItem[] = [
-      ...updatedBudgetItems.map((item) => ({
-        ...item,
-        isSelected: selectedItemIds.has(item.id) || item.isSelected,
-      })),
-      ...updatedRevenueItems.map<BudgetItem>((stream) => ({
-        id: stream.id,
-        name: stream.name,
-        category: 'revenue' as const,
-        estimated_amount: stream.revenueProjection,
-        actual_amount: undefined,
-        description: '',
-        is_custom: stream.isCustom,
-        isSelected: stream.isSelected,
-      })),
+    // Only expense items — revenue is handled by saveRevenueStreams
+    const expenseItems: BudgetItem[] = [
+      ...startupCostItems, ...operatingExpenseItems, ...payrollExpenseItems, ...cogsExpenseItems, ...otherExpenses
     ];
 
-    const totalEstimatedExpensesForSave = allItemsForSave
-      .filter(item => item.category === 'expense' && item.estimated_amount !== undefined)
-      .reduce((sum, item) => sum + item.estimated_amount, 0);
+    // Also include any revenue items already in budget.items so they aren't deleted
+    const existingRevenueItems = budget.items.filter(item => item.category === 'revenue');
 
-    const totalEstimatedRevenueForSave = allItemsForSave
-      .filter(item => item.category === 'revenue' && item.estimated_amount !== undefined)
-      .reduce((sum, item) => sum + item.estimated_amount, 0);
+    const allItemsForSave: BudgetItem[] = [...expenseItems, ...existingRevenueItems];
 
     try {
-        await budgetService.saveBudget(sessionId, {
+        const response = await budgetService.saveBudget(sessionId, {
             ...budget,
             items: allItemsForSave,
-            total_estimated_expenses: totalEstimatedExpensesForSave,
-            total_estimated_revenue: totalEstimatedRevenueForSave,
         });
+        if (response.success && response.result) {
+          onUpdateBudget(response.result);
+        }
         setSaveStatus('saved');
-        setTimeout(() => setSaveStatus('idle'), 2000);
+        setTimeout(() => setSaveStatus('idle'), 2500);
     } catch (error) {
         console.error("Failed to save budget:", error);
         setSaveStatus('error');
+        setTimeout(() => setSaveStatus('idle'), 3000);
+    } finally {
+        isSavingRef.current = false;
     }
-  }, [sessionId, budget, startupCostItems, operatingExpenseItems, payrollExpenseItems, cogsExpenseItems, otherExpenses, dynamicRevenueStreams, selectedItemIds]);
+  }, [sessionId, budget, startupCostItems, operatingExpenseItems, payrollExpenseItems, cogsExpenseItems, otherExpenses, onUpdateBudget]);
 
-  const debouncedSave = useCallback(debounce(handleSaveBudget, 2500), [handleSaveBudget]);
-
-  // Add auto-save trigger on any change
-  useEffect(() => {
-    // Auto-save after 2 seconds of inactivity
-    const timer = setTimeout(() => {
-      if (saveStatus === 'idle') {
-        debouncedSave();
-      }
-    }, 2000);
-    
-    return () => clearTimeout(timer);
-  }, [budget.items, dynamicRevenueStreams, budget.initial_investment, debouncedSave, saveStatus]);
+  // No auto-save useEffect here — the parent (Implementation) already
+  // debounces a full save to DB whenever handleUpdateBudget is called.
+  // Revenue streams are saved separately via saveRevenueStreams API.
+  // The manual "Save" button below calls handleSaveBudget directly.
 
   const handleBudgetUpdate = useCallback((updates: Partial<Budget>) => {
     onUpdateBudget(updates);
-    debouncedSave();
-  }, [onUpdateBudget, debouncedSave]);
+
+    // If initial_investment changed, also persist it via a direct PATCH call
+    if (updates.initial_investment !== undefined && sessionId) {
+      budgetService.updateBudgetHeader(sessionId, { initial_investment: updates.initial_investment }).catch(
+        (err) => console.error('Failed to save initial investment:', err)
+      );
+    }
+  }, [onUpdateBudget, sessionId]);
 
   // Add this function to BudgetDashboard
   const handleExportExcel = useCallback(async () => {
@@ -908,7 +989,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
     return 10000;
   }, []);
 
-  // Component: Modern Metric Card
+  // Component: Modern Metric Card — teal / blue themed
   const MetricCard = ({ title, value, icon: Icon, trend, subtitle, color = 'blue', delay = 0 }: {
     title: string;
     value: string;
@@ -918,217 +999,216 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
     color?: 'blue' | 'green' | 'purple' | 'red' | 'amber';
     delay?: number;
   }) => {
-    const colorClasses = {
-      blue: 'from-blue-500 to-indigo-600',
-      green: 'from-emerald-500 to-teal-600',
-      purple: 'from-purple-500 to-pink-600',
-      red: 'from-red-500 to-rose-600',
-      amber: 'from-amber-500 to-orange-600',
+    const colorMap: Record<string, { gradient: string; bg: string; ring: string }> = {
+      blue:   { gradient: 'from-teal-500 to-cyan-600',    bg: 'bg-teal-50',    ring: 'ring-teal-200' },
+      green:  { gradient: 'from-emerald-500 to-green-600', bg: 'bg-emerald-50', ring: 'ring-emerald-200' },
+      purple: { gradient: 'from-teal-500 to-cyan-600',  bg: 'bg-teal-50',    ring: 'ring-teal-200' },
+      red:    { gradient: 'from-red-500 to-rose-600',     bg: 'bg-red-50',     ring: 'ring-red-200' },
+      amber:  { gradient: 'from-amber-500 to-orange-600', bg: 'bg-amber-50',   ring: 'ring-amber-200' },
     };
+    const c = colorMap[color] || colorMap.blue;
 
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay }}
+        transition={{ duration: 0.45, delay }}
+        whileHover={{ y: -4, scale: 1.02 }}
         className="group"
       >
-        <Card className="relative overflow-hidden border-2 border-transparent hover:border-gray-200 transition-all duration-300 shadow-lg hover:shadow-2xl bg-white">
-          <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${colorClasses[color]} opacity-10 rounded-bl-full group-hover:scale-110 transition-transform duration-300`} />
-          
-          <CardContent className="p-6 relative">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600 mb-1">{title}</p>
-                <motion.h3
-                  initial={{ scale: 0.9 }}
-                  animate={{ scale: 1 }}
-                  transition={{ delay: delay + 0.2, type: "spring", stiffness: 200 }}
-                  className="text-3xl font-bold text-gray-900 tracking-tight"
-                >
-                  {value}
-                </motion.h3>
-                {subtitle && (
-                  <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
-                )}
+        <div className={`relative overflow-hidden rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-md hover:shadow-xl transition-all duration-300 ring-1 ${c.ring}`}>
+          {/* decorative blob */}
+          <div className={`absolute -top-8 -right-8 w-28 h-28 rounded-full bg-gradient-to-br ${c.gradient} opacity-[0.08] group-hover:scale-125 transition-transform duration-500`} />
+
+          <div className="p-5 relative">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">{title}</p>
+              <div className={`p-2.5 rounded-xl bg-gradient-to-br ${c.gradient} shadow-lg shadow-teal-500/10`}>
+                <Icon className="w-5 h-5 text-white" />
               </div>
-              
-              <motion.div
-                whileHover={{ rotate: 360, scale: 1.1 }}
-                transition={{ duration: 0.6 }}
-                className={`p-3 rounded-2xl bg-gradient-to-br ${colorClasses[color]} shadow-lg`}
-              >
-                <Icon className="w-6 h-6 text-white" />
-              </motion.div>
             </div>
 
+            <motion.p
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: delay + 0.15, type: 'spring', stiffness: 220 }}
+              className="text-2xl font-extrabold text-gray-900 tracking-tight"
+            >
+              {value}
+            </motion.p>
+
+            {subtitle && <p className="text-[11px] text-gray-500 mt-1">{subtitle}</p>}
+
             {trend && (
-              <motion.div
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: delay + 0.3 }}
-                className="flex items-center gap-2"
-              >
-                <div className={`flex items-center gap-1 px-2 py-1 rounded-full ${
-                  trend.value >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-                }`}>
-                  {trend.value >= 0 ? (
-                    <ArrowUpRight className="w-3 h-3" />
-                  ) : (
-                    <ArrowDownRight className="w-3 h-3" />
-                  )}
-                  <span className="text-xs font-semibold">
-                    {Math.abs(trend.value)}%
-                  </span>
-                </div>
-                <span className="text-xs text-gray-600">{trend.label}</span>
-              </motion.div>
+              <div className={`mt-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                trend.value >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+              }`}>
+                {trend.value >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                {Math.abs(trend.value)}% <span className="font-normal text-gray-500 ml-1">{trend.label}</span>
+              </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
     );
   };
 
-  // Component: Budget Introduction
-  const BudgetIntroduction = () => (
+  // Budget Introduction — teal / blue themed (memoised JSX to prevent re-mount flicker)
+  const budgetIntroductionEl = useMemo(() => (
     <motion.div
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
-      className="mb-8"
+      className="mb-10"
     >
-      <div className="bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 rounded-3xl p-8 border-2 border-indigo-100 shadow-xl">
-        <div className="flex items-start gap-4 mb-6">
-          <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-lg">
-            <Sparkles className="w-8 h-8 text-white" />
-          </div>
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-teal-600 via-teal-700 to-cyan-800 p-10 shadow-2xl">
+        {/* Background decorative elements */}
+        <div className="absolute top-0 right-0 w-72 h-72 bg-white/[0.06] rounded-full -mr-20 -mt-20" />
+        <div className="absolute bottom-0 left-0 w-56 h-56 bg-white/[0.04] rounded-full -ml-16 -mb-16" />
+        <div className="absolute top-1/2 right-1/4 w-32 h-32 bg-cyan-400/10 rounded-full blur-2xl" />
+
+        <div className="relative z-10 flex items-start gap-5 mb-8">
+          <motion.div
+            whileHover={{ rotate: 12, scale: 1.1 }}
+            className="flex-shrink-0 p-4 bg-white/15 backdrop-blur-sm rounded-2xl border border-white/20 shadow-lg"
+          >
+            <Sparkles className="w-9 h-9 text-white" />
+          </motion.div>
           <div>
-            <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
-              Budgeting: Understand What It Takes to Make This Business Real
+            <h2 className="text-3xl md:text-4xl font-extrabold text-white leading-tight mb-3">
+              Budgeting: Understand What It Takes
             </h2>
-            <p className="text-gray-700 text-lg leading-relaxed">
-              Starting a business isn't just about having a good idea — it's about understanding what it will actually cost to make it work.
+            <p className="text-teal-100 text-base md:text-lg leading-relaxed max-w-2xl">
+              Starting a business isn't just about having a good idea — it's about understanding what it will actually cost to make it work. This is a first-cut budget based on your inputs so far.
             </p>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6 mt-8">
-          <Card className="border-2 border-indigo-200 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3 mb-3">
-                <Target className="w-6 h-6 text-indigo-600" />
-                <h3 className="font-bold text-gray-900">Business Budgeting</h3>
+        <div className="relative z-10 grid md:grid-cols-3 gap-5">
+          {[
+            {
+              icon: Target,
+              title: 'Business Budgeting',
+              desc: 'Organized into startup costs, monthly revenue, and monthly expenses — together showing your capital needs and break-even timeline.',
+              accent: 'from-teal-400 to-cyan-400',
+              border: 'border-teal-400/30',
+            },
+            {
+              icon: Zap,
+              title: 'A Living Budget',
+              desc: "This isn't a spreadsheet you finish once. Add or remove line items, adjust assumptions, and come back anytime during implementation.",
+              accent: 'from-cyan-400 to-blue-400',
+              border: 'border-cyan-400/30',
+            },
+            {
+              icon: Award,
+              title: 'Guided by Angel',
+              desc: 'Angel sees your budget and business plan together — here to sanity-check numbers, challenge assumptions, and dial things in.',
+              accent: 'from-teal-400 to-cyan-400',
+              border: 'border-blue-400/30',
+            },
+          ].map((card, i) => (
+            <motion.div
+              key={card.title}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 * (i + 1), duration: 0.45 }}
+              whileHover={{ y: -3 }}
+              className={`bg-white/10 backdrop-blur-md rounded-2xl p-6 border ${card.border} hover:bg-white/[0.15] transition-all duration-300`}
+            >
+              <div className={`inline-flex p-2.5 rounded-xl bg-gradient-to-r ${card.accent} mb-4 shadow-md`}>
+                <card.icon className="w-5 h-5 text-white" />
               </div>
-              <p className="text-sm text-gray-600 leading-relaxed">
-                Your budget is organized into three connected parts: startup costs, monthly revenue, and monthly expenses. Together, these help you understand your capital needs and break-even timeline.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-2 border-purple-200 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3 mb-3">
-                <Zap className="w-6 h-6 text-purple-600" />
-                <h3 className="font-bold text-gray-900">Living Budget</h3>
-              </div>
-              <p className="text-sm text-gray-600 leading-relaxed">
-                This isn't a spreadsheet you finish once — it's a living budget. You can add or remove line items, adjust assumptions, and come back anytime during implementation.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-2 border-pink-200 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3 mb-3">
-                <Award className="w-6 h-6 text-pink-600" />
-                <h3 className="font-bold text-gray-900">Guided by Angel</h3>
-              </div>
-              <p className="text-sm text-gray-600 leading-relaxed">
-                Angel can see your budget and business plan together, and is here to help you sanity-check numbers, challenge assumptions, and dial things in over time.
-              </p>
-            </CardContent>
-          </Card>
+              <h3 className="font-bold text-white text-base mb-2">{card.title}</h3>
+              <p className="text-sm text-teal-100/90 leading-relaxed">{card.desc}</p>
+            </motion.div>
+          ))}
         </div>
       </div>
     </motion.div>
-  );
+  ), []); // static content — no deps needed
 
-  // Component: Startup Budget Summary
-  const StartupBudgetSummaryCard = () => (
+  // Startup Budget Summary — teal themed (memoised)
+  const startupBudgetSummaryEl = useMemo(() => (
     <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
+      initial={{ opacity: 0, scale: 0.96 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5 }}
     >
-      <Card className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-0 shadow-2xl overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32" />
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full -ml-24 -mb-24" />
-        
-        <CardContent className="p-8 relative">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-600 via-teal-700 to-cyan-800 text-white shadow-xl">
+        {/* decorative circles */}
+        <div className="absolute top-0 right-0 w-56 h-56 bg-white/[0.06] rounded-full -mr-24 -mt-24" />
+        <div className="absolute bottom-0 left-0 w-40 h-40 bg-white/[0.04] rounded-full -ml-16 -mb-16" />
+
+        <div className="relative z-10 p-8">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-sm">
-              <Calculator className="w-8 h-8 text-white" />
+            <div className="p-3 bg-white/15 backdrop-blur-sm rounded-xl border border-white/20">
+              <Calculator className="w-7 h-7 text-white" />
             </div>
-            <h3 className="text-2xl font-bold">Startup Budget Summary</h3>
+            <h3 className="text-2xl font-bold tracking-tight">Startup Budget Summary</h3>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
-              <p className="text-sm text-white/80 mb-1">Initial Investment</p>
-              <p className="text-3xl font-bold">{formatCurrency(budget.initial_investment, currency)}</p>
-            </div>
+          <div className="grid md:grid-cols-3 gap-5">
+            <UITooltip>
+              <TooltipTrigger asChild>
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-5 border border-white/15 hover:bg-white/[0.14] transition-colors cursor-help">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-teal-200 mb-2">Initial Investment</p>
+                  <p className="text-3xl font-extrabold">{formatCurrency(budget.initial_investment, currency)}</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Total capital you're putting into the business</TooltipContent>
+            </UITooltip>
 
-            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
-              <p className="text-sm text-white/80 mb-1">Total Startup Costs</p>
-              <p className="text-3xl font-bold">{formatCurrency(startupCostsTotal, currency)}</p>
-            </div>
+            <UITooltip>
+              <TooltipTrigger asChild>
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-5 border border-white/15 hover:bg-white/[0.14] transition-colors cursor-help">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-teal-200 mb-2">Total Startup Costs</p>
+                  <p className="text-3xl font-extrabold">{formatCurrency(startupCostsTotal, currency)}</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Sum of all budgeted startup cost line items</TooltipContent>
+            </UITooltip>
 
-            <div className={`backdrop-blur-sm rounded-2xl p-4 border-2 ${
-              remainingStartupFunds >= 0 
-                ? 'bg-emerald-500/20 border-emerald-300' 
-                : 'bg-red-500/20 border-red-300'
-            }`}>
-              <div className="flex items-center gap-2 mb-1">
-                {remainingStartupFunds >= 0 ? (
-                  <CheckCircle2 className="w-5 h-5" />
-                ) : (
-                  <AlertCircle className="w-5 h-5" />
-                )}
-                <p className="text-sm text-white/90">
-                  {remainingStartupFunds >= 0 ? 'Available Funds' : 'Funding Gap'}
-                </p>
-              </div>
-              <p className="text-3xl font-bold">
-                {formatCurrency(Math.abs(remainingStartupFunds), currency)}
-              </p>
-            </div>
+            <UITooltip>
+              <TooltipTrigger asChild>
+                <div className={`backdrop-blur-sm rounded-xl p-5 border-2 transition-colors cursor-help ${
+                  remainingStartupFunds >= 0
+                    ? 'bg-emerald-500/20 border-emerald-300/50 hover:bg-emerald-500/25'
+                    : 'bg-red-500/20 border-red-300/50 hover:bg-red-500/25'
+                }`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    {remainingStartupFunds >= 0 ? <CheckCircle2 className="w-4 h-4 text-emerald-300" /> : <AlertCircle className="w-4 h-4 text-red-300" />}
+                    <p className="text-xs font-semibold uppercase tracking-wider text-white/80">
+                      {remainingStartupFunds >= 0 ? 'Available Funds' : 'Funding Gap'}
+                    </p>
+                  </div>
+                  <p className="text-3xl font-extrabold">{formatCurrency(Math.abs(remainingStartupFunds), currency)}</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{remainingStartupFunds >= 0 ? 'Investment − Startup Costs = funds remaining' : 'Your startup costs exceed your investment — you need more capital'}</TooltipContent>
+            </UITooltip>
           </div>
 
           {remainingStartupFunds < 0 && (
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mt-4 p-4 bg-red-500/30 backdrop-blur-sm rounded-xl border border-red-300"
+              className="mt-5 p-4 bg-red-500/25 backdrop-blur-sm rounded-xl border border-red-300/40 flex items-start gap-3"
             >
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold mb-1">Additional Funding Required</p>
-                  <p className="text-sm text-white/90">
-                    Consider: personal savings, loans, investors, or grants to cover the funding gap.
-                  </p>
-                </div>
+              <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-200" />
+              <div>
+                <p className="font-semibold text-sm mb-0.5">Additional Funding Required</p>
+                <p className="text-xs text-white/80">Consider: personal savings, loans, investors, or grants to cover the funding gap.</p>
               </div>
             </motion.div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </motion.div>
-  );
+  ), [budget.initial_investment, startupCostsTotal, remainingStartupFunds, currency]);
 
-  // Component: Break-Even Analysis Card
-  const BreakEvenCard = () => {
+  // Break-Even Analysis Card — teal themed (memoised)
+  const breakEvenEl = useMemo(() => {
     const isPositive = monthlyNetIncome > 0;
     const breakEvenMonths = breakEven.months || 0;
     const breakEvenYears = breakEven.years;
@@ -1137,272 +1217,171 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.2 }}
+        transition={{ duration: 0.5, delay: 0.15 }}
       >
-        <Card className="border-2 border-gray-200 shadow-xl bg-gradient-to-br from-gray-50 to-white">
-          <CardHeader>
+        <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+          {/* Header */}
+          <div className="px-7 py-5 bg-gradient-to-r from-teal-50 to-cyan-50 border-b border-gray-200/60">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-2xl shadow-lg">
-                <Target className="w-6 h-6 text-white" />
+              <div className="p-2.5 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-xl shadow-md">
+                <Target className="w-5 h-5 text-white" />
               </div>
               <div>
-                <CardTitle className="text-2xl">Break-Even Analysis</CardTitle>
-                <CardDescription>When will you recoup your investment?</CardDescription>
+                <h3 className="text-xl font-bold text-gray-900">Break-Even Analysis</h3>
+                <p className="text-xs text-gray-500 mt-0.5">When will you recoup your investment?</p>
               </div>
             </div>
-          </CardHeader>
+          </div>
 
-          <CardContent className="space-y-6">
+          <div className="p-7 space-y-6">
             <div className="grid md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
-                  <span className="text-sm font-medium text-gray-600">Monthly Revenue</span>
-                  <span className="text-lg font-bold text-emerald-600">
-                    {formatCurrency(effectiveMonthlyRevenueForBreakEven, currency)}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
-                  <span className="text-sm font-medium text-gray-600">Monthly Costs</span>
-                  <span className="text-lg font-bold text-red-600">
-                    {formatCurrency(totalMonthlyCosts, currency)}
-                  </span>
-                </div>
+              {/* Left: Financial summary */}
+              <div className="space-y-3">
+                {[
+                  { label: 'Monthly Revenue', value: effectiveMonthlyRevenueForBreakEven, color: 'text-emerald-600' },
+                  { label: 'Monthly Costs', value: totalMonthlyCosts, color: 'text-red-500' },
+                ].map((row) => (
+                  <div key={row.label} className="flex items-center justify-between p-4 bg-gray-50/80 rounded-xl border border-gray-100">
+                    <span className="text-sm font-medium text-gray-600">{row.label}</span>
+                    <span className={`text-lg font-bold ${row.color}`}>{formatCurrency(row.value, currency)}</span>
+                  </div>
+                ))}
 
                 <div className={`flex items-center justify-between p-4 rounded-xl border-2 ${
                   isPositive ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'
                 }`}>
-                  <span className="text-sm font-medium text-gray-700">Monthly Net Income</span>
-                  <span className={`text-xl font-bold ${isPositive ? 'text-emerald-700' : 'text-red-700'}`}>
+                  <span className="text-sm font-semibold text-gray-700">Monthly Net Income</span>
+                  <span className={`text-xl font-extrabold ${isPositive ? 'text-emerald-600' : 'text-red-600'}`}>
                     {formatCurrency(monthlyNetIncome, currency)}
                   </span>
                 </div>
               </div>
 
-              <div className={`p-6 rounded-2xl border-2 ${
-                breakEven.status === 'never' 
-                  ? 'bg-red-50 border-red-200' 
+              {/* Right: Timeline badge */}
+              <div className={`relative p-6 rounded-2xl border-2 flex flex-col justify-center ${
+                breakEven.status === 'never'
+                  ? 'bg-red-50 border-red-200'
                   : breakEvenMonths <= 12
                   ? 'bg-emerald-50 border-emerald-200'
                   : breakEvenMonths <= 24
                   ? 'bg-amber-50 border-amber-200'
                   : 'bg-orange-50 border-orange-200'
               }`}>
-                <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center gap-2 mb-3">
                   {breakEven.status === 'never' ? (
-                    <XCircle className="w-8 h-8 text-red-600" />
+                    <XCircle className="w-7 h-7 text-red-500" />
                   ) : breakEvenMonths <= 12 ? (
-                    <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+                    <CheckCircle2 className="w-7 h-7 text-emerald-500" />
                   ) : (
-                    <Clock className="w-8 h-8 text-amber-600" />
+                    <Clock className="w-7 h-7 text-amber-500" />
                   )}
-                  <h4 className="text-lg font-bold text-gray-900">Break-Even Timeline</h4>
+                  <h4 className="text-base font-bold text-gray-900">Break-Even Timeline</h4>
                 </div>
 
                 {breakEven.status === 'never' ? (
-                  <div>
-                    <p className="text-4xl font-bold text-red-700 mb-2">Never</p>
-                    <p className="text-sm text-gray-700">
-                      Revenue doesn't cover monthly costs. Adjust your revenue or expenses to achieve profitability.
-                    </p>
-                  </div>
+                  <>
+                    <p className="text-4xl font-extrabold text-red-600 mb-1">Never</p>
+                    <p className="text-xs text-gray-600 leading-relaxed">Revenue doesn't cover monthly costs. Adjust pricing or reduce expenses.</p>
+                  </>
                 ) : (
-                  <div>
-                    <div className="flex items-baseline gap-2 mb-2">
-                      <p className="text-5xl font-bold text-gray-900">{breakEvenMonths}</p>
-                      <p className="text-2xl text-gray-600">months</p>
+                  <>
+                    <div className="flex items-baseline gap-1.5 mb-1">
+                      <p className="text-5xl font-extrabold text-gray-900">{breakEvenMonths}</p>
+                      <p className="text-xl text-gray-500 font-medium">months</p>
                     </div>
-                    {breakEvenYears && (
-                      <p className="text-lg text-gray-600 mb-2">
-                        ({breakEvenYears.toFixed(1)} years)
-                      </p>
-                    )}
-                    <p className="text-sm text-gray-700">
-                      {breakEvenMonths <= 12 
-                        ? 'Excellent! Quick path to profitability.' 
-                        : breakEvenMonths <= 24
-                        ? 'Manageable timeline with sufficient runway.'
-                        : 'Consider if you have adequate funding for this timeline.'}
+                    {breakEvenYears && <p className="text-sm text-gray-500 mb-1">({breakEvenYears.toFixed(1)} years)</p>}
+                    <p className="text-xs text-gray-600">
+                      {breakEvenMonths <= 12 ? 'Excellent! Quick path to profitability.' : breakEvenMonths <= 24 ? 'Manageable with sufficient runway.' : 'Ensure adequate funding for this timeline.'}
                     </p>
-                  </div>
+                  </>
                 )}
               </div>
             </div>
 
             {breakEven.status === 'never' && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="p-4 bg-red-100 border-2 border-red-300 rounded-xl"
-              >
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-red-700 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-semibold text-red-900 mb-1">Action Required</p>
-                    <p className="text-sm text-red-800">
-                      Your business will lose money each month. Review your pricing strategy or reduce operating costs to achieve sustainability.
-                    </p>
-                  </div>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-red-800 text-sm mb-0.5">Action Required</p>
+                  <p className="text-xs text-red-700">Review your pricing strategy or reduce operating costs to achieve sustainability.</p>
                 </div>
               </motion.div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
     );
-  };
+  }, [effectiveMonthlyRevenueForBreakEven, totalMonthlyCosts, monthlyNetIncome, breakEven, currency]);
 
-  // Component: Modern Charts
-  const ModernCharts = () => (
+  // Modern Charts — teal themed (memoised)
+  const modernChartsEl = useMemo(() => (
     <div className="grid md:grid-cols-2 gap-6">
-      <motion.div
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <Card className="shadow-xl border-2 border-gray-200">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <PieChartIcon className="w-6 h-6 text-indigo-600" />
-              <CardTitle>Startup Costs Breakdown</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
+      <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.45 }}>
+        <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+          <div className="px-6 py-4 bg-gradient-to-r from-teal-50 to-cyan-50 border-b border-gray-200/60 flex items-center gap-2">
+            <PieChartIcon className="w-5 h-5 text-teal-600" />
+            <h3 className="font-bold text-gray-900">Startup Costs Breakdown</h3>
+          </div>
+          <div className="p-6">
             {startupChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={280}>
                 <RechartsPieChart>
-                  <Tooltip 
+                  <Tooltip
                     formatter={(value: any) => formatCurrency(Number(value), currency)}
-                    contentStyle={{ 
-                      backgroundColor: 'white', 
-                      border: '2px solid #e5e7eb', 
-                      borderRadius: '12px',
-                      boxShadow: '0 10px 40px rgba(0,0,0,0.1)'
-                    }}
+                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}
                   />
-                  <Legend 
-                    wrapperStyle={{ fontSize: '12px' }}
-                    iconType="circle"
-                  />
-                  <Pie data={startupChartData} cx="50%" cy="50%" labelLine={false} outerRadius={100}>
-                    {startupChartData.map((entry, index) => (
+                  <Legend wrapperStyle={{ fontSize: '11px' }} iconType="circle" />
+                  <Pie data={startupChartData} cx="50%" cy="50%" labelLine={false} outerRadius={95} innerRadius={40} paddingAngle={2}>
+                    {startupChartData.map((_entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS.chart.startup[index % COLORS.chart.startup.length]} />
                     ))}
                   </Pie>
                 </RechartsPieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-64 text-gray-400">
-                <p>No startup cost data available</p>
-              </div>
+              <div className="flex items-center justify-center h-56 text-gray-400 text-sm">No startup cost data available</div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
-      >
-        <Card className="shadow-xl border-2 border-gray-200">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <BarChart3 className="w-6 h-6 text-purple-600" />
-              <CardTitle>Monthly Costs Distribution</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
+      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.45, delay: 0.1 }}>
+        <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+          <div className="px-6 py-4 bg-gradient-to-r from-cyan-50 to-blue-50 border-b border-gray-200/60 flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-blue-600" />
+            <h3 className="font-bold text-gray-900">Monthly Costs Distribution</h3>
+          </div>
+          <div className="p-6">
             {monthlyChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={monthlyChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis 
-                    dataKey="name" 
-                    tick={{ fontSize: 12 }}
-                    stroke="#6b7280"
-                  />
-                  <YAxis 
-                    tick={{ fontSize: 12 }}
-                    stroke="#6b7280"
-                    tickFormatter={(value) => `${currency}${(value / 1000).toFixed(0)}k`}
-                  />
-                  <Tooltip 
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#9ca3af" />
+                  <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" tickFormatter={(v) => `${currency}${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip
                     formatter={(value: any) => formatCurrency(Number(value), currency)}
-                    contentStyle={{ 
-                      backgroundColor: 'white', 
-                      border: '2px solid #e5e7eb', 
-                      borderRadius: '12px',
-                      boxShadow: '0 10px 40px rgba(0,0,0,0.1)'
-                    }}
+                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}
                   />
-                  <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                    {monthlyChartData.map((entry, index) => (
+                  <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                    {monthlyChartData.map((_entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS.chart.monthly[index % COLORS.chart.monthly.length]} />
                     ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-64 text-gray-400">
-                <p>No monthly cost data available</p>
-              </div>
+              <div className="flex items-center justify-center h-56 text-gray-400 text-sm">No monthly cost data available</div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
     </div>
-  );
-
-  // Add visual indicator
-  const AutoSaveIndicator = () => {
-    const [lastSaved, setLastSaved] = useState<Date | null>(null);
-    
-    useEffect(() => {
-      if (saveStatus === 'saved') {
-        setLastSaved(new Date());
-      }
-    }, [saveStatus]);
-    
-    return (
-      <AnimatePresence>
-        {saveStatus !== 'idle' && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="flex items-center gap-2 text-sm"
-          >
-            {saveStatus === 'saving' && (
-              <>
-                <Loader className="w-4 h-4 animate-spin text-blue-600" />
-                <span className="text-blue-600">Saving...</span>
-              </>
-            )}
-            {saveStatus === 'saved' && (
-              <>
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span className="text-emerald-600">
-                  Saved {lastSaved ? `at ${lastSaved.toLocaleTimeString()}` : ''}
-                </span>
-              </>
-            )}
-            {saveStatus === 'error' && (
-              <>
-                <XCircle className="w-4 h-4 text-red-600" />
-                <span className="text-red-600">Failed to save</span>
-              </>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    );
-  };
+  ), [startupChartData, monthlyChartData]);
 
   return (
-    <div id="budget-dashboard-content" className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-24">
+    <div id="budget-dashboard-content" className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-teal-50/30 pb-20">
       {/* Budget Introduction */}
-      <BudgetIntroduction />
+      {budgetIntroductionEl}
 
       {/* Header Section */}
       <BudgetDashboardHeader
@@ -1413,7 +1392,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         handleExportPdf={handleExportPdf}
         handleExportExcel={handleExportExcel}
         budget={budget}
-        AutoSaveIndicator={AutoSaveIndicator}
+        onContinueToRoadmap={handleGoToRoadmap}
       />
 
       {/* Selected Items Banner */}
@@ -1427,32 +1406,47 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
         {/* Startup Budget Summary */}
-        <StartupBudgetSummaryCard />
+        {startupBudgetSummaryEl}
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="bg-white p-2 shadow-lg rounded-2xl border-2 border-gray-200 inline-flex gap-2">
-            <TabsTrigger
-              value="overview"
-              className="px-6 py-3 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all font-medium"
-            >
-              <PieChartIcon className="w-4 h-4 mr-2" />
-              Overview
-            </TabsTrigger>
-            <TabsTrigger
-              value="manage"
-              className="px-6 py-3 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all font-medium"
-            >
-              <Edit2 className="w-4 h-4 mr-2" />
-              Manage Items
-            </TabsTrigger>
-            <TabsTrigger
-              value="analysis"
-              className="px-6 py-3 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg transition-all font-medium"
-            >
-              <BarChart3 className="w-4 h-4 mr-2" />
-              Analysis
-            </TabsTrigger>
+          <TabsList className="bg-white/80 backdrop-blur-md p-1.5 shadow-md rounded-2xl border border-gray-200/60 inline-flex gap-1">
+            <UITooltip>
+              <TooltipTrigger asChild>
+                <TabsTrigger
+                  value="overview"
+                  className="px-5 py-2.5 rounded-xl text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-500 data-[state=active]:to-cyan-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all font-semibold"
+                >
+                  <PieChartIcon className="w-4 h-4 mr-2" />
+                  Overview
+                </TabsTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Budget summary, charts, and break-even analysis at a glance</TooltipContent>
+            </UITooltip>
+            <UITooltip>
+              <TooltipTrigger asChild>
+                <TabsTrigger
+                  value="manage"
+                  className="px-5 py-2.5 rounded-xl text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-500 data-[state=active]:to-cyan-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all font-semibold"
+                >
+                  <Edit2 className="w-4 h-4 mr-2" />
+                  Manage Items
+                </TabsTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Add, edit, and remove budget line items across all categories</TooltipContent>
+            </UITooltip>
+            <UITooltip>
+              <TooltipTrigger asChild>
+                <TabsTrigger
+                  value="analysis"
+                  className="px-5 py-2.5 rounded-xl text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-500 data-[state=active]:to-cyan-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all font-semibold"
+                >
+                  <BarChart3 className="w-4 h-4 mr-2" />
+                  Analysis
+                </TabsTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Break-even timeline, charts, and 2-year financial projections</TooltipContent>
+            </UITooltip>
           </TabsList>
 
           {/* Overview Tab */}
@@ -1465,508 +1459,264 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
               monthlyNetIncome={monthlyNetIncome}
               currency={currency}
               formatCurrency={formatCurrency}
-              BreakEvenCard={BreakEvenCard}
-              ModernCharts={ModernCharts}
+              breakEvenCard={breakEvenEl}
+              modernCharts={modernChartsEl}
             />
 
             {/* Budget Tables */}
-            <div className="space-y-8">
+            <div className="space-y-6">
               {/* Startup Costs */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-              >
-                <Card className="shadow-xl border-2 border-gray-200">
-                  <CardHeader className="bg-gradient-to-r from-gray-50 to-white border-b-2 border-gray-200">
-                    <CardTitle className="flex items-center gap-3">
-                      <div className="p-2 bg-indigo-100 rounded-lg">
-                        <DollarSign className="w-5 h-5 text-indigo-600" />
-                      </div>
-                      Startup Costs (One-Time, Pre-Launch)
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    <TableSelectionControls
-                      items={startupCostItems}
-                      selectedItemIds={selectedItemIds}
-                      onToggleAll={(isSelected) => 
-                        onToggleSectionSelection(startupCostItems.map(i => i.id), isSelected)
-                      }
-                      sectionName="Startup Costs"
-                    />
+              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+                <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+                  <div className="px-6 py-4 bg-gradient-to-r from-teal-50 to-cyan-50 border-b border-gray-200/60 flex items-center gap-3">
+                    <div className="p-2 bg-teal-100 rounded-lg"><DollarSign className="w-5 h-5 text-teal-600" /></div>
+                    <h3 className="font-bold text-gray-900">Startup Costs <span className="text-gray-500 font-normal text-sm">(One-Time, Pre-Launch)</span></h3>
+                    <UITooltip>
+                      <TooltipTrigger asChild><HelpCircle className="w-4 h-4 text-gray-400 hover:text-teal-500 cursor-help transition-colors" /></TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[280px]">One-time expenses needed before you can launch — like registration, equipment, and branding</TooltipContent>
+                    </UITooltip>
+                  </div>
+                  <div className="p-6">
+                    <TableSelectionControls items={[...startupCostItems, ...otherExpenses]} selectedItemIds={selectedItemIds} onToggleAll={(s) => onToggleSectionSelection([...startupCostItems, ...otherExpenses].map(i => i.id), s)} sectionName="Startup Costs" />
                     <StartupCostsTable
-                      items={startupCostItems}
-                      onChange={(nextStartupItems) => {
-                        const nextItems: BudgetItem[] = [
-                          ...nextStartupItems,
-                          ...cogsExpenseItems,
-                          ...operatingExpenseItems,
-                          ...payrollExpenseItems,
-                          ...revenues,
-                        ];
-                        handleBudgetUpdate({ items: nextItems });
-                      }}
-                      currency={currency}
-                      selectedItemIds={selectedItemIds}
-                      onToggleItemSelection={onToggleItemSelection}
-                      onToggleAllSelection={(isSelected) =>
-                        onToggleSectionSelection(startupCostItems.map((i) => i.id), isSelected)
-                      }
-                      onAddLineItem={openAddLineItemModal}
-                      onRemoveItem={openRemoveModal}
+                      items={[...startupCostItems, ...otherExpenses]}
+                      onChange={(next) => handleBudgetUpdate({ items: [...next, ...cogsExpenseItems, ...operatingExpenseItems, ...payrollExpenseItems, ...revenues] })}
+                      currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection}
+                      onToggleAllSelection={(s) => onToggleSectionSelection([...startupCostItems, ...otherExpenses].map(i => i.id), s)}
+                      onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal}
                     />
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </motion.div>
 
               {/* Startup Funds */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.1 }}
-              >
-                <Card className="shadow-xl border-2 border-gray-200">
-                  <CardHeader className="bg-gradient-to-r from-emerald-50 to-white border-b-2 border-gray-200">
-                    <CardTitle className="flex items-center gap-3">
-                      <div className="p-2 bg-emerald-100 rounded-lg">
-                        <DollarSign className="w-5 h-5 text-emerald-600" />
+              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.05 }}>
+                <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+                  <div className="px-6 py-4 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-gray-200/60 flex items-center gap-3">
+                    <div className="p-2 bg-emerald-100 rounded-lg"><DollarSign className="w-5 h-5 text-emerald-600" /></div>
+                    <h3 className="font-bold text-gray-900">Startup Funds <span className="text-gray-500 font-normal text-sm">(Initial Investment)</span></h3>
+                    <UITooltip>
+                      <TooltipTrigger asChild><HelpCircle className="w-4 h-4 text-gray-400 hover:text-emerald-500 cursor-help transition-colors" /></TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[280px]">How much money you have to start. Remaining = Investment − Startup Costs spent so far</TooltipContent>
+                    </UITooltip>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    <div className="p-4 bg-gray-50/80 rounded-xl border border-gray-100">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Initial Investment</p>
+                        <UITooltip>
+                          <TooltipTrigger asChild><HelpCircle className="w-3.5 h-3.5 text-gray-400 hover:text-teal-500 cursor-help" /></TooltipTrigger>
+                          <TooltipContent side="right" className="max-w-[240px]">Total capital you're putting into the business to get started</TooltipContent>
+                        </UITooltip>
                       </div>
-                      Startup Funds (Initial Investment)
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    <div className="space-y-4">
-                      <div className="p-4 bg-gradient-to-br from-gray-50 to-white rounded-2xl border-2 border-gray-200">
-                        <p className="text-sm font-medium text-gray-600 mb-2">Initial Investment</p>
-                        <CurrencyInput
-                          value={budget.initial_investment}
-                          onChange={(value) => handleBudgetUpdate({ initial_investment: value })}
-                          min={0}
-                          step={100}
-                          getSmartStep={getSmartStepForInitialInvestment}
-                          className="w-full text-2xl font-bold"
-                        />
+                      <CurrencyInput value={budget.initial_investment} onChange={(v) => handleBudgetUpdate({ initial_investment: v })} min={0} step={100} getSmartStep={getSmartStepForInitialInvestment} className="w-full text-2xl font-bold" />
+                    </div>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="p-4 bg-teal-50/60 rounded-xl border border-teal-200/60">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Expenses To Date</p>
+                          <UITooltip>
+                            <TooltipTrigger asChild><HelpCircle className="w-3.5 h-3.5 text-gray-400 hover:text-teal-500 cursor-help" /></TooltipTrigger>
+                            <TooltipContent side="right" className="max-w-[240px]">Sum of all actual amounts entered in Startup Costs above</TooltipContent>
+                          </UITooltip>
+                        </div>
+                        <p className="text-2xl font-extrabold text-teal-700">{formatCurrency(startupActualTotal, currency)}</p>
                       </div>
-
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div className="p-4 bg-gradient-to-br from-blue-50 to-white rounded-2xl border-2 border-blue-200">
-                          <p className="text-sm font-medium text-gray-600 mb-1">Expenses To Date</p>
-                          <p className="text-2xl font-bold text-blue-700">
-                            {formatCurrency(startupActualTotal, currency)}
-                          </p>
+                      <div className={`p-4 rounded-xl border ${remainingStartupFunds >= 0 ? 'bg-emerald-50/60 border-emerald-200/60' : 'bg-red-50/60 border-red-200/60'}`}>
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Remaining Funds</p>
+                          <UITooltip>
+                            <TooltipTrigger asChild><HelpCircle className="w-3.5 h-3.5 text-gray-400 hover:text-teal-500 cursor-help" /></TooltipTrigger>
+                            <TooltipContent side="right" className="max-w-[240px]">Initial Investment − Expenses To Date. Red if overspent</TooltipContent>
+                          </UITooltip>
                         </div>
-
-                        <div className={`p-4 rounded-2xl border-2 ${
-                          remainingStartupFunds >= 0
-                            ? 'bg-gradient-to-br from-emerald-50 to-white border-emerald-200'
-                            : 'bg-gradient-to-br from-red-50 to-white border-red-200'
-                        }`}>
-                          <p className="text-sm font-medium text-gray-600 mb-1">Remaining Funds</p>
-                          <p className={`text-2xl font-bold ${
-                            remainingStartupFunds >= 0 ? 'text-emerald-700' : 'text-red-700'
-                          }`}>
-                            {formatCurrency(remainingStartupFunds, currency)}
-                          </p>
-                        </div>
+                        <p className={`text-2xl font-extrabold ${remainingStartupFunds >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatCurrency(remainingStartupFunds, currency)}</p>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </motion.div>
 
               {/* Monthly Revenue */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
-              >
-                <Card className="shadow-xl border-2 border-gray-200">
-                  <CardHeader className="bg-gradient-to-r from-green-50 to-white border-b-2 border-gray-200">
-                    <CardTitle className="flex items-center gap-3">
-                      <div className="p-2 bg-green-100 rounded-lg">
-                        <TrendingUp className="w-5 h-5 text-green-600" />
-                      </div>
-                      Monthly Revenue Projection
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
+              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }}>
+                <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+                  <div className="px-6 py-4 bg-gradient-to-r from-emerald-50 to-green-50 border-b border-gray-200/60 flex items-center gap-3">
+                    <div className="p-2 bg-emerald-100 rounded-lg"><TrendingUp className="w-5 h-5 text-emerald-600" /></div>
+                    <h3 className="font-bold text-gray-900">Monthly Revenue Projection</h3>
+                    <UITooltip>
+                      <TooltipTrigger asChild><HelpCircle className="w-4 h-4 text-gray-400 hover:text-emerald-500 cursor-help transition-colors" /></TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[280px]">Projected monthly income. Price × Volume = Revenue per stream. Total feeds into break-even analysis</TooltipContent>
+                    </UITooltip>
+                  </div>
+                  <div className="p-6">
                     {loadingRevenueStreams ? (
-                      <div className="flex items-center justify-center py-12">
-                        <Loader className="animate-spin w-8 h-8 text-indigo-600" />
-                      </div>
+                      <div className="flex items-center justify-center py-12"><Loader className="animate-spin w-7 h-7 text-teal-600" /></div>
                     ) : (
-                      <RevenueTable
-                        items={dynamicRevenueStreams}
-                        onRevenueStreamsChange={handleRevenueStreamsChange}
-                        onTotalMonthlyRevenueChange={setTotalMonthlyRevenue}
-                        currency={currency}
-                        selectedItemIds={selectedItemIds}
-                        onToggleItemSelection={onToggleItemSelection}
-                        onToggleAllSelection={(itemIds, isSelected) => onToggleSectionSelection(itemIds, isSelected)}
-                        onAddLineItem={openAddLineItemModal}
-                      />
+                      <RevenueTable items={dynamicRevenueStreams} onRevenueStreamsChange={handleRevenueStreamsChange} onTotalMonthlyRevenueChange={setTotalMonthlyRevenue} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(ids, s) => onToggleSectionSelection(ids, s)} onAddLineItem={openAddLineItemModal} />
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </motion.div>
 
               {/* Monthly Operating Expenses */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.3 }}
-              >
-                <Card className="shadow-xl border-2 border-gray-200">
-                  <CardHeader className="bg-gradient-to-r from-amber-50 to-white border-b-2 border-gray-200">
-                    <CardTitle className="flex items-center gap-3">
-                      <div className="p-2 bg-amber-100 rounded-lg">
-                        <Calendar className="w-5 h-5 text-amber-600" />
-                      </div>
-                      Monthly Operating Expenses (Post-Launch)
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    <OperatingExpensesTable
-                      items={operatingExpenseItems}
-                      onChange={(nextOperatingItems) => {
-                        const nextItems: BudgetItem[] = [
-                          ...startupCostItems,
-                          ...cogsExpenseItems,
-                          ...nextOperatingItems,
-                          ...payrollExpenseItems,
-                          ...revenues,
-                        ];
-                        handleBudgetUpdate({ items: nextItems });
-                      }}
-                      currency={currency}
-                      selectedItemIds={selectedItemIds}
-                      onToggleItemSelection={onToggleItemSelection}
-                      onToggleAllSelection={(isSelected) =>
-                        onToggleSectionSelection(operatingExpenseItems.map((i) => i.id), isSelected)
-                      }
-                      onAddLineItem={openAddLineItemModal}
-                      onRemoveItem={openRemoveModal}
-                    />
-                  </CardContent>
-                </Card>
+              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.15 }}>
+                <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+                  <div className="px-6 py-4 bg-gradient-to-r from-amber-50 to-yellow-50 border-b border-gray-200/60 flex items-center gap-3">
+                    <div className="p-2 bg-amber-100 rounded-lg"><Calendar className="w-5 h-5 text-amber-600" /></div>
+                    <h3 className="font-bold text-gray-900">Monthly Operating Expenses <span className="text-gray-500 font-normal text-sm">(Post-Launch)</span></h3>
+                    <UITooltip>
+                      <TooltipTrigger asChild><HelpCircle className="w-4 h-4 text-gray-400 hover:text-amber-500 cursor-help transition-colors" /></TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[280px]">Recurring monthly costs to keep your business running — rent, marketing, software, etc.</TooltipContent>
+                    </UITooltip>
+                  </div>
+                  <div className="p-6">
+                    <OperatingExpensesTable items={operatingExpenseItems} onChange={(next) => handleBudgetUpdate({ items: [...startupCostItems, ...cogsExpenseItems, ...next, ...payrollExpenseItems, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection(operatingExpenseItems.map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} />
+                  </div>
+                </div>
               </motion.div>
 
               {/* Monthly Payroll */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.4 }}
-              >
-                <Card className="shadow-xl border-2 border-gray-200">
-                  <CardHeader className="bg-gradient-to-r from-purple-50 to-white border-b-2 border-gray-200">
-                    <CardTitle className="flex items-center gap-3">
-                      <div className="p-2 bg-purple-100 rounded-lg">
-                        <FileText className="w-5 h-5 text-purple-600" />
-                      </div>
-                      Monthly Payroll, Contractor & Associated Costs
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    <PayrollCostsTable
-                      items={payrollExpenseItems}
-                      onChange={(nextPayrollItems) => {
-                        const nextItems: BudgetItem[] = [
-                          ...startupCostItems,
-                          ...cogsExpenseItems,
-                          ...operatingExpenseItems,
-                          ...nextPayrollItems,
-                          ...revenues,
-                        ];
-                        handleBudgetUpdate({ items: nextItems });
-                      }}
-                      currency={currency}
-                      selectedItemIds={selectedItemIds}
-                      onToggleItemSelection={onToggleItemSelection}
-                      onToggleAllSelection={(isSelected) =>
-                        onToggleSectionSelection(payrollExpenseItems.map((i) => i.id), isSelected)
-                      }
-                      onAddLineItem={openAddLineItemModal}
-                      onRemoveItem={openRemoveModal}
-                    />
-                  </CardContent>
-                </Card>
+              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.2 }}>
+                <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+                  <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-cyan-50 border-b border-gray-200/60 flex items-center gap-3">
+                    <div className="p-2 bg-blue-100 rounded-lg"><FileText className="w-5 h-5 text-blue-600" /></div>
+                    <h3 className="font-bold text-gray-900">Monthly Payroll & Contractors</h3>
+                    <UITooltip>
+                      <TooltipTrigger asChild><HelpCircle className="w-4 h-4 text-gray-400 hover:text-blue-500 cursor-help transition-colors" /></TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[280px]">Monthly people costs — your salary, employee wages, taxes, benefits, and contractor fees</TooltipContent>
+                    </UITooltip>
+                  </div>
+                  <div className="p-6">
+                    <PayrollCostsTable items={payrollExpenseItems} onChange={(next) => handleBudgetUpdate({ items: [...startupCostItems, ...cogsExpenseItems, ...operatingExpenseItems, ...next, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection(payrollExpenseItems.map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} />
+                  </div>
+                </div>
               </motion.div>
 
               {/* Monthly COGS */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.5 }}
-              >
-                <Card className="shadow-xl border-2 border-gray-200">
-                  <CardHeader className="bg-gradient-to-r from-pink-50 to-white border-b-2 border-gray-200">
-                    <CardTitle className="flex items-center gap-3">
-                      <div className="p-2 bg-pink-100 rounded-lg">
-                        <Calculator className="w-5 h-5 text-pink-600" />
-                      </div>
-                      Monthly Cost of Goods Sold (COGS)
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    <COGSTable
-                      items={cogsExpenseItems}
-                      onChange={(nextCogsItems) => {
-                        const nextItems: BudgetItem[] = [
-                          ...startupCostItems,
-                          ...nextCogsItems,
-                          ...operatingExpenseItems,
-                          ...payrollExpenseItems,
-                          ...revenues,
-                        ];
-                        handleBudgetUpdate({ items: nextItems });
-                      }}
-                      currency={currency}
-                      selectedItemIds={selectedItemIds}
-                      onToggleItemSelection={onToggleItemSelection}
-                      onToggleAllSelection={(isSelected) =>
-                        onToggleSectionSelection(cogsExpenseItems.map((i) => i.id), isSelected)
-                      }
-                      onAddLineItem={openAddLineItemModal}
-                      onRemoveItem={openRemoveModal}
-                    />
-                  </CardContent>
-                </Card>
+              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.25 }}>
+                <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+                  <div className="px-6 py-4 bg-gradient-to-r from-rose-50 to-pink-50 border-b border-gray-200/60 flex items-center gap-3">
+                    <div className="p-2 bg-rose-100 rounded-lg"><Calculator className="w-5 h-5 text-rose-600" /></div>
+                    <h3 className="font-bold text-gray-900">Cost of Goods Sold <span className="text-gray-500 font-normal text-sm">(COGS)</span></h3>
+                    <UITooltip>
+                      <TooltipTrigger asChild><HelpCircle className="w-4 h-4 text-gray-400 hover:text-rose-500 cursor-help transition-colors" /></TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[280px]">Direct costs to produce your product — materials, packaging, shipping, payment fees</TooltipContent>
+                    </UITooltip>
+                  </div>
+                  <div className="p-6">
+                    <COGSTable items={cogsExpenseItems} onChange={(next) => handleBudgetUpdate({ items: [...startupCostItems, ...next, ...operatingExpenseItems, ...payrollExpenseItems, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection(cogsExpenseItems.map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} />
+                  </div>
+                </div>
               </motion.div>
             </div>
           </TabsContent>
 
           {/* Manage Tab */}
-          <TabsContent value="manage" className="mt-8 space-y-8">
-            <div className="text-center mb-8">
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">Manage Your Budget Items</h3>
-              <p className="text-gray-600">Edit line items across all budget categories</p>
+          <TabsContent value="manage" className="mt-8 space-y-6">
+            <div className="text-center mb-6">
+              <h3 className="text-2xl font-bold text-gray-900 mb-1">Manage Your Budget Items</h3>
+              <p className="text-sm text-gray-500">Add, edit and remove line items across all budget categories</p>
             </div>
 
-            {/* Same tables as Overview but in manage mode */}
-            <div className="space-y-8">
+            <div className="space-y-6">
               {/* Startup Costs Management */}
-              <Card className="shadow-xl border-2 border-gray-200">
-                <CardHeader className="bg-gradient-to-r from-gray-50 to-white border-b-2 border-gray-200">
-                  <CardTitle>Startup Costs</CardTitle>
-                </CardHeader>
-                <CardContent className="p-6">
-                  <StartupCostsTable
-                    items={startupCostItems}
-                    onChange={(nextStartupItems) => {
-                      const nextItems: BudgetItem[] = [
-                        ...nextStartupItems,
-                        ...cogsExpenseItems,
-                        ...operatingExpenseItems,
-                        ...payrollExpenseItems,
-                        ...revenues,
-                      ];
-                      handleBudgetUpdate({ items: nextItems });
-                    }}
-                    currency={currency}
-                    selectedItemIds={selectedItemIds}
-                    onToggleItemSelection={onToggleItemSelection}
-                    onToggleAllSelection={(isSelected) =>
-                      onToggleSectionSelection(startupCostItems.map((i) => i.id), isSelected)
-                    }
-                    onAddLineItem={openAddLineItemModal}
-                    onRemoveItem={openRemoveModal}
-                  />
-                </CardContent>
-              </Card>
+              <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+                <div className="px-6 py-4 bg-gradient-to-r from-teal-50 to-cyan-50 border-b border-gray-200/60">
+                  <h3 className="font-bold text-gray-900">Startup Costs</h3>
+                </div>
+                <div className="p-6">
+                  <StartupCostsTable items={[...startupCostItems, ...otherExpenses]} onChange={(next) => handleBudgetUpdate({ items: [...next, ...cogsExpenseItems, ...operatingExpenseItems, ...payrollExpenseItems, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection([...startupCostItems, ...otherExpenses].map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} />
+                </div>
+              </div>
 
               {/* Revenue Management */}
-              <Card className="shadow-xl border-2 border-gray-200">
-                <CardHeader className="bg-gradient-to-r from-green-50 to-white border-b-2 border-gray-200">
-                  <CardTitle>Monthly Revenue</CardTitle>
-                </CardHeader>
-                <CardContent className="p-6">
+              <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+                <div className="px-6 py-4 bg-gradient-to-r from-emerald-50 to-green-50 border-b border-gray-200/60">
+                  <h3 className="font-bold text-gray-900">Monthly Revenue</h3>
+                </div>
+                <div className="p-6">
                   {loadingRevenueStreams ? (
-                    <div className="flex items-center justify-center py-12">
-                      <Loader className="animate-spin w-8 h-8 text-indigo-600" />
-                    </div>
+                    <div className="flex items-center justify-center py-12"><Loader className="animate-spin w-7 h-7 text-teal-600" /></div>
                   ) : (
-                    <RevenueTable
-                      items={dynamicRevenueStreams}
-                      onRevenueStreamsChange={handleRevenueStreamsChange}
-                      onTotalMonthlyRevenueChange={setTotalMonthlyRevenue}
-                      currency={currency}
-                      selectedItemIds={selectedItemIds}
-                      onToggleItemSelection={onToggleItemSelection}
-                      onToggleAllSelection={(itemIds, isSelected) => onToggleSectionSelection(itemIds, isSelected)}
-                      onAddLineItem={openAddLineItemModal}
-                    />
+                    <RevenueTable items={dynamicRevenueStreams} onRevenueStreamsChange={handleRevenueStreamsChange} onTotalMonthlyRevenueChange={setTotalMonthlyRevenue} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(ids, s) => onToggleSectionSelection(ids, s)} onAddLineItem={openAddLineItemModal} />
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
               {/* Operating Expenses Management */}
-              <Card className="shadow-xl border-2 border-gray-200">
-                <CardHeader className="bg-gradient-to-r from-amber-50 to-white border-b-2 border-gray-200">
-                  <CardTitle>Monthly Operating Expenses</CardTitle>
-                </CardHeader>
-                <CardContent className="p-6">
-                  <OperatingExpensesTable
-                    items={operatingExpenseItems}
-                    onChange={(nextOperatingItems) => {
-                      const nextItems: BudgetItem[] = [
-                        ...startupCostItems,
-                        ...cogsExpenseItems,
-                        ...nextOperatingItems,
-                        ...payrollExpenseItems,
-                        ...revenues,
-                      ];
-                      handleBudgetUpdate({ items: nextItems });
-                    }}
-                    currency={currency}
-                    selectedItemIds={selectedItemIds}
-                    onToggleItemSelection={onToggleItemSelection}
-                    onToggleAllSelection={(isSelected) =>
-                      onToggleSectionSelection(operatingExpenseItems.map((i) => i.id), isSelected)
-                    }
-                    onAddLineItem={openAddLineItemModal}
-                    onRemoveItem={openRemoveModal}
-                  />
-                </CardContent>
-              </Card>
+              <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+                <div className="px-6 py-4 bg-gradient-to-r from-amber-50 to-yellow-50 border-b border-gray-200/60">
+                  <h3 className="font-bold text-gray-900">Monthly Operating Expenses</h3>
+                </div>
+                <div className="p-6">
+                  <OperatingExpensesTable items={operatingExpenseItems} onChange={(next) => handleBudgetUpdate({ items: [...startupCostItems, ...cogsExpenseItems, ...next, ...payrollExpenseItems, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection(operatingExpenseItems.map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} />
+                </div>
+              </div>
 
               {/* Payroll Management */}
-              <Card className="shadow-xl border-2 border-gray-200">
-                <CardHeader className="bg-gradient-to-r from-purple-50 to-white border-b-2 border-gray-200">
-                  <CardTitle>Monthly Payroll</CardTitle>
-                </CardHeader>
-                <CardContent className="p-6">
-                  <PayrollCostsTable
-                    items={payrollExpenseItems}
-                    onChange={(nextPayrollItems) => {
-                      const nextItems: BudgetItem[] = [
-                        ...startupCostItems,
-                        ...cogsExpenseItems,
-                        ...operatingExpenseItems,
-                        ...nextPayrollItems,
-                        ...revenues,
-                      ];
-                      handleBudgetUpdate({ items: nextItems });
-                    }}
-                    currency={currency}
-                    selectedItemIds={selectedItemIds}
-                    onToggleItemSelection={onToggleItemSelection}
-                    onToggleAllSelection={(isSelected) =>
-                      onToggleSectionSelection(payrollExpenseItems.map((i) => i.id), isSelected)
-                    }
-                    onAddLineItem={openAddLineItemModal}
-                    onRemoveItem={openRemoveModal}
-                  />
-                </CardContent>
-              </Card>
+              <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+                <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-cyan-50 border-b border-gray-200/60">
+                  <h3 className="font-bold text-gray-900">Monthly Payroll & Contractors</h3>
+                </div>
+                <div className="p-6">
+                  <PayrollCostsTable items={payrollExpenseItems} onChange={(next) => handleBudgetUpdate({ items: [...startupCostItems, ...cogsExpenseItems, ...operatingExpenseItems, ...next, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection(payrollExpenseItems.map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} />
+                </div>
+              </div>
 
               {/* COGS Management */}
-              <Card className="shadow-xl border-2 border-gray-200">
-                <CardHeader className="bg-gradient-to-r from-pink-50 to-white border-b-2 border-gray-200">
-                  <CardTitle>Monthly COGS</CardTitle>
-                </CardHeader>
-                <CardContent className="p-6">
-                  <COGSTable
-                    items={cogsExpenseItems}
-                    onChange={(nextCogsItems) => {
-                      const nextItems: BudgetItem[] = [
-                        ...startupCostItems,
-                        ...nextCogsItems,
-                        ...operatingExpenseItems,
-                        ...payrollExpenseItems,
-                        ...revenues,
-                      ];
-                      handleBudgetUpdate({ items: nextItems });
-                    }}
-                    currency={currency}
-                    selectedItemIds={selectedItemIds}
-                    onToggleItemSelection={onToggleItemSelection}
-                    onToggleAllSelection={(isSelected) =>
-                      onToggleSectionSelection(cogsExpenseItems.map((i) => i.id), isSelected)
-                    }
-                    onAddLineItem={openAddLineItemModal}
-                    onRemoveItem={openRemoveModal}
-                  />
-                </CardContent>
-              </Card>
+              <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+                <div className="px-6 py-4 bg-gradient-to-r from-rose-50 to-pink-50 border-b border-gray-200/60">
+                  <h3 className="font-bold text-gray-900">Cost of Goods Sold (COGS)</h3>
+                </div>
+                <div className="p-6">
+                  <COGSTable items={cogsExpenseItems} onChange={(next) => handleBudgetUpdate({ items: [...startupCostItems, ...next, ...operatingExpenseItems, ...payrollExpenseItems, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection(cogsExpenseItems.map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} />
+                </div>
+              </div>
             </div>
           </TabsContent>
 
           {/* Analysis Tab */}
-          <TabsContent value="analysis" className="mt-8 space-y-8">
+          <TabsContent value="analysis" className="mt-8 space-y-6">
             {/* Break-Even Analysis */}
-            <BreakEvenCard />
+            {breakEvenEl}
 
             {/* Charts */}
-            <ModernCharts />
+            {modernChartsEl}
 
             {/* 2-Year Projection */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <Card className="shadow-xl border-2 border-gray-200">
-                <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b-2 border-gray-200">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-indigo-100 rounded-lg">
-                      <Calendar className="w-6 h-6 text-indigo-600" />
-                    </div>
-                    <div>
-                      <CardTitle>2-Year Financial Projection</CardTitle>
-                      <CardDescription>Revenue, costs, and net profit forecast</CardDescription>
-                    </div>
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+              <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+                <div className="px-6 py-4 bg-gradient-to-r from-teal-50 to-cyan-50 border-b border-gray-200/60 flex items-center gap-3">
+                  <div className="p-2 bg-teal-100 rounded-lg"><Calendar className="w-5 h-5 text-teal-600" /></div>
+                  <div>
+                    <h3 className="font-bold text-gray-900">2-Year Financial Projection</h3>
+                    <p className="text-xs text-gray-500">Revenue, costs, and net profit forecast</p>
                   </div>
-                </CardHeader>
-                <CardContent className="p-6">
+                </div>
+                <div className="p-6">
                   <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="p-4 bg-gradient-to-br from-emerald-50 to-white rounded-2xl border-2 border-emerald-200">
-                      <p className="text-sm font-medium text-gray-600 mb-1">24-Month Revenue</p>
-                      <p className="text-2xl font-bold text-emerald-700">
-                        {formatCurrency(twoYearProjection.revenue24, currency)}
-                      </p>
+                    <div className="p-4 bg-emerald-50/60 rounded-xl border border-emerald-200/60">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">24-Month Revenue</p>
+                      <p className="text-2xl font-extrabold text-emerald-600">{formatCurrency(twoYearProjection.revenue24, currency)}</p>
                     </div>
-
-                    <div className="p-4 bg-gradient-to-br from-red-50 to-white rounded-2xl border-2 border-red-200">
-                      <p className="text-sm font-medium text-gray-600 mb-1">24-Month Costs</p>
-                      <p className="text-2xl font-bold text-red-700">
-                        {formatCurrency(twoYearProjection.costs24, currency)}
-                      </p>
+                    <div className="p-4 bg-red-50/60 rounded-xl border border-red-200/60">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">24-Month Costs</p>
+                      <p className="text-2xl font-extrabold text-red-600">{formatCurrency(twoYearProjection.costs24, currency)}</p>
                     </div>
-
-                    <div className={`p-4 rounded-2xl border-2 ${
-                      twoYearProjection.net24 >= 0
-                        ? 'bg-gradient-to-br from-blue-50 to-white border-blue-200'
-                        : 'bg-gradient-to-br from-orange-50 to-white border-orange-200'
-                    }`}>
-                      <p className="text-sm font-medium text-gray-600 mb-1">24-Month Net</p>
-                      <p className={`text-2xl font-bold ${
-                        twoYearProjection.net24 >= 0 ? 'text-blue-700' : 'text-orange-700'
-                      }`}>
-                        {formatCurrency(twoYearProjection.net24, currency)}
-                      </p>
+                    <div className={`p-4 rounded-xl border ${twoYearProjection.net24 >= 0 ? 'bg-teal-50/60 border-teal-200/60' : 'bg-orange-50/60 border-orange-200/60'}`}>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">24-Month Net</p>
+                      <p className={`text-2xl font-extrabold ${twoYearProjection.net24 >= 0 ? 'text-teal-600' : 'text-orange-600'}`}>{formatCurrency(twoYearProjection.net24, currency)}</p>
                     </div>
-
-                    <div className={`p-4 rounded-2xl border-2 ${
-                      twoYearProjection.netAfterStartup24 >= 0
-                        ? 'bg-gradient-to-br from-emerald-50 to-white border-emerald-200'
-                        : 'bg-gradient-to-br from-red-50 to-white border-red-200'
-                    }`}>
-                      <p className="text-sm font-medium text-gray-600 mb-1">Net After Startup</p>
-                      <p className={`text-2xl font-bold ${
-                        twoYearProjection.netAfterStartup24 >= 0 ? 'text-emerald-700' : 'text-red-700'
-                      }`}>
-                        {formatCurrency(twoYearProjection.netAfterStartup24, currency)}
-                      </p>
+                    <div className={`p-4 rounded-xl border ${twoYearProjection.netAfterStartup24 >= 0 ? 'bg-emerald-50/60 border-emerald-200/60' : 'bg-red-50/60 border-red-200/60'}`}>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Net After Startup</p>
+                      <p className={`text-2xl font-extrabold ${twoYearProjection.netAfterStartup24 >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatCurrency(twoYearProjection.netAfterStartup24, currency)}</p>
                     </div>
                   </div>
-
-                  <div className="mt-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
-                    <p className="text-xs text-gray-600">
-                      <strong>Calculation:</strong> (24-month revenue - 24-month operating costs) - total startup costs
-                    </p>
+                  <div className="mt-5 p-3 bg-gray-50/80 rounded-lg border border-gray-100 text-xs text-gray-500">
+                    <strong className="text-gray-600">Formula:</strong> (24-month revenue − 24-month operating costs) − total startup costs
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </motion.div>
           </TabsContent>
         </Tabs>
@@ -1988,11 +1738,12 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       <AddLineItemModal
           isOpen={isAddLineItemModalOpen}
           onClose={closeAddLineItemModal}
-          onAddExpenseItem={(item) => {
-            handleAddItem(item);
+          onAddExpenseItem={async (item) => {
+            const sub = addLineItemCategory !== 'revenue' ? addLineItemCategory ?? undefined : undefined;
+            await handleAddItem(item, sub);
           }}
-          onAddRevenueStream={(payload) => {
-            const id = `custom-${payload.name.trim().toLowerCase().replace(/\s+/g, '-')}-${dynamicRevenueStreams.length}`;
+          onAddRevenueStream={async (payload) => {
+            const id = `custom-${payload.name.trim().toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`;
             const projection = payload.estimatedPrice * payload.estimatedVolume;
 
             const newStream: RevenueStream = {
@@ -2006,16 +1757,15 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
               category: 'revenue',
             };
 
-            setDynamicRevenueStreams((prev) => {
-              const next = [...prev, newStream];
-              saveRevenueStreamsDebounced(next);
-              setTotalMonthlyRevenue(
-                next.filter((s) => s.isSelected).reduce((sum, s) => sum + s.revenueProjection, 0)
-              );
-              return next;
-            });
+            const next = [...dynamicRevenueStreams, newStream];
+            setDynamicRevenueStreams(next);
+            setTotalMonthlyRevenue(
+              next.filter((s) => s.isSelected).reduce((sum, s) => sum + s.revenueProjection, 0)
+            );
+            // Save ALL revenue streams to DB immediately and await it
+            await saveRevenueStreamsDirect(next);
           }}
-          category={addLineItemCategory}
+          category={addLineItemCategory || 'startup_cost'}
           existingItems={
             addLineItemCategory === 'revenue'
               ? dynamicRevenueStreams
@@ -2040,8 +1790,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         isCustom={removeModalState.isCustom}
       />
       
-      {/* Sticky Go to Roadmap Button */}
-      <StickyRoadmapButton handleGoToRoadmap={handleGoToRoadmap} />
+      {/* Roadmap CTA is now in the BudgetDashboardHeader */}
     </div>
   );
 };

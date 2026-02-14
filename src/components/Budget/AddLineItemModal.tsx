@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Loader2 } from 'lucide-react';
 import type { BudgetItem, RevenueStream } from '@/types/apiTypes';
 import { formatCurrency } from '@/lib/utils';
 import { toast } from 'react-toastify';
@@ -24,8 +25,8 @@ type AddRevenueStreamPayload = {
 interface AddLineItemModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAddExpenseItem: (item: Omit<BudgetItem, 'id' | 'created_at' | 'updated_at'>) => void;
-  onAddRevenueStream: (stream: AddRevenueStreamPayload) => void;
+  onAddExpenseItem: (item: Omit<BudgetItem, 'id' | 'created_at' | 'updated_at'>) => Promise<void> | void;
+  onAddRevenueStream: (stream: AddRevenueStreamPayload) => Promise<void> | void;
   category: 'startup_cost' | 'operating_expense' | 'payroll' | 'cogs' | 'revenue';
   existingItems: (BudgetItem | RevenueStream)[]; // Used for name uniqueness validation
   currency: string;
@@ -52,6 +53,7 @@ const AddLineItemModal: React.FC<AddLineItemModalProps> = ({
   const [estimatedPrice, setEstimatedPrice] = useState('');
   const [estimatedVolume, setEstimatedVolume] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const existingNames = useMemo(() => {
     return new Set(
@@ -69,6 +71,7 @@ const AddLineItemModal: React.FC<AddLineItemModalProps> = ({
       setEstimatedPrice('');
       setEstimatedVolume('');
       setErrors({});
+      setIsSubmitting(false);
     }
   }, [isOpen]);
 
@@ -101,45 +104,54 @@ const AddLineItemModal: React.FC<AddLineItemModalProps> = ({
     return Object.keys(next).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
+
+    setIsSubmitting(true);
 
     const description = notes.trim() ? notes.trim() : undefined;
     const trimmedName = name.trim();
 
-    if (isRevenue) {
-      const p = Number(estimatedPrice);
-      const v = Number(estimatedVolume);
-      const projection = p * v;
+    try {
+      if (isRevenue) {
+        const p = Number(estimatedPrice);
+        const v = Number(estimatedVolume);
+        const projection = p * v;
 
-      onAddRevenueStream({
+        await onAddRevenueStream({
+          name: trimmedName,
+          estimatedPrice: p,
+          estimatedVolume: v,
+          description,
+        });
+
+        toast.success(
+          `Custom revenue stream "${trimmedName}" added with projection ${formatCurrency(projection, currency)}`
+        );
+        onClose();
+        return;
+      }
+
+      const a = Number(amount);
+      await onAddExpenseItem({
         name: trimmedName,
-        estimatedPrice: p,
-        estimatedVolume: v,
+        category: 'expense',
+        estimated_amount: a,
+        actual_amount: undefined,
         description,
+        is_custom: true,
+        isSelected: true,
       });
 
-      toast.success(
-        `Custom revenue stream "${trimmedName}" added with projection ${formatCurrency(projection, currency)}`
-      );
+      toast.success(`Custom line item "${trimmedName}" added for ${formatCurrency(a, currency)}`);
       onClose();
-      return;
+    } catch (error) {
+      // Error is already handled by the parent's toast
+      console.error('Failed to add item:', error);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    const a = Number(amount);
-    onAddExpenseItem({
-      name: trimmedName,
-      category: 'expense',
-      estimated_amount: a,
-      actual_amount: undefined,
-      description,
-      is_custom: true,
-      isSelected: true,
-    });
-
-    toast.success(`Custom line item "${trimmedName}" added for ${formatCurrency(a, currency)}`);
-    onClose();
   };
 
   const getTitle = () => {
@@ -244,10 +256,23 @@ const AddLineItemModal: React.FC<AddLineItemModalProps> = ({
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button type="submit">Add Item</Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white min-w-[100px]"
+            >
+              {isSubmitting ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Adding...
+                </span>
+              ) : (
+                'Add Item'
+              )}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

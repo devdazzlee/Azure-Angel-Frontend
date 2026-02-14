@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -234,14 +234,24 @@ const Implementation: React.FC<ImplementationProps> = ({
     }
   };
 
-  const loadBudget = async () => {
-    if (budgetLoading || budget) return;
+  const budgetLoadedRef = useRef(false);
+  const loadBudget = async (forceRefresh = false) => {
+    if (budgetLoading) return;
+    // Skip if already loaded, unless force refresh
+    if (!forceRefresh && budgetLoadedRef.current && budget) return;
     try {
       setBudgetLoading(true);
+      console.log('[loadBudget] Fetching budget from DB for session:', sessionId);
       const response = await budgetService.getBudget(sessionId);
-      if (response.success) {
-        setBudget(response.result);
+      console.log('[loadBudget] Response:', { success: response.success, itemsCount: response.result?.items?.length ?? 0, budgetId: response.result?.id });
+      
+      if (response.success && response.result) {
+        const result = response.result;
+        // Backend now always returns a valid budget via _ensure_budget_exists
+        setBudget(result);
+        budgetLoadedRef.current = true;
       } else {
+        console.warn('[loadBudget] No budget returned, creating one...');
         const created = await budgetService.saveBudget(sessionId, {
           session_id: sessionId,
           initial_investment: 0,
@@ -249,37 +259,44 @@ const Implementation: React.FC<ImplementationProps> = ({
           total_estimated_revenue: 0,
           items: [],
         });
-        if (created.success) {
+        if (created.success && created.result) {
           setBudget(created.result);
+          budgetLoadedRef.current = true;
         } else {
           toast.error(created.message || 'Failed to initialize budget');
           setBudget(null);
         }
       }
     } catch (error) {
-      console.error('Error loading budget:', error);
+      console.error('[loadBudget] Error loading budget:', error);
       toast.error('Failed to load budget');
     } finally {
       setBudgetLoading(false);
     }
   };
 
-  const handleUpdateBudget = (updates: Partial<Budget>) => {
-    if (!budget) return;
+  // handleUpdateBudget — LOCAL STATE ONLY.
+  // Individual CRUD operations (addBudgetItem, updateBudgetItem, deleteBudgetItem,
+  // updateBudgetHeader, saveRevenueStreams) each persist directly to DB.
+  // The manual "Save" button in BudgetDashboard does a full sync when clicked.
+  // NO debounced full-save here — it was causing race conditions that deleted newly-added items.
+  const handleUpdateBudget = useCallback((updates: Partial<Budget>) => {
+    setBudget((prev) => {
+      if (!prev) return prev;
+      const updatedBudget = { ...prev, ...updates, updated_at: new Date().toISOString() };
     
-    const updatedBudget = { ...budget, ...updates, updated_at: new Date().toISOString() };
+      // Recalculate totals from items
+      const expenses = updatedBudget.items.filter(item => item.category === 'expense');
+      const revenues = updatedBudget.items.filter(item => item.category === 'revenue');
     
-    // Recalculate totals
-    const expenses = updatedBudget.items.filter(item => item.category === 'expense');
-    const revenues = updatedBudget.items.filter(item => item.category === 'revenue');
-    
-    updatedBudget.total_estimated_expenses = expenses.reduce((sum, item) => sum + item.estimated_amount, 0);
-    updatedBudget.total_estimated_revenue = revenues.reduce((sum, item) => sum + item.estimated_amount, 0);
-    updatedBudget.total_actual_expenses = expenses.reduce((sum, item) => sum + (item.actual_amount || 0), 0);
-    updatedBudget.total_actual_revenue = revenues.reduce((sum, item) => sum + (item.actual_amount || 0), 0);
-    
-    setBudget(updatedBudget);
-  };
+      updatedBudget.total_estimated_expenses = expenses.reduce((sum, item) => sum + item.estimated_amount, 0);
+      updatedBudget.total_estimated_revenue = revenues.reduce((sum, item) => sum + item.estimated_amount, 0);
+      updatedBudget.total_actual_expenses = expenses.reduce((sum, item) => sum + (item.actual_amount || 0), 0);
+      updatedBudget.total_actual_revenue = revenues.reduce((sum, item) => sum + (item.actual_amount || 0), 0);
+
+      return updatedBudget;
+    });
+  }, []);
 
   const handleAddItem = async (item: Omit<BudgetItem, 'id' | 'created_at' | 'updated_at'>) => {
     if (!budget) return;
@@ -1029,7 +1046,6 @@ const Implementation: React.FC<ImplementationProps> = ({
                 />
               )}
             </motion.button>
-            {/* COMMENTED OUT: Budget tab - temporarily disabled
             <motion.button
               onClick={() => handleTabChange('budget')}
               className={`relative py-4 px-6 font-semibold text-sm rounded-t-xl transition-all duration-300 ${
@@ -1055,7 +1071,6 @@ const Implementation: React.FC<ImplementationProps> = ({
                 />
               )}
             </motion.button>
-            */}
           </div>
         </div>
       </div>
@@ -1156,7 +1171,6 @@ const Implementation: React.FC<ImplementationProps> = ({
             </motion.div>
           )}
           
-          {/* COMMENTED OUT: Budget tab content - temporarily disabled
           {activeTab === 'budget' && mountedTabs.budget && (
             <motion.div
               key="budget"
@@ -1184,6 +1198,7 @@ const Implementation: React.FC<ImplementationProps> = ({
                     showActuals={true}
                     sessionId={sessionId}
                     businessType={businessContext?.business_type}
+                    businessContext={businessContext}
                   />
                 ) : (
                   <div className="text-center py-12">
@@ -1193,7 +1208,7 @@ const Implementation: React.FC<ImplementationProps> = ({
                     <p className="text-lg font-semibold text-gray-700 mb-2">No budget data available</p>
                     <p className="text-sm text-gray-500 mb-5">Create your first budget to start tracking expenses</p>
                     <motion.button
-                      onClick={loadBudget}
+                      onClick={() => loadBudget()}
                       className="bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white px-6 py-2.5 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-300 transform hover:-translate-y-0.5"
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
@@ -1205,7 +1220,6 @@ const Implementation: React.FC<ImplementationProps> = ({
               </div>
             </motion.div>
           )}
-          */}
         </AnimatePresence>
       </div>
 

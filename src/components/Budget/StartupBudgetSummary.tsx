@@ -42,7 +42,7 @@ const StartupBudgetSummary: React.FC<StartupBudgetSummaryProps> = ({
       transition={{ duration: 0.5 }}
       className="w-full max-w-2xl mx-auto" // Center the box and limit its width
     >
-      <Card className="shadow-xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50">
+      <Card className="shadow-xl border border-teal-200/40 bg-gradient-to-br from-teal-50/60 to-cyan-50/60 rounded-xl">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center justify-between text-2xl font-bold text-blue-800">
             Startup Budget Summary

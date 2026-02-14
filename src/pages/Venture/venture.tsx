@@ -2901,18 +2901,18 @@ export default function ChatPage() {
         const totalPhase = QUESTION_COUNTS[phase as keyof typeof QUESTION_COUNTS] || QUESTION_COUNTS.GKY;
         const phasePercent = totalPhase > 0 ? Math.min(Math.round((answeredPhase / totalPhase) * 100), 100) : 0;
 
+        // Overall progress always includes ALL question phases (GKY + BP = 51)
+        const overallTotal = QUESTION_COUNTS.GKY + QUESTION_COUNTS.BUSINESS_PLAN; // Always 51
         let overallAnswered = 0;
-        let overallTotal = 0;
         Object.entries(phaseQuestionSets).forEach(([phaseKey, questions]) => {
           const normalizedPhase = phaseKey.toUpperCase();
           const phaseTotal = QUESTION_COUNTS[normalizedPhase as keyof typeof QUESTION_COUNTS];
           if (phaseTotal) {
             overallAnswered += questions.size;
-            overallTotal += phaseTotal;
           }
         });
-        if (overallTotal === 0) {
-          overallTotal = totalPhase;
+        // Ensure at least current phase answered count
+        if (overallAnswered === 0) {
           overallAnswered = answeredPhase;
         }
         const overallPercent = overallTotal > 0 ? Math.min(Math.round((overallAnswered / overallTotal) * 100), 100) : phasePercent;
@@ -3743,7 +3743,7 @@ export default function ChatPage() {
         }, 100);
       
         // User feedback
-      toast.success(`Returned to Question ${getClientDisplayNumber(previousQuestionNumber, progress.phase) ?? 'previous'}`, {
+      toast.success(`Returned to Question ${previousQuestionNumber ?? 'previous'}`, {
         autoClose: 2000
       });
       } else {
@@ -3761,10 +3761,8 @@ export default function ChatPage() {
     setLoading(true);
     try {
       // Determine transition type based on current phase
-      // COMMENTED OUT: Budget phase - always go to roadmap now
-      // const currentTransitionType = transitionType || 
-      //   (transitionData?.transitionPhase === "PLAN_TO_SUMMARY" ? "summary_to_budget" : "plan_to_roadmap");
-      const currentTransitionType = transitionType || "plan_to_roadmap";
+      const currentTransitionType = transitionType || 
+        (transitionData?.transitionPhase === "PLAN_TO_SUMMARY" ? "summary_to_budget" : "plan_to_roadmap");
       
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/transition-decision`, {
         method: 'POST',
@@ -3781,23 +3779,21 @@ export default function ChatPage() {
       const data = await response.json();
       
       if (data.success) {
-        // COMMENTED OUT: Budget phase transition - skip directly to roadmap
-        // if (data.result?.action === "transition_to_budget") {
-        //   // Summary approved - transition to budget
-        //   setTransitionData({
-        //     businessPlanSummary: data.result.business_plan_summary || transitionData?.businessPlanSummary || "",
-        //     businessPlanArtifact: data.result.business_plan_artifact || transitionData?.businessPlanArtifact || null,
-        //     transitionPhase: "PLAN_TO_BUDGET",
-        //     estimatedExpenses: data.result.estimated_expenses || "",
-        //     businessContext: data.result.business_context || {}
-        //   });
-        //   if (data.result?.progress) {
-        //     applyProgressUpdate(data.result.progress);
-        //   }
-        //   toast.success("Proceeding to budget setup");
-        // } else {
-        {
-          // Transition to roadmap (budget phase skipped)
+        if (data.result?.action === "transition_to_budget") {
+          // Summary approved - transition to budget
+          setTransitionData({
+            businessPlanSummary: data.result.business_plan_summary || transitionData?.businessPlanSummary || "",
+            businessPlanArtifact: data.result.business_plan_artifact || transitionData?.businessPlanArtifact || null,
+            transitionPhase: "PLAN_TO_BUDGET",
+            estimatedExpenses: data.result.estimated_expenses || "",
+            businessContext: data.result.business_context || {}
+          });
+          if (data.result?.progress) {
+            applyProgressUpdate(data.result.progress);
+          }
+          toast.success("Proceeding to budget setup");
+        } else {
+          // Transition to roadmap
           setTransitionData(null);
           if (data.result?.progress) {
             applyProgressUpdate(data.result.progress);
@@ -3920,15 +3916,38 @@ export default function ChatPage() {
   };
 
   // Use backend progress data directly to avoid calculation mismatches
-  // Use phase-specific answered count for step display
-  const currentStep = backendTotals.answered;
+  // Use phase-specific answered count for step display.
+  // When the user is ON a question (currentQuestionNumber is set), ensure step is at least 1
+  // so the header never shows "0 of 6" when the user can see Question 1.
+  const rawStep = backendTotals.answered;
+  const currentStep = (rawStep === 0 && currentQuestionNumber && currentQuestionNumber > 0)
+    ? currentQuestionNumber
+    : rawStep;
   // Use phase-specific totals instead of combined totals for step display
   const total = backendTotals.total;
-  const percent = backendTotals.total > 0 ? Math.round((backendTotals.answered / backendTotals.total) * 100) : 0;
+  const percent = total > 0 ? Math.round((currentStep / total) * 100) : 0;
+  
+  // Short-form phase labels for the header (user requested abbreviations)
+  const phaseDisplayLabel: Record<string, string> = {
+    GKY: "GKY",
+    BUSINESS_PLAN: "BP",
+    PLAN_TO_SUMMARY_TRANSITION: "Summary",
+    PLAN_TO_BUDGET_TRANSITION: "Budget",
+    PLAN_TO_ROADMAP_TRANSITION: "Roadmap",
+    ROADMAP: "Roadmap",
+    ROADMAP_GENERATED: "Roadmap",
+    ROADMAP_TO_IMPLEMENTATION_TRANSITION: "Implementation",
+    IMPLEMENTATION: "Implementation",
+  };
+  const headerPhaseLabel = phaseDisplayLabel[progress.phase] ?? progress.phase;
 
-  const overallAnswered = progress.overall_progress?.answered ?? backendTotals.overallAnswered;
+  // Overall progress: ensure it's at least as high as currentStep (accounts for initial load where backend hasn't responded yet)
+  const rawOverallAnswered = progress.overall_progress?.answered ?? backendTotals.overallAnswered;
+  const overallAnswered = currentStep > 0 
+    ? Math.max(rawOverallAnswered, progress.phase === "GKY" ? currentStep : progress.phase === "BUSINESS_PLAN" ? 6 + currentStep : currentStep)
+    : rawOverallAnswered;
   const overallTotal = progress.overall_progress?.total ?? backendTotals.overallTotal;
-  const overallPercent = progress.overall_progress?.percent ?? (overallTotal > 0 ? Math.round((overallAnswered / overallTotal) * 100) : percent);
+  const overallPercent = overallTotal > 0 ? Math.round((overallAnswered / overallTotal) * 100) : percent;
 
   // Console logging for calculated display values
   console.log("📊 Display Values Calculated:", {
@@ -3960,82 +3979,80 @@ export default function ChatPage() {
       <PlanToRoadmapTransition
         businessPlanSummary={transitionData.businessPlanSummary}
         businessPlanArtifact={transitionData.businessPlanArtifact}
-        onApprove={() => handleApprovePlan("plan_to_roadmap")}
+        onApprove={() => handleApprovePlan("summary_to_budget")}
         onRevisit={handleRevisitPlan}
         loading={loading}
         sessionId={sessionId}
         initialQuote={transitionQuote}
-        nextStep="roadmap"
+        nextStep="budget"
       />
     );
   }
 
-  // COMMENTED OUT: Budget phase - skipping directly to roadmap
-  // if (transitionData && transitionData.transitionPhase === "PLAN_TO_BUDGET") {
-  //   return (
-  //     <PlanToBudgetTransition
-  //       businessPlanSummary={transitionData.businessPlanSummary}
-  //       estimatedExpenses={transitionData.estimatedExpenses}
-  //       businessContext={transitionData.businessContext}
-  //       onComplete={async (budgetData) => {
-  //         // Budget is complete, now transition to roadmap
-  //         // Immediately switch UI into a global loading state to avoid a "stuck" feeling
-  //         setTransitionData(null);
-  //         setCurrentQuestion("");
-  //         setLoading(true);
-  //         try {
-  //           const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/transition-decision`, {
-  //             method: 'POST',
-  //             headers: {
-  //               'Content-Type': 'application/json',
-  //               'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`
-  //             },
-  //             body: JSON.stringify({ 
-  //               decision: 'approve',
-  //               transition_type: 'budget_to_roadmap'
-  //             })
-  //           });
-  //
-  //           const data = await response.json();
-  //           
-  //           if (data.success) {
-  //             if (data.result?.progress) {
-  //               applyProgressUpdate(data.result.progress);
-  //             }
-  //             if (data.result?.roadmap) {
-  //               const roadmapContent = data.result.roadmap;
-  //               setRoadmapData({
-  //                 roadmapContent: roadmapContent,
-  //                 isGenerated: true
-  //               });
-  //               setRoadmapState({
-  //                 showModal: true,
-  //                 plan: roadmapContent,
-  //                 loading: false,
-  //                 error: ""
-  //               });
-  //               toast.success("Roadmap Generated");
-  //             }
-  //           } else {
-  //             if (data.requires_subscription) {
-  //               toast.error(data.message || "Subscription required to proceed to Roadmap phase");
-  //             } else {
-  //               toast.error(data.message || "Failed to proceed to roadmap");
-  //             }
-  //           }
-  //         } catch (error: any) {
-  //           console.error("❌ Failed to proceed to roadmap:", error);
-  //           toast.error("Failed to proceed to roadmap. Please try again.");
-  //         } finally {
-  //           setLoading(false);
-  //         }
-  //       }}
-  //       onRevisit={handleRevisitPlan}
-  //       loading={loading}
-  //       sessionId={sessionId}
-  //     />
-  //   );
-  // }
+  if (transitionData && transitionData.transitionPhase === "PLAN_TO_BUDGET") {
+    return (
+      <PlanToBudgetTransition
+        businessPlanSummary={transitionData.businessPlanSummary}
+        estimatedExpenses={transitionData.estimatedExpenses}
+        businessContext={transitionData.businessContext}
+        onComplete={async (budgetData) => {
+          // Budget is complete, now transition to roadmap
+          setTransitionData(null);
+          setCurrentQuestion("");
+          setLoading(true);
+          try {
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/transition-decision`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`
+              },
+              body: JSON.stringify({ 
+                decision: 'approve',
+                transition_type: 'budget_to_roadmap'
+              })
+            });
+
+            const data = await response.json();
+            
+            if (data.success) {
+              if (data.result?.progress) {
+                applyProgressUpdate(data.result.progress);
+              }
+              if (data.result?.roadmap) {
+                const roadmapContent = data.result.roadmap;
+                setRoadmapData({
+                  roadmapContent: roadmapContent,
+                  isGenerated: true
+                });
+                setRoadmapState({
+                  showModal: true,
+                  plan: roadmapContent,
+                  loading: false,
+                  error: ""
+                });
+                toast.success("Roadmap Generated");
+              }
+            } else {
+              if (data.requires_subscription) {
+                toast.error(data.message || "Subscription required to proceed to Roadmap phase");
+              } else {
+                toast.error(data.message || "Failed to proceed to roadmap");
+              }
+            }
+          } catch (error: any) {
+            console.error("❌ Failed to proceed to roadmap:", error);
+            toast.error("Failed to proceed to roadmap. Please try again.");
+          } finally {
+            setLoading(false);
+          }
+        }}
+        onRevisit={handleRevisitPlan}
+        loading={loading}
+        sessionId={sessionId}
+      />
+    );
+  }
 
   if (transitionData && transitionData.transitionPhase === "PLAN_TO_ROADMAP") {
     return (
@@ -4260,7 +4277,7 @@ export default function ChatPage() {
           onClick={handleGoBack} 
               disabled={history.length === 0 || loading || backButtonLoading}
               className="group relative bg-gradient-to-br from-teal-50 to-blue-50 hover:from-teal-100 hover:to-blue-100 border border-teal-200 hover:border-teal-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex flex-col items-center space-y-2 mt-auto"
-              title={currentQuestionNumber ? `Go back to Question ${getClientDisplayNumber(currentQuestionNumber - 1, progress.phase)}` : "Go back to previous question"}
+              title={currentQuestionNumber ? `Go back to Question ${currentQuestionNumber - 1}` : "Go back to previous question"}
             >
               {backButtonLoading ? (
                 <div className="w-12 h-12 bg-gradient-to-br from-teal-500 to-blue-600 rounded-full flex items-center justify-center">
@@ -4327,7 +4344,7 @@ export default function ChatPage() {
                       <div className="absolute inset-0 w-2 h-2 bg-gradient-to-r from-emerald-400 to-teal-400 rounded-full animate-ping opacity-60"></div>
                     </div>
                     <span className="text-sm font-semibold text-transparent bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text">
-                      {progress.phase}
+                      {headerPhaseLabel}
                     </span>
                     <div className="h-4 w-px bg-gradient-to-b from-emerald-300 to-teal-300"></div>
                     <span className="text-sm font-medium text-gray-700">
@@ -4342,7 +4359,7 @@ export default function ChatPage() {
                       <div className="absolute inset-0 w-1.5 h-1.5 bg-gradient-to-r from-emerald-400 to-teal-400 rounded-full animate-ping opacity-60"></div>
                     </div>
                     <span className="text-xs font-semibold text-transparent bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text">
-                      {progress.phase}
+                      {headerPhaseLabel}
                     </span>
                     <span className="text-xs font-medium text-gray-700">
                       {currentStep}/{total}
@@ -4637,7 +4654,7 @@ export default function ChatPage() {
                       {(progress.phase === "GKY" || progress.phase === "BUSINESS_PLAN") && pair.questionNumber && (
                         <div className="mb-2">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            Question {getClientDisplayNumber(pair.questionNumber, progress.phase)}
+                            Question {pair.questionNumber}
                           </span>
                         </div>
                       )}
@@ -4683,7 +4700,7 @@ export default function ChatPage() {
                     {!loading && (progress.phase === "GKY" || progress.phase === "BUSINESS_PLAN") && currentQuestionNumber && (
                       <div className="mb-2">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          Question {getClientDisplayNumber(currentQuestionNumber, progress.phase)}
+                          Question {currentQuestionNumber}
                         </span>
                       </div>
                     )}
@@ -4904,14 +4921,27 @@ export default function ChatPage() {
           onQuestionSelect={handleQuestionSelect}
           currentProgress={{
             phase: progress.phase,
-            answered: backendTotals.answered,
-            total: backendTotals.total,
+            answered: currentStep,
+            total,
             percent,
+            phase_answered: currentStep,
             overall_progress: {
               answered: overallAnswered,
               total: overallTotal,
               percent: overallPercent,
-              phase_breakdown: progress.overall_progress?.phase_breakdown,
+              phase_breakdown: (() => {
+                const base = progress.overall_progress?.phase_breakdown ?? {
+                  gky_completed: 0, gky_total: 6, bp_completed: 0, bp_total: 45,
+                };
+                // Ensure phase_breakdown reflects corrected currentStep
+                if (progress.phase === "GKY" && currentStep > (base.gky_completed ?? 0)) {
+                  return { ...base, gky_completed: currentStep };
+                }
+                if (progress.phase === "BUSINESS_PLAN" && currentStep > (base.bp_completed ?? 0)) {
+                  return { ...base, bp_completed: currentStep };
+                }
+                return base;
+              })(),
             },
           }}
           currentQuestionNumber={currentQuestionNumber}
@@ -4968,8 +4998,8 @@ export default function ChatPage() {
               <div className="p-4 border-b border-gray-100 bg-white">
                 <div className="text-center">
                   <div className="text-sm font-medium text-gray-600 mb-1">Current Progress</div>
-                  <div className="text-lg font-bold text-gray-900">{progress.phase}</div>
-                  <div className="text-sm text-gray-500">Step {backendTotals.answered} of {backendTotals.total}</div>
+                  <div className="text-lg font-bold text-gray-900">{headerPhaseLabel}</div>
+                  <div className="text-sm text-gray-500">Step {currentStep} of {total}</div>
                   <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
                     <div 
                       className="bg-gradient-to-r from-teal-500 to-blue-500 h-2 rounded-full transition-all duration-300"
@@ -5307,9 +5337,9 @@ export default function ChatPage() {
                 applyProgressUpdate(updatedProgress);
                 
                 if (questionNumber === firstMissingNumber) {
-                  toast.success(`Starting from Question ${getClientDisplayNumber(firstMissingNumber, 'BUSINESS_PLAN')} - ${analysisToUse.missingQuestions.length} questions to answer!`);
+                  toast.success(`Starting from Question ${firstMissingNumber} - ${analysisToUse.missingQuestions.length} questions to answer!`);
                 } else {
-                  toast.warning(`Expected Question ${getClientDisplayNumber(firstMissingNumber, 'BUSINESS_PLAN')} but got Question ${getClientDisplayNumber(questionNumber, 'BUSINESS_PLAN')}. Please check the backend logs.`);
+                  toast.warning(`Expected Question ${firstMissingNumber} but got Question ${questionNumber}. Please check the backend logs.`);
                 }
               } catch (fetchError) {
                 console.error("❌ Error fetching question:", fetchError);
