@@ -3,8 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DollarSign, TrendingUp, TrendingDown } from 'lucide-react';
 import StartupCostsTable from './StartupCostsTable';
 import OperatingExpensesTable from './OperatingExpensesTable';
-import PayrollCostsTable from './PayrollCostsTable';
-import COGSTable from './COGSTable';
 import RevenueTable from './RevenueTable';
 import { TableSelectionControls } from './TableSelectionControls';
 import type { BudgetItem } from '@/types/apiTypes';
@@ -12,8 +10,6 @@ import type { BudgetItem } from '@/types/apiTypes';
 interface ManageItemsSectionProps {
   startupCostItems: BudgetItem[];
   operatingExpenseItems: BudgetItem[];
-  payrollExpenseItems: BudgetItem[];
-  cogsExpenseItems: BudgetItem[];
   selectedItemIds: Set<string>;
   onToggleSectionSelection: (itemIds: string[], isSelected: boolean) => void;
   onToggleItemSelection: (itemId: string, isSelected: boolean) => void;
@@ -26,14 +22,12 @@ interface ManageItemsSectionProps {
   saveRevenueStreamsDebounced: (streams: any[]) => void;
   setTotalMonthlyRevenue: React.Dispatch<React.SetStateAction<number>>;
   loadingRevenueStreams: boolean;
-  onAddLineItem: (category: 'startup_cost' | 'operating_expense' | 'payroll' | 'cogs' | 'revenue') => void;
+  onAddLineItem: (category: 'startup_cost' | 'operating_expense' | 'revenue') => void;
 }
 
 const ManageItemsSection: React.FC<ManageItemsSectionProps> = ({
   startupCostItems,
   operatingExpenseItems,
-  payrollExpenseItems,
-  cogsExpenseItems,
   selectedItemIds,
   onToggleSectionSelection,
   onToggleItemSelection,
@@ -161,73 +155,6 @@ const ManageItemsSection: React.FC<ManageItemsSectionProps> = ({
         </CardContent>
       </Card>
 
-      {/* Monthly Payroll Costs */}
-      <Card className="shadow-xl border border-gray-200/60 rounded-xl overflow-hidden">
-        <CardHeader className="bg-gradient-to-r from-blue-50/80 to-white border-b border-blue-200/40">
-          <CardTitle className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <DollarSign className="w-5 h-5 text-blue-600" />
-            </div>
-            Monthly Payroll, Contractor & Associated Costs
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-6">
-          <TableSelectionControls
-            items={payrollExpenseItems}
-            selectedItemIds={selectedItemIds}
-            onToggleAll={(isSelected) =>
-              onToggleSectionSelection(payrollExpenseItems.map(i => i.id), isSelected)
-            }
-            sectionName="Payroll Costs"
-          />
-          <PayrollCostsTable
-            items={payrollExpenseItems}
-            onChange={(items) => items.forEach(item => onUpdateItem(item))}
-            onRemoveItem={(id, name) => onDeleteItem(id)}
-            currency={currency}
-            selectedItemIds={selectedItemIds}
-            onToggleItemSelection={onToggleItemSelection}
-            onToggleAllSelection={(isSelected) => 
-              onToggleSectionSelection(payrollExpenseItems.map(i => i.id), isSelected)
-            }
-            onAddLineItem={() => onAddLineItem('payroll')}
-          />
-        </CardContent>
-      </Card>
-
-      {/* COGS */}
-      <Card className="shadow-xl border border-gray-200/60 rounded-xl overflow-hidden">
-        <CardHeader className="bg-gradient-to-r from-rose-50/80 to-white border-b border-rose-200/40">
-          <CardTitle className="flex items-center gap-3">
-            <div className="p-2 bg-red-100 rounded-lg">
-              <DollarSign className="w-5 h-5 text-red-600" />
-            </div>
-            Cost of Goods Sold (COGS)
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-6">
-          <TableSelectionControls
-            items={cogsExpenseItems}
-            selectedItemIds={selectedItemIds}
-            onToggleAll={(isSelected) =>
-              onToggleSectionSelection(cogsExpenseItems.map(i => i.id), isSelected)
-            }
-            sectionName="COGS"
-          />
-          <COGSTable
-            items={cogsExpenseItems}
-            onChange={(items) => items.forEach(item => onUpdateItem(item))}
-            onRemoveItem={(id, name) => onDeleteItem(id)}
-            currency={currency}
-            selectedItemIds={selectedItemIds}
-            onToggleItemSelection={onToggleItemSelection}
-            onToggleAllSelection={(isSelected) => 
-              onToggleSectionSelection(cogsExpenseItems.map(i => i.id), isSelected)
-            }
-            onAddLineItem={() => onAddLineItem('cogs')}
-          />
-        </CardContent>
-      </Card>
     </div>
   );
 };

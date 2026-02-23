@@ -191,8 +191,6 @@ export const handleExportExcel = async (
   budget: Budget,
   startupCostItems: BudgetItem[],
   operatingExpenseItems: BudgetItem[],
-  payrollExpenseItems: BudgetItem[],
-  cogsExpenseItems: BudgetItem[],
   dynamicRevenueStreams: any[],
   businessContext?: any,
   currency: string = '$'
@@ -210,9 +208,7 @@ export const handleExportExcel = async (
       ['Total Startup Costs', formatCurrency(startupCostItems.reduce((sum, item) => sum + item.estimated_amount, 0), currency)],
       ['Monthly Revenue', formatCurrency(dynamicRevenueStreams.reduce((sum, stream) => sum + stream.revenueProjection, 0), currency)],
       ['Monthly Costs', formatCurrency(
-        operatingExpenseItems.reduce((sum, item) => sum + item.estimated_amount, 0) +
-        payrollExpenseItems.reduce((sum, item) => sum + item.estimated_amount, 0) +
-        cogsExpenseItems.reduce((sum, item) => sum + item.estimated_amount, 0),
+        operatingExpenseItems.reduce((sum, item) => sum + item.estimated_amount, 0),
         currency
       )],
     ];

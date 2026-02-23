@@ -42,8 +42,6 @@ import type { BudgetItem, Budget, APIResponse } from '@/types/apiTypes';
 import StartupCostsTable from './StartupCostsTable';
 import { TableSelectionControls } from './TableSelectionControls';
 import OperatingExpensesTable from './OperatingExpensesTable';
-import PayrollCostsTable from './PayrollCostsTable';
-import COGSTable from './COGSTable';
 import RevenueTable from './RevenueTable';
 import { CurrencyInput } from './CurrencyInput'; 
 import BudgetDashboardHeader from './BudgetDashboardHeader';
@@ -141,7 +139,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   });
 
   const [isAddLineItemModalOpen, setIsAddLineItemModalOpen] = useState(false);
-  const [addLineItemCategory, setAddLineItemCategory] = useState<'startup_cost' | 'operating_expense' | 'payroll' | 'cogs' | 'revenue' | null>(null);
+  const [addLineItemCategory, setAddLineItemCategory] = useState<'startup_cost' | 'operating_expense' | 'revenue' | null>(null);
   
   const [removeModalState, setRemoveModalState] = useState<{
     isOpen: boolean;
@@ -156,7 +154,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   });
 
   // Helper Functions
-  const openAddLineItemModal = (category: 'startup_cost' | 'operating_expense' | 'payroll' | 'cogs' | 'revenue') => {
+  const openAddLineItemModal = (category: 'startup_cost' | 'operating_expense' | 'revenue') => {
     setAddLineItemCategory(category);
     setIsAddLineItemModalOpen(true);
   };
@@ -415,33 +413,25 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   }, []);
 
   // Classification
-  const classifyExpenseGroup = useCallback((item: BudgetItem): 'startup' | 'operating' | 'payroll' | 'cogs' | 'other' => {
-    // 1. Check explicit subcategory field first (most reliable)
+  const classifyExpenseGroup = useCallback((item: BudgetItem): 'startup' | 'operating' | 'other' => {
     if (item.subcategory) {
-      const map: Record<string, 'startup' | 'operating' | 'payroll' | 'cogs'> = {
+      const map: Record<string, 'startup' | 'operating'> = {
         startup_cost: 'startup',
         operating_expense: 'operating',
-        payroll: 'payroll',
-        cogs: 'cogs',
+        payroll: 'operating',
+        cogs: 'operating',
       };
       if (map[item.subcategory]) return map[item.subcategory];
     }
 
-    // 2. Check ID prefix
     const id = String(item.id || '');
     if (id.startsWith('startup_')) return 'startup';
-    if (id.startsWith('operating_')) return 'operating';
-    if (id.startsWith('payroll_')) return 'payroll';
-    if (id.startsWith('cogs_')) return 'cogs';
+    if (id.startsWith('operating_') || id.startsWith('payroll_') || id.startsWith('cogs_')) return 'operating';
 
-    // 3. Check description for encoded subcategory (persisted from backend)
     const desc = String(item.description || '');
     if (desc.startsWith('[startup_cost]')) return 'startup';
-    if (desc.startsWith('[operating_expense]')) return 'operating';
-    if (desc.startsWith('[payroll]')) return 'payroll';
-    if (desc.startsWith('[cogs]')) return 'cogs';
+    if (desc.startsWith('[operating_expense]') || desc.startsWith('[payroll]') || desc.startsWith('[cogs]')) return 'operating';
 
-    // 4. Fallback to name hints
     const name = String(item.name || '').trim().toLowerCase();
 
     const startupHints = [
@@ -470,17 +460,11 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       'phone & communications',
       'miscellaneous / buffer',
       'inventory replenishment',
-    ];
-
-    const payrollHints = [
       'founder compensation',
       'employee wages',
       'payroll taxes',
       'benefits',
       'contractors / freelancers',
-    ];
-
-    const cogsHints = [
       'materials / supplies',
       'manufacturing / production',
       'packaging & shipping',
@@ -489,8 +473,6 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
 
     if (startupHints.some((h) => name.includes(h))) return 'startup';
     if (operatingHints.some((h) => name.includes(h))) return 'operating';
-    if (payrollHints.some((h) => name.includes(h))) return 'payroll';
-    if (cogsHints.some((h) => name.includes(h))) return 'cogs';
 
     return 'other';
   }, []);
@@ -524,16 +506,6 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
 
   const operatingExpenseItems = useMemo(
     () => expenses.filter((item) => classifyExpenseGroup(item) === 'operating'),
-    [expenses, classifyExpenseGroup]
-  );
-
-  const payrollExpenseItems = useMemo(
-    () => expenses.filter((item) => classifyExpenseGroup(item) === 'payroll'),
-    [expenses, classifyExpenseGroup]
-  );
-
-  const cogsExpenseItems = useMemo(
-    () => expenses.filter((item) => classifyExpenseGroup(item) === 'cogs'),
     [expenses, classifyExpenseGroup]
   );
 
@@ -576,10 +548,8 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   );
 
   const totalMonthlyCosts = useMemo(() => 
-    operatingExpenseItems.reduce((sum, item) => sum + (item.estimated_amount || 0), 0) +
-    payrollExpenseItems.reduce((sum, item) => sum + (item.estimated_amount || 0), 0) +
-    cogsExpenseItems.reduce((sum, item) => sum + (item.estimated_amount || 0), 0),
-    [operatingExpenseItems, payrollExpenseItems, cogsExpenseItems]
+    operatingExpenseItems.reduce((sum, item) => sum + (item.estimated_amount || 0), 0),
+    [operatingExpenseItems]
   );
 
   const monthlyNetIncome = useMemo(() => 
@@ -700,12 +670,10 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   const monthlyChartData = useMemo(() => {
     const entries = [
       { name: 'Operating', value: operatingExpenseItems.reduce((sum, item) => sum + getMonthlyValue(item), 0) },
-      { name: 'Payroll', value: payrollExpenseItems.reduce((sum, item) => sum + getMonthlyValue(item), 0) },
-      { name: 'COGS', value: cogsExpenseItems.reduce((sum, item) => sum + getMonthlyValue(item), 0) },
     ];
 
     return entries.filter((d) => Number.isFinite(d.value) && d.value > 0);
-  }, [operatingExpenseItems, payrollExpenseItems, cogsExpenseItems, getMonthlyValue]);
+  }, [operatingExpenseItems, getMonthlyValue]);
 
   const allBudgetItems = useMemo(() => {
     const itemsMap = new Map<string, BudgetItem>();
@@ -714,7 +682,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       itemsMap.set(item.id, { ...item, isSelected: selectedItemIds.has(item.id) });
     };
 
-    [...startupCostItems, ...operatingExpenseItems, ...payrollExpenseItems, ...cogsExpenseItems, ...otherExpenses].forEach(addOrUpdateItem);
+    [...startupCostItems, ...operatingExpenseItems, ...otherExpenses].forEach(addOrUpdateItem);
     
     dynamicRevenueStreams.forEach(stream => {
       itemsMap.set(stream.id, {
@@ -730,7 +698,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
     });
 
     return Array.from(itemsMap.values());
-  }, [startupCostItems, operatingExpenseItems, payrollExpenseItems, cogsExpenseItems, otherExpenses, dynamicRevenueStreams, selectedItemIds]);
+  }, [startupCostItems, operatingExpenseItems, otherExpenses, dynamicRevenueStreams, selectedItemIds]);
 
   const selectedItems = useMemo(() => {
     return allBudgetItems.filter(item => selectedItemIds.has(item.id));
@@ -833,7 +801,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
 
     // Only expense items — revenue is handled by saveRevenueStreams
     const expenseItems: BudgetItem[] = [
-      ...startupCostItems, ...operatingExpenseItems, ...payrollExpenseItems, ...cogsExpenseItems, ...otherExpenses
+      ...startupCostItems, ...operatingExpenseItems, ...otherExpenses
     ];
 
     // Also include any revenue items already in budget.items so they aren't deleted
@@ -858,7 +826,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
     } finally {
         isSavingRef.current = false;
     }
-  }, [sessionId, budget, startupCostItems, operatingExpenseItems, payrollExpenseItems, cogsExpenseItems, otherExpenses, onUpdateBudget]);
+  }, [sessionId, budget, startupCostItems, operatingExpenseItems, otherExpenses, onUpdateBudget]);
 
   // No auto-save useEffect here — the parent (Implementation) already
   // debounces a full save to DB whenever handleUpdateBudget is called.
@@ -943,32 +911,6 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       const operatingSheet = XLSX.utils.aoa_to_sheet(operatingData);
       XLSX.utils.book_append_sheet(wb, operatingSheet, 'Operating');
       
-      // Payroll Sheet
-      const payrollData = [
-        ['Line Item', 'Budget', 'Actual', 'Variance'],
-        ...payrollExpenseItems.map(item => [
-          item.name,
-          item.estimated_amount,
-          item.actual_amount || 0,
-          item.estimated_amount - (item.actual_amount || 0)
-        ])
-      ];
-      const payrollSheet = XLSX.utils.aoa_to_sheet(payrollData);
-      XLSX.utils.book_append_sheet(wb, payrollSheet, 'Payroll');
-      
-      // COGS Sheet
-      const cogsData = [
-        ['Line Item', 'Budget', 'Actual', 'Variance'],
-        ...cogsExpenseItems.map(item => [
-          item.name,
-          item.estimated_amount,
-          item.actual_amount || 0,
-          item.estimated_amount - (item.actual_amount || 0)
-        ])
-      ];
-      const cogsSheet = XLSX.utils.aoa_to_sheet(cogsData);
-      XLSX.utils.book_append_sheet(wb, cogsSheet, 'COGS');
-      
       // Generate filename
       const businessName = businessContext?.business_name || 'Business';
       const filename = `${businessName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_budget_${new Date().toISOString().split('T')[0]}.xlsx`;
@@ -980,7 +922,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       console.error('Error exporting to Excel:', error);
       toast.error('Failed to export Excel file');
     }
-  }, [budget, startupCostItems, operatingExpenseItems, payrollExpenseItems, cogsExpenseItems, dynamicRevenueStreams, businessContext, currency, startupCostsTotal, startupActualTotal, remainingStartupFunds, effectiveMonthlyRevenueForBreakEven, totalMonthlyCosts, monthlyNetIncome, breakEven, totalMonthlyRevenue]);
+  }, [budget, startupCostItems, operatingExpenseItems, dynamicRevenueStreams, businessContext, currency, startupCostsTotal, startupActualTotal, remainingStartupFunds, effectiveMonthlyRevenueForBreakEven, totalMonthlyCosts, monthlyNetIncome, breakEven, totalMonthlyRevenue]);
 
   const getSmartStepForInitialInvestment = useCallback((currentValue: number): number => {
     if (currentValue < 1000) return 100;
@@ -1480,7 +1422,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                     <TableSelectionControls items={[...startupCostItems, ...otherExpenses]} selectedItemIds={selectedItemIds} onToggleAll={(s) => onToggleSectionSelection([...startupCostItems, ...otherExpenses].map(i => i.id), s)} sectionName="Startup Costs" />
                     <StartupCostsTable
                       items={[...startupCostItems, ...otherExpenses]}
-                      onChange={(next) => handleBudgetUpdate({ items: [...next, ...cogsExpenseItems, ...operatingExpenseItems, ...payrollExpenseItems, ...revenues] })}
+                      onChange={(next) => handleBudgetUpdate({ items: [...next, ...operatingExpenseItems, ...revenues] })}
                       currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection}
                       onToggleAllSelection={(s) => onToggleSectionSelection([...startupCostItems, ...otherExpenses].map(i => i.id), s)}
                       onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal}
@@ -1570,41 +1512,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                     </UITooltip>
                   </div>
                   <div className="p-6">
-                    <OperatingExpensesTable items={operatingExpenseItems} onChange={(next) => handleBudgetUpdate({ items: [...startupCostItems, ...cogsExpenseItems, ...next, ...payrollExpenseItems, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection(operatingExpenseItems.map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} />
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Monthly Payroll */}
-              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.2 }}>
-                <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
-                  <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-cyan-50 border-b border-gray-200/60 flex items-center gap-3">
-                    <div className="p-2 bg-blue-100 rounded-lg"><FileText className="w-5 h-5 text-blue-600" /></div>
-                    <h3 className="font-bold text-gray-900">Monthly Payroll & Contractors</h3>
-                    <UITooltip>
-                      <TooltipTrigger asChild><HelpCircle className="w-4 h-4 text-gray-400 hover:text-blue-500 cursor-help transition-colors" /></TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-[280px]">Monthly people costs — your salary, employee wages, taxes, benefits, and contractor fees</TooltipContent>
-                    </UITooltip>
-                  </div>
-                  <div className="p-6">
-                    <PayrollCostsTable items={payrollExpenseItems} onChange={(next) => handleBudgetUpdate({ items: [...startupCostItems, ...cogsExpenseItems, ...operatingExpenseItems, ...next, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection(payrollExpenseItems.map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} />
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Monthly COGS */}
-              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.25 }}>
-                <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
-                  <div className="px-6 py-4 bg-gradient-to-r from-rose-50 to-pink-50 border-b border-gray-200/60 flex items-center gap-3">
-                    <div className="p-2 bg-rose-100 rounded-lg"><Calculator className="w-5 h-5 text-rose-600" /></div>
-                    <h3 className="font-bold text-gray-900">Cost of Goods Sold <span className="text-gray-500 font-normal text-sm">(COGS)</span></h3>
-                    <UITooltip>
-                      <TooltipTrigger asChild><HelpCircle className="w-4 h-4 text-gray-400 hover:text-rose-500 cursor-help transition-colors" /></TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-[280px]">Direct costs to produce your product — materials, packaging, shipping, payment fees</TooltipContent>
-                    </UITooltip>
-                  </div>
-                  <div className="p-6">
-                    <COGSTable items={cogsExpenseItems} onChange={(next) => handleBudgetUpdate({ items: [...startupCostItems, ...next, ...operatingExpenseItems, ...payrollExpenseItems, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection(cogsExpenseItems.map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} />
+                    <OperatingExpensesTable items={operatingExpenseItems} onChange={(next) => handleBudgetUpdate({ items: [...startupCostItems, ...otherExpenses, ...next, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection(operatingExpenseItems.map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} />
                   </div>
                 </div>
               </motion.div>
@@ -1625,7 +1533,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                   <h3 className="font-bold text-gray-900">Startup Costs</h3>
                 </div>
                 <div className="p-6">
-                  <StartupCostsTable items={[...startupCostItems, ...otherExpenses]} onChange={(next) => handleBudgetUpdate({ items: [...next, ...cogsExpenseItems, ...operatingExpenseItems, ...payrollExpenseItems, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection([...startupCostItems, ...otherExpenses].map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} />
+                  <StartupCostsTable items={[...startupCostItems, ...otherExpenses]} onChange={(next) => handleBudgetUpdate({ items: [...next, ...operatingExpenseItems, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection([...startupCostItems, ...otherExpenses].map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} />
                 </div>
               </div>
 
@@ -1649,27 +1557,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                   <h3 className="font-bold text-gray-900">Monthly Operating Expenses</h3>
                 </div>
                 <div className="p-6">
-                  <OperatingExpensesTable items={operatingExpenseItems} onChange={(next) => handleBudgetUpdate({ items: [...startupCostItems, ...cogsExpenseItems, ...next, ...payrollExpenseItems, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection(operatingExpenseItems.map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} />
-                </div>
-              </div>
-
-              {/* Payroll Management */}
-              <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
-                <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-cyan-50 border-b border-gray-200/60">
-                  <h3 className="font-bold text-gray-900">Monthly Payroll & Contractors</h3>
-                </div>
-                <div className="p-6">
-                  <PayrollCostsTable items={payrollExpenseItems} onChange={(next) => handleBudgetUpdate({ items: [...startupCostItems, ...cogsExpenseItems, ...operatingExpenseItems, ...next, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection(payrollExpenseItems.map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} />
-                </div>
-              </div>
-
-              {/* COGS Management */}
-              <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
-                <div className="px-6 py-4 bg-gradient-to-r from-rose-50 to-pink-50 border-b border-gray-200/60">
-                  <h3 className="font-bold text-gray-900">Cost of Goods Sold (COGS)</h3>
-                </div>
-                <div className="p-6">
-                  <COGSTable items={cogsExpenseItems} onChange={(next) => handleBudgetUpdate({ items: [...startupCostItems, ...next, ...operatingExpenseItems, ...payrollExpenseItems, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection(cogsExpenseItems.map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} />
+                  <OperatingExpensesTable items={operatingExpenseItems} onChange={(next) => handleBudgetUpdate({ items: [...startupCostItems, ...otherExpenses, ...next, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection(operatingExpenseItems.map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} />
                 </div>
               </div>
             </div>
@@ -1773,9 +1661,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                   const group = classifyExpenseGroup(item);
                   return (
                     (group === 'startup' && addLineItemCategory === 'startup_cost') ||
-                    (group === 'operating' && addLineItemCategory === 'operating_expense') ||
-                    (group === 'payroll' && addLineItemCategory === 'payroll') ||
-                    (group === 'cogs' && addLineItemCategory === 'cogs')
+                    (group === 'operating' && addLineItemCategory === 'operating_expense')
                   );
                 })
           }

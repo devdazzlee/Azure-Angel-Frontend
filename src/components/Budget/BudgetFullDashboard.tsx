@@ -32,8 +32,6 @@ import { budgetService } from '@/services/budgetService';
 import BudgetCharts from './BudgetCharts';
 import StartupCostsTable from './StartupCostsTable';
 import OperatingExpensesTable from './OperatingExpensesTable';
-import PayrollCostsTable from './PayrollCostsTable';
-import COGSTable from './COGSTable';
 import RevenueTable from './RevenueTable';
 import { BudgetSummaryCards } from './BudgetSummaryCards';
 import AddLineItemModal from './AddLineItemModal';
@@ -67,9 +65,6 @@ export const BudgetFullDashboard: React.FC<BudgetFullDashboardProps> = ({
   const startupRef = useRef<HTMLDivElement>(null);
   const revenueRef = useRef<HTMLDivElement>(null);
   const operatingRef = useRef<HTMLDivElement>(null);
-  const payrollRef = useRef<HTMLDivElement>(null);
-  const cogsRef = useRef<HTMLDivElement>(null);
-
   const sections: SectionRef[] = [
     { id: 'summary', label: 'Summary', ref: summaryRef },
     { id: 'break-even', label: 'Break-Even', ref: breakEvenRef },
@@ -77,17 +72,13 @@ export const BudgetFullDashboard: React.FC<BudgetFullDashboardProps> = ({
     { id: 'startup', label: 'Startup Costs', ref: startupRef },
     { id: 'revenue', label: 'Revenue', ref: revenueRef },
     { id: 'operating', label: 'Operating', ref: operatingRef },
-    { id: 'payroll', label: 'Payroll', ref: payrollRef },
-    { id: 'cogs', label: 'COGS', ref: cogsRef },
   ];
 
   // Calculate all budget metrics FIRST (before using them in state)
-  const classifyExpenseGroup = useCallback((item: BudgetItem): 'startup' | 'operating' | 'payroll' | 'cogs' | 'other' => {
+  const classifyExpenseGroup = useCallback((item: BudgetItem): 'startup' | 'operating' | 'other' => {
     const id = String(item.id || '');
     if (id.startsWith('startup_')) return 'startup';
-    if (id.startsWith('operating_')) return 'operating';
-    if (id.startsWith('payroll_')) return 'payroll';
-    if (id.startsWith('cogs_')) return 'cogs';
+    if (id.startsWith('operating_') || id.startsWith('payroll_') || id.startsWith('cogs_')) return 'operating';
 
     const name = String(item.name || '').trim().toLowerCase();
 
@@ -103,22 +94,14 @@ export const BudgetFullDashboard: React.FC<BudgetFullDashboardProps> = ({
       'insurance (monthly)', 'marketing & advertising', 'accounting & bookkeeping',
       'professional services', 'vehicle expenses', 'phone & communications',
       'miscellaneous / buffer', 'inventory replenishment',
-    ];
-
-    const payrollHints = [
       'founder compensation', 'employee wages', 'payroll taxes',
       'benefits', 'contractors / freelancers',
-    ];
-
-    const cogsHints = [
       'materials / supplies', 'manufacturing / production',
       'packaging & shipping', 'payment processing fees',
     ];
 
     if (startupHints.some((h) => name.includes(h))) return 'startup';
     if (operatingHints.some((h) => name.includes(h))) return 'operating';
-    if (payrollHints.some((h) => name.includes(h))) return 'payroll';
-    if (cogsHints.some((h) => name.includes(h))) return 'cogs';
 
     return 'other';
   }, []);
@@ -129,8 +112,6 @@ export const BudgetFullDashboard: React.FC<BudgetFullDashboardProps> = ({
   
   const startupCostItems = useMemo(() => expenses.filter(item => classifyExpenseGroup(item) === 'startup'), [expenses, classifyExpenseGroup]);
   const operatingExpenseItems = useMemo(() => expenses.filter(item => classifyExpenseGroup(item) === 'operating'), [expenses, classifyExpenseGroup]);
-  const payrollExpenseItems = useMemo(() => expenses.filter(item => classifyExpenseGroup(item) === 'payroll'), [expenses, classifyExpenseGroup]);
-  const cogsExpenseItems = useMemo(() => expenses.filter(item => classifyExpenseGroup(item) === 'cogs'), [expenses, classifyExpenseGroup]);
   const otherExpenses = useMemo(() => expenses.filter(item => classifyExpenseGroup(item) === 'other'), [expenses, classifyExpenseGroup]);
 
   // State for revenue streams (initialized AFTER revenues is calculated)
@@ -175,11 +156,11 @@ export const BudgetFullDashboard: React.FC<BudgetFullDashboardProps> = ({
   // State for AddLineItemModal
   const [isAddLineItemModalOpen, setIsAddLineItemModalOpen] = useState(false);
   const [addLineItemCategory, setAddLineItemCategory] = useState<
-    'startup_cost' | 'operating_expense' | 'payroll' | 'cogs' | 'revenue' | null
+    'startup_cost' | 'operating_expense' | 'revenue' | null
   >(null);
 
   const openAddLineItemModal = useCallback(
-    (category: 'startup_cost' | 'operating_expense' | 'payroll' | 'cogs' | 'revenue') => {
+    (category: 'startup_cost' | 'operating_expense' | 'revenue') => {
       setAddLineItemCategory(category);
       setIsAddLineItemModalOpen(true);
     },
@@ -197,10 +178,6 @@ export const BudgetFullDashboard: React.FC<BudgetFullDashboardProps> = ({
 
   const totalMonthlyCosts = 
     operatingExpenseItems.reduce((sum, item) => 
-      sum + (showActuals ? (item.actual_amount || 0) : (item.estimated_amount || 0)), 0) +
-    payrollExpenseItems.reduce((sum, item) => 
-      sum + (showActuals ? (item.actual_amount || 0) : (item.estimated_amount || 0)), 0) +
-    cogsExpenseItems.reduce((sum, item) => 
       sum + (showActuals ? (item.actual_amount || 0) : (item.estimated_amount || 0)), 0);
 
   const monthlyRevenue = revenues.reduce((sum, item) => 
@@ -236,8 +213,6 @@ export const BudgetFullDashboard: React.FC<BudgetFullDashboardProps> = ({
     
     const categories = [
       { name: 'Operating', items: operatingExpenseItems },
-      { name: 'Payroll', items: payrollExpenseItems },
-      { name: 'COGS', items: cogsExpenseItems },
     ];
 
     categories.forEach(cat => {
@@ -250,7 +225,7 @@ export const BudgetFullDashboard: React.FC<BudgetFullDashboardProps> = ({
     });
 
     return data;
-  }, [operatingExpenseItems, payrollExpenseItems, cogsExpenseItems, showActuals]);
+  }, [operatingExpenseItems, showActuals]);
 
   // Scroll to section
   const scrollToSection = (ref: React.RefObject<HTMLDivElement>) => {
@@ -354,14 +329,12 @@ export const BudgetFullDashboard: React.FC<BudgetFullDashboardProps> = ({
     
     const nextItems: BudgetItem[] = [
       ...startupCostItems,
-      ...cogsExpenseItems,
       ...operatingExpenseItems,
-      ...payrollExpenseItems,
       ...otherExpenses,
       ...updatedRevenueItems,
     ];
     onUpdateBudget({ items: nextItems });
-  }, [startupCostItems, cogsExpenseItems, operatingExpenseItems, payrollExpenseItems, otherExpenses, onUpdateBudget]);
+  }, [startupCostItems, operatingExpenseItems, otherExpenses, onUpdateBudget]);
 
   // Handle total monthly revenue changes
   const handleTotalMonthlyRevenueChange = useCallback((total: number) => {
@@ -640,9 +613,7 @@ export const BudgetFullDashboard: React.FC<BudgetFullDashboardProps> = ({
                     onChange={(nextStartupItems) => {
                       const nextItems: BudgetItem[] = [
                         ...nextStartupItems,
-                        ...cogsExpenseItems,
                         ...operatingExpenseItems,
-                        ...payrollExpenseItems,
                         ...otherExpenses,
                         ...revenues,
                       ];
@@ -739,9 +710,7 @@ export const BudgetFullDashboard: React.FC<BudgetFullDashboardProps> = ({
                     onChange={(nextOperatingItems) => {
                       const nextItems: BudgetItem[] = [
                         ...startupCostItems,
-                        ...cogsExpenseItems,
                         ...nextOperatingItems,
-                        ...payrollExpenseItems,
                         ...otherExpenses,
                         ...revenues,
                       ];
@@ -760,93 +729,6 @@ export const BudgetFullDashboard: React.FC<BudgetFullDashboardProps> = ({
             </Card>
           </div>
 
-          {/* Payroll */}
-          <div ref={payrollRef} className="print-break">
-            <Card className="shadow-lg">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingDown className="w-5 h-5" />
-                  Monthly Payroll
-                </CardTitle>
-                <Badge variant="secondary">{payrollExpenseItems.length} items</Badge>
-              </CardHeader>
-              <CardContent>
-                {payrollExpenseItems.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                    <p className="text-lg font-medium">No payroll items added yet</p>
-                    <p className="text-sm">Add payroll expenses in the Manage tab</p>
-                  </div>
-                ) : (
-                  <PayrollCostsTable
-                    items={payrollExpenseItems}
-                    onChange={(nextPayrollItems) => {
-                      const nextItems: BudgetItem[] = [
-                        ...startupCostItems,
-                        ...cogsExpenseItems,
-                        ...operatingExpenseItems,
-                        ...nextPayrollItems,
-                        ...otherExpenses,
-                        ...revenues,
-                      ];
-                      onUpdateBudget({ items: nextItems });
-                    }}
-                    currency={currency}
-                    selectedItemIds={selectedItemIds}
-                    onToggleItemSelection={onToggleItemSelection}
-                    onToggleAllSelection={(isSelected) =>
-                      onToggleSectionSelection(payrollExpenseItems.map((i) => i.id), isSelected)
-                    }
-                    onAddLineItem={openAddLineItemModal}
-                  />
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* COGS */}
-          <div ref={cogsRef} className="print-break">
-            <Card className="shadow-lg">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingDown className="w-5 h-5" />
-                  Monthly COGS
-                </CardTitle>
-                <Badge variant="secondary">{cogsExpenseItems.length} items</Badge>
-              </CardHeader>
-              <CardContent>
-                {cogsExpenseItems.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                    <p className="text-lg font-medium">No COGS items added yet</p>
-                    <p className="text-sm">Add cost of goods sold in the Manage tab</p>
-                  </div>
-                ) : (
-                  <COGSTable
-                    items={cogsExpenseItems}
-                    onChange={(nextCogsItems) => {
-                      const nextItems: BudgetItem[] = [
-                        ...startupCostItems,
-                        ...nextCogsItems,
-                        ...operatingExpenseItems,
-                        ...payrollExpenseItems,
-                        ...otherExpenses,
-                        ...revenues,
-                      ];
-                      onUpdateBudget({ items: nextItems });
-                    }}
-                    currency={currency}
-                    selectedItemIds={selectedItemIds}
-                    onToggleItemSelection={onToggleItemSelection}
-                    onToggleAllSelection={(isSelected) =>
-                      onToggleSectionSelection(cogsExpenseItems.map((i) => i.id), isSelected)
-                    }
-                    onAddLineItem={openAddLineItemModal}
-                  />
-                )}
-              </CardContent>
-            </Card>
-          </div>
         </div>
 
         {addLineItemCategory && (
@@ -933,9 +815,7 @@ export const BudgetFullDashboard: React.FC<BudgetFullDashboardProps> = ({
                     const group = classifyExpenseGroup(item);
                     return (
                       (group === 'startup' && addLineItemCategory === 'startup_cost') ||
-                      (group === 'operating' && addLineItemCategory === 'operating_expense') ||
-                      (group === 'payroll' && addLineItemCategory === 'payroll') ||
-                      (group === 'cogs' && addLineItemCategory === 'cogs')
+                      (group === 'operating' && addLineItemCategory === 'operating_expense')
                     );
                   })
             }

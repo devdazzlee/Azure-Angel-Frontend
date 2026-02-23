@@ -131,7 +131,7 @@ const BusinessPlanModal: React.FC<{
     );
 
     // Check if this is a scene table (business plan tables)
-    const isSceneTable = contextTitle?.toLowerCase().includes('scene') || 
+    const isSceneTable = contextTitle?.toLowerCase().includes('section') || 
                         headerCells.some(h => 
                           h.toLowerCase().includes('section') || 
                           h.toLowerCase().includes('highlights') ||
@@ -224,7 +224,7 @@ const BusinessPlanModal: React.FC<{
       const trimmedLine = line.trim();
 
       // Detect Scene headers
-      if (trimmedLine.startsWith('## Scene')) {
+      if (trimmedLine.startsWith('## Section')) {
         currentSceneTitle = trimmedLine.replace(/^##\s*/, '').trim();
         nonTableContent.push(line);
       } else if (trimmedLine.startsWith('###')) {
