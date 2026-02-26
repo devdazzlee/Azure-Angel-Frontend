@@ -76,18 +76,22 @@ const Footer: React.FC = () => (
       </div>
 
       {/* Copyright */}
-      <div className="border-t border-gray-200 mt-8 pt-6 text-sm text-gray-500 text-center md:text-left">
-        <div>© {new Date().getFullYear()} Founderport LLC. All rights reserved.</div>
-        <div className="mt-2">
-          Website developed using services of{' '}
-          <a
-            href="https://buildnext.org"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-teal-600 hover:text-teal-700 hover:underline transition-colors"
-          >
-            BuildNext LLC
-          </a>
+      <div className="mt-10 border-t border-teal-100/80 pt-6">
+        <div className="flex flex-col gap-3 rounded-2xl border border-teal-100 bg-white/75 px-4 py-4 text-center shadow-sm backdrop-blur-sm md:flex-row md:items-center md:justify-between md:text-left">
+          <p className="text-sm font-medium text-slate-700">
+            © {new Date().getFullYear()} Founderport LLC. All rights reserved.
+          </p>
+          <p className="text-sm text-slate-600">
+            Website developed using services of{' '}
+            <a
+              href="https://buildnext.org"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center rounded-full bg-teal-50 px-3 py-1 font-semibold text-teal-700 transition-colors hover:bg-teal-100 hover:text-teal-800"
+            >
+              BuildNext LLC
+            </a>
+          </p>
         </div>
       </div>
     </div>

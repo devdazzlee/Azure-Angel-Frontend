@@ -1,145 +1,135 @@
 import React, { useEffect } from 'react';
-import { motion, useAnimation } from 'framer-motion';
-import type { Variants } from 'framer-motion';
-import { useInView } from 'react-intersection-observer';
+import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaBolt, FaUsers, FaChartBar } from 'react-icons/fa';
 
-import businessPlanningImg from '../../assets/images/home/business-planning.jpg'
-import launchRoadmapImg from '../../assets/images/home/launch-roadmap.jpg'
-import implementationImg from '../../assets/images/home/implementation.jpg'
-// import businessServiceNetworkImg from '../../assets/images/home/business-services-network.jpg'
-// import saasProductImg from '../../assets/images/home/saas-product.jpg'
-import avatar1Img from '../../assets/images/home/avatar-1.webp'
-import avatar2Img from '../../assets/images/home/avatar-2.webp'
-import avatar3Img from '../../assets/images/home/avatar-3.webp'
-
-
-// Define MotionLink for animated Links
-const MotionLink = motion(Link);
-
-// Types
-interface CardItem { title: string; text: string; image: string; }
-interface Testimonial { name: string; role: string; quote: string; image: string; }
-
-// Data
-const angels: CardItem[] = [
-  {
-    title: 'Business Planning',
-    text: 'Engage in an interactive, guided process that begins with helps you build a comprehensive business plan tailored to your business idea.',
-    image: businessPlanningImg,
-  },
-  {
-    title: 'Launch Roadmap',
-    text: 'Once the business plan is complete, Angel will auto-generate a bespoke roadmap for you of milestones to complete so you can launch your business.',
-    image: launchRoadmapImg,
-  },
-  {
-    title: 'Implementation',
-    text: 'Angel will then guide you through that roadmap, step by step, where each milestone is broken down into simplified and actionable tasks.',
-    image: implementationImg,
-  },
-];
-
-const features: CardItem[] = [
-  {
-    title: 'Guided Workflow',
-    text: 'Angel walks you through every component of your business plan to help both you and Angel create a detailed business plan, providing guidance and research inputs along the way.',
-    image: '',
-  },
-  {
-    title: 'Task Automation',
-    text: 'As Angel learns more about your business, it can complete tasks on your behalf to make the business startup process easier.',
-    image: '',
-  },
-  {
-    title: 'Domain Expertise',
-    text: 'Angel is trained on deep subject matter so it can be an expert across regulatory and compliance, financial, marketing, business model and operations to provide accurate and bespoke guidance to help you navigate the business startup process.',
-    image: '',
-  },
-];
-
-// Only three icons to match three features
-const featureIcons = [FaUsers, FaBolt, FaChartBar];
-
-// const comingSoon: CardItem[] = [
-//   {
-//     title: 'SaaS Product Providers',
-//     text: 'Founderport will onboard industry-leading products such as Intuit QuickBooks, LegalZoom, Airtable and other providers to further enhance entrepreneurs’ ability to automate and manage their businesses.',
-//     image: saasProductImg,
-//   },
-//   {
-//     title: 'Business Services Network',
-//     text: 'We will provide a curated network of vetted service providers offering services such as legal, accounting, marketing, consulting and other services to help founders grow.',
-//     image: businessServiceNetworkImg,
-//   },
-// ];
-
-const testimonials: Testimonial[] = [
-  {
-    name: 'Oliver Bennett',
-    role: 'Tech Startup CTO',
-    quote: 'Angel has revolutionized how I balance work and well-being.',
-    image: avatar1Img,
-  },
-  {
-    name: 'James Clarke',
-    role: 'CEO & Co-founder',
-    quote: 'Staying productive without burning out has never been easier.',
-    image: avatar2Img,
-  },
-  {
-    name: 'Emma Hughes',
-    role: 'Product Manager',
-    quote: 'The community support feature is a game-changer for daily motivation.',
-    image: avatar3Img,
-  },
-];
-
-// Animation variants
-const reveal: Variants = {
-  hidden: { opacity: 0, y: 40 },
-  visible: { opacity: 1, y: 0 },
-};
-const hoverCard: Variants = {
-  hover: { scale: 1.04, boxShadow: '0 8px 24px rgba(0,0,0,0.12)' },
+type Step = {
+  number: string;
+  title: string;
+  description: string;
 };
 
-// Section wrapper
-interface SectionProps { id?: string; bg?: string; title: string; children: React.ReactNode; }
-const Section: React.FC<SectionProps> = ({ id, bg, title, children }) => {
-  const controls = useAnimation();
-  const [ref, inView] = useInView({ triggerOnce: true, threshold: 0.2 });
-  useEffect(() => { if (inView) controls.start('visible'); }, [controls, inView]);
+type FeatureCard = {
+  icon: string;
+  title: string;
+  description: string;
+};
 
-  return (
-    <section id={id} className={`${bg ?? ''} py-16 px-4 lg:px-0`} ref={ref}>
-      <motion.h2
-        className="text-4xl lg:text-5xl font-extrabold text-gray-900 text-center mb-8 tracking-tight"
-        initial="hidden"
-        animate={controls}
-        variants={reveal}
-        transition={{ duration: 0.6 }}
-      >
-        {title}
-      </motion.h2>
-      <motion.div initial="hidden" animate={controls} variants={reveal} transition={{ delay: 0.2, duration: 0.6 }}>
-        {children}
-      </motion.div>
-    </section>
-  );
+const processSteps: Step[] = [
+  {
+    number: '1',
+    title: 'Create Your Business Plan',
+    description:
+      'Answer structured questions about your business idea. Founderport organizes your thinking and consolidates your decisions in one place.',
+  },
+  {
+    number: '2',
+    title: 'Get Your Launch Roadmap',
+    description:
+      'Founderport converts your plan into a personalized roadmap with clear milestones, ordered in a logical sequence for your business.',
+  },
+  {
+    number: '3',
+    title: 'Follow Guided Steps',
+    description:
+      "Each milestone breaks down into smaller, actionable steps. You'll understand what to do, why it matters, and what to consider.",
+  },
+  {
+    number: '4',
+    title: 'Move Forward with Clarity',
+    description:
+      "You always know what's next. Founderport keeps you oriented and helps reduce uncertainty at each stage.",
+  },
+];
+
+const featureCards: FeatureCard[] = [
+  {
+    icon: '📋',
+    title: 'Structured Business Plan',
+    description:
+      'Create a comprehensive plan that organizes your thinking and consolidates your decisions as your reference point for next steps.',
+  },
+  {
+    icon: '🗺️',
+    title: 'Personalized Launch Roadmap',
+    description:
+      'Get a roadmap that breaks your launch into major milestones, ordered in a logical sequence that reflects your business type.',
+  },
+  {
+    icon: '✅',
+    title: 'Guided Implementation Steps',
+    description:
+      'Each milestone decomposes into smaller, actionable steps with clear explanations of what to do and why it matters.',
+  },
+  {
+    icon: '🎯',
+    title: 'Clear Sequencing',
+    description:
+      "Always know what comes next. Founderport removes uncertainty about which steps to tackle first and what applies to your situation.",
+  },
+  {
+    icon: '💬',
+    title: 'Guidance When You Need It',
+    description:
+      "When you're unsure, Founderport's support guidance helps clarify questions, explain options, and reduce confusion.",
+  },
+  {
+    icon: '📁',
+    title: 'Centralized Workspace',
+    description:
+      'One place to organize your business decisions, from initial concept through launch planning and execution.',
+  },
+];
+
+const stepsContainer = {
+  hidden: {},
+  show: {
+    transition: {
+      staggerChildren: 0.12,
+    },
+  },
+};
+
+const stepCard = {
+  hidden: { opacity: 0, y: 24, scale: 0.96 },
+  show: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { duration: 0.45 },
+  },
+};
+
+const sectionReveal = {
+  hidden: { opacity: 0, y: 24 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.5 },
+  },
+};
+
+const fadeStagger = {
+  hidden: {},
+  show: {
+    transition: {
+      staggerChildren: 0.1,
+    },
+  },
+};
+
+const fadeItem = {
+  hidden: { opacity: 0, y: 16 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.35 },
+  },
 };
 
 const FounderportHome: React.FC = () => {
   const navigate = useNavigate();
-  const heroControls = useAnimation();
-  const [heroRef, heroInView] = useInView({ triggerOnce: true, threshold: 0.2 });
-  useEffect(() => { if (heroInView) heroControls.start('visible'); }, [heroControls, heroInView]);
-  
-  // Check if user is logged in (returning user)
   const isLoggedIn = Boolean(localStorage.getItem('sb_access_token'));
 
-  // Handle Supabase auth redirects that land on root URL
   useEffect(() => {
     const hash = window.location.hash;
     if (hash) {
@@ -148,192 +138,231 @@ const FounderportHome: React.FC = () => {
       const type = hashParams.get('type');
       const error = hashParams.get('error');
       const errorCode = hashParams.get('error_code');
-      
-      // If it's a recovery token or has recovery-related errors, redirect to reset-password page
+
       if ((accessToken && type === 'recovery') || error || errorCode) {
-        // Preserve the hash when redirecting
         navigate(`/reset-password${hash}`, { replace: true });
       }
     }
   }, [navigate]);
 
-  return (
-    <div className="relative overflow-hidden bg-gray-50 pt-32">
-      {/* Hero Section */}
-      <motion.section
-        id="hero"
-        ref={heroRef}
-        className="relative py-20 px-4 lg:px-0 overflow-hidden"
-        initial="hidden"
-        animate={heroControls}
-        variants={reveal}
-        transition={{ duration: 0.6 }}
-      >
-        {/* SVG Accents */}
-        <svg className="absolute -top-10 -left-10 w-64 h-64 opacity-20" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 200 200">
-          <circle cx="100" cy="100" r="80" stroke="url(#grad1)" strokeWidth="20" />
-          <defs>
-            <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#14B8A6" />
-              <stop offset="100%" stopColor="#0EA5E9" />
-            </linearGradient>
-          </defs>
-        </svg>
-        <svg className="absolute -bottom-10 -right-10 w-64 h-64 opacity-20" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 200 200">
-          <rect x="20" y="20" width="160" height="160" stroke="url(#grad2)" strokeWidth="20" />
-          <defs>
-            <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#EC4899" />
-              <stop offset="100%" stopColor="#8B5CF6" />
-            </linearGradient>
-          </defs>
-        </svg>
+  const primaryCta = isLoggedIn ? '/ventures' : '/login';
 
-        <motion.h2
-          className="text-5xl lg:text-6xl font-extrabold text-gray-900 text-center mb-4 tracking-tight relative z-10"
-          variants={reveal}
-        >
-          Welcome to Founderport
-        </motion.h2>
-        <motion.p
-          className="text-xl text-gray-700 text-center max-w-2xl mx-auto mb-8 relative z-10"
-          variants={reveal}
-          transition={{ delay: 0.2 }}
-        >
-          Founderport is dedicated to simplifying the entrepreneurial journey for aspiring business owners.
-        </motion.p>
-        <motion.div
-          className="flex justify-center space-x-4 relative z-10"
-          variants={reveal}
-          transition={{ delay: 0.4 }}
-        >
-          {isLoggedIn ? (
-            <MotionLink
-              to="/ventures"
-              className="px-6 py-3 bg-teal-600 text-white font-semibold rounded-full hover:bg-teal-700 transition"
-              whileHover={{ scale: 1.05 }}
-            >
-              Your Business
-            </MotionLink>
-          ) : (
-            <MotionLink
-              to="/login"
-              className="px-6 py-3 bg-teal-600 text-white font-semibold rounded-full hover:bg-teal-700 transition"
-              whileHover={{ scale: 1.05 }}
-            >
-              Get Started
-            </MotionLink>
-          )}
-          <MotionLink
-            to="/learn-more"
-            className="px-6 py-3 border border-teal-600 text-teal-600 font-semibold rounded-full hover:bg-teal-50 transition"
-            whileHover={{ scale: 1.05 }}
+  return (
+    <div className="bg-slate-100 pt-20 text-slate-900">
+      <motion.section
+        className="w-full pb-10"
+        variants={sectionReveal}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.25 }}
+      >
+        <div className="w-full bg-blue-700 px-5 py-12 text-white md:px-10">
+          <motion.h1
+            className="mx-auto max-w-4xl text-center text-3xl font-bold leading-tight md:text-5xl"
+            variants={fadeItem}
           >
-            Learn More
-          </MotionLink>
+            Transform Your Business Idea Into a Clear, Actionable Plan
+          </motion.h1>
+          <motion.p className="mx-auto mt-5 max-w-4xl text-center text-base text-blue-100 md:text-lg" variants={fadeItem}>
+            Founderport is a centralized platform that helps first-time entrepreneurs move from idea
+            to launch through guided, step-by-step planning. Replace fragmented advice with clarity,
+            structure, and confidence for any business idea.
+          </motion.p>
+          <motion.div className="mt-7 flex flex-wrap items-center justify-center gap-3" variants={fadeItem}>
+            <Link
+              to={primaryCta}
+              className="rounded-md bg-white px-7 py-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+            >
+              Start Planning Your Business
+            </Link>
+            <Link
+              to="/services"
+              className="rounded-md border border-white px-7 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+            >
+              See How It Works
+            </Link>
+          </motion.div>
+
+          <motion.div
+            className="mt-10 grid grid-cols-1 gap-6 text-center sm:grid-cols-2 md:grid-cols-4"
+            variants={fadeStagger}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.2 }}
+          >
+            <motion.div variants={fadeItem}>
+              <h3 className="text-3xl font-bold leading-tight sm:text-2xl">One Place</h3>
+              <p className="mt-1.5 text-xl leading-snug text-blue-100 sm:text-base">For All Your Planning</p>
+            </motion.div>
+            <motion.div variants={fadeItem}>
+              <h3 className="text-3xl font-bold leading-tight sm:text-2xl">Clear Steps</h3>
+              <p className="mt-1.5 text-xl leading-snug text-blue-100 sm:text-base">Always Know What&apos;s Next</p>
+            </motion.div>
+            <motion.div variants={fadeItem}>
+              <h3 className="text-3xl font-bold leading-tight sm:text-2xl">Guided Process</h3>
+              <p className="mt-1.5 text-xl leading-snug text-blue-100 sm:text-base">Built for First-Time Entrepreneurs</p>
+            </motion.div>
+            <motion.div variants={fadeItem}>
+              <h3 className="text-3xl font-bold leading-tight sm:text-2xl">Start Free</h3>
+              <p className="mt-1.5 text-xl leading-snug text-blue-100 sm:text-base">No Credit Card Required</p>
+            </motion.div>
+          </motion.div>
+        </div>
+      </motion.section>
+
+      <motion.section
+        className="mx-auto w-full max-w-6xl px-4 pb-10"
+        variants={sectionReveal}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.25 }}
+      >
+        <motion.h2 className="text-center text-3xl font-bold md:text-4xl" variants={fadeItem}>What Founderport Unlocks for You</motion.h2>
+        <motion.div
+          className="mt-6 grid gap-5 md:grid-cols-2"
+          variants={fadeStagger}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, amount: 0.2 }}
+        >
+          <motion.article
+            variants={fadeItem}
+            whileHover={{ y: -6 }}
+            className="rounded-2xl border border-slate-300 bg-white p-6 shadow-sm transition-shadow hover:shadow-md"
+          >
+            <h3 className="text-2xl font-bold text-slate-800">Common Challenges</h3>
+            <ul className="mt-4 list-disc space-y-2.5 pl-5 text-base text-slate-600">
+              <li>Advice scattered across websites, videos, and templates</li>
+              <li>Unclear which steps come first</li>
+              <li>No single place to organize your business decisions</li>
+              <li>Decision paralysis from uncertainty</li>
+              <li>Worry about doing things incorrectly</li>
+            </ul>
+          </motion.article>
+          <motion.article
+            variants={fadeItem}
+            whileHover={{ y: -6 }}
+            className="rounded-2xl border-2 border-emerald-400 bg-white p-6 shadow-sm transition-shadow hover:shadow-md"
+          >
+            <h3 className="text-2xl font-bold text-slate-800">With Founderport</h3>
+            <ul className="mt-4 space-y-2.5 text-base text-slate-700">
+              <li>✓ Centralized workspace for all your planning</li>
+              <li>✓ Clear sequence of steps tailored to your idea</li>
+              <li>✓ Organized structure to capture your decisions</li>
+              <li>✓ Guidance when you&apos;re unsure what to do next</li>
+              <li>✓ Clarity and confidence at each stage</li>
+            </ul>
+          </motion.article>
         </motion.div>
       </motion.section>
 
-      {/* Angel Cards */}
-      <Section id="angel" bg="bg-gradient-to-b from-white to-gray-100" title="Angel">
-        <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto">
-          {angels.map(item => (
-            <motion.div
-              key={item.title}
-              className="bg-white rounded-2xl overflow-hidden"
-              variants={hoverCard}
-              whileHover="hover"
-              transition={{ duration: 0.3 }}
-            >
-              <img src={item.image} alt={item.title} loading='lazy' className="w-full h-48 object-cover" />
-              <div className="p-6">
-                <h3 className="text-xl font-semibold mb-2">{item.title}</h3>
-                <p className="text-gray-600 text-sm">{item.text}</p>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </Section>
-
-      {/* Key Features with Icons + CTA */}
-      <Section id="features" title="Key Features">
-        <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto mb-8">
-          {features.map((f, idx) => {
-            const Icon = featureIcons[idx];
-            return (
-              <motion.div
-                key={f.title}
-                className="flex flex-col items-center p-6 bg-white rounded-xl shadow-sm text-center space-y-4"
-                initial="hidden"
-                animate="visible"
-                variants={reveal}
-                transition={{ delay: idx * 0.1, duration: 0.5 }}
+      <motion.section
+        className="mx-auto w-full max-w-6xl px-4 pb-10"
+        initial={{ opacity: 0, y: 18 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.25 }}
+        transition={{ duration: 0.45 }}
+      >
+        <h2 className="text-center text-3xl font-bold md:text-4xl">How Founderport Works</h2>
+        <p className="mt-3 text-center text-base text-slate-500 md:text-lg">
+          A guided, phased workflow that takes you from idea to structured plan to actionable steps
+        </p>
+        <motion.div
+          className="mt-6 grid gap-5 overflow-visible md:grid-cols-2 xl:grid-cols-4 xl:gap-10"
+          variants={stepsContainer}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, amount: 0.2 }}
+        >
+          {processSteps.map((step, index) => (
+            <div key={step.number} className="relative overflow-visible">
+              <motion.article
+                variants={stepCard}
+                whileHover={{ y: -8, scale: 1.02 }}
+                className="group relative h-full overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/80 p-6 text-center shadow-md transition-shadow duration-300 hover:shadow-xl"
               >
-                <Icon size={40} className="text-teal-600" />
-                <h4 className="font-medium text-gray-900">{f.title}</h4>
-                <p className="text-gray-600 text-sm">{f.text}</p>
-              </motion.div>
-            );
-          })}
-        </div>
-        <div className="text-center">
-          <Link to="/learn-more" className="px-6 py-2 bg-white text-teal-600 font-semibold rounded-full border border-teal-600 hover:bg-teal-50 transition mr-4">
-            Learn More
+                <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                  <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-blue-200/40 blur-2xl" />
+                  <div className="absolute -bottom-8 -left-8 h-24 w-24 rounded-full bg-indigo-200/40 blur-2xl" />
+                </div>
+                <div className="relative mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-md ring-4 ring-blue-100">
+                  {step.number}
+                </div>
+                <h3 className="relative min-h-[5.5rem] text-2xl font-bold leading-tight text-slate-800">{step.title}</h3>
+                <p className="relative mt-3 text-base leading-relaxed text-slate-600">{step.description}</p>
+              </motion.article>
+              {index < processSteps.length - 1 && (
+                <span className="pointer-events-none absolute right-[-1.5rem] top-[56%] z-20 hidden -translate-y-1/2 rounded bg-slate-100 px-1 text-2xl font-bold text-blue-600 xl:block">
+                  →
+                </span>
+              )}
+            </div>
+          ))}
+        </motion.div>
+      </motion.section>
+
+      <motion.section
+        className="mx-auto w-full max-w-6xl px-4 pb-10"
+        variants={sectionReveal}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.25 }}
+      >
+        <motion.h2 className="text-center text-3xl font-bold md:text-4xl" variants={fadeItem}>What Founderport Provides</motion.h2>
+        <motion.p className="mt-3 text-center text-base text-slate-500 md:text-lg" variants={fadeItem}>
+          A centralized platform that brings clarity and structure to your entrepreneurial journey
+        </motion.p>
+        <motion.div
+          className="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3"
+          variants={fadeStagger}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, amount: 0.2 }}
+        >
+          {featureCards.map((card) => (
+            <motion.article
+              key={card.title}
+              variants={fadeItem}
+              whileHover={{ y: -6, scale: 1.01 }}
+              className="rounded-2xl border border-slate-300 bg-white p-6 shadow-sm transition hover:shadow-md"
+            >
+              <div className="text-2xl">{card.icon}</div>
+              <h3 className="mt-3 text-xl font-bold text-slate-800">{card.title}</h3>
+              <p className="mt-3 text-base leading-relaxed text-slate-500">{card.description}</p>
+            </motion.article>
+          ))}
+        </motion.div>
+      </motion.section>
+
+      <motion.section
+        className="mx-auto w-full max-w-5xl px-4 pb-14"
+        variants={sectionReveal}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.25 }}
+      >
+        <motion.div
+          className="rounded-2xl bg-blue-700 px-6 py-10 text-center text-white"
+          whileHover={{ scale: 1.01 }}
+          transition={{ duration: 0.25 }}
+        >
+          <motion.h2 className="text-3xl font-bold md:text-4xl" variants={fadeItem}>Start Your Business Planning Journey</motion.h2>
+          <motion.p className="mx-auto mt-3 max-w-3xl text-base text-blue-100 md:text-lg" variants={fadeItem}>
+            Founderport provides the structure and guidance to help you move from idea to plan to action with clarity and confidence.
+          </motion.p>
+          <motion.div variants={fadeItem}>
+            <Link
+            to={primaryCta}
+            className="mt-6 inline-block rounded-xl bg-white px-6 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+          >
+            Begin Planning Your Business
           </Link>
-          {isLoggedIn ? (
-            <Link to="/ventures" className="px-6 py-2 bg-teal-600 text-white font-semibold rounded-full hover:bg-teal-700 transition">
-              Your Business
-            </Link>
-          ) : (
-            <Link to="/login" className="px-6 py-2 bg-teal-600 text-white font-semibold rounded-full hover:bg-teal-700 transition">
-              Get Started
-            </Link>
-          )}
-        </div>
-      </Section>
-
-      {/* Coming Soon with Alternating Layout */}
-      {/* <Section id="coming" bg="bg-white" title="Coming Soon - Service Providers">
-        <div className="space-y-12 max-w-6xl mx-auto">
-          {comingSoon.map((c, i) => (
-            <motion.div
-              key={c.title}
-              className={`flex flex-col ${i % 2 === 0 ? 'lg:flex-row' : 'lg:flex-row-reverse'} items-center gap-6`}
-              initial="hidden"
-              animate="visible"
-              variants={reveal}
-              transition={{ duration: 0.6 }}
-            >
-              <div className="flex-1">
-                <h4 className="text-2xl font-semibold mb-2 text-gray-900">{c.title}</h4>
-                <p className="text-gray-600 text-sm">{c.text}</p>
-              </div>
-              <img src={c.image} alt={c.title} loading='lazy' className="flex-1 w-full h-64 object-cover object-left-center rounded-xl shadow-md" />
-            </motion.div>
-          ))}
-        </div>
-      </Section> */}
-
-      {/* Testimonials Improved */}
-      <Section id="testimonials" bg="bg-gradient-to-b from-gray-100 to-white" title="What Our Founders Say">
-        <div className="grid gap-8 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto">
-          {testimonials.map((t, i) => (
-            <motion.div
-              key={t.name}
-              className="bg-white rounded-2xl p-6 shadow-lg flex flex-col items-center text-center space-y-4"
-              initial="hidden"
-              animate="visible"
-              variants={reveal}
-              transition={{ delay: i * 0.2, duration: 0.5 }}
-            >
-              <img src={t.image} alt={t.name} loading='lazy' className="h-16 w-16 bg-gray-200 rounded-full flex items-center justify-center text-xl font-semibold text-gray-500" />
-              <p className="italic text-gray-600">“{t.quote}”</p>
-              <div className="font-semibold text-gray-900">{t.name}</div>
-              <div className="text-gray-500 text-sm">{t.role}</div>
-            </motion.div>
-          ))}
-        </div>
-      </Section>
+          </motion.div>
+          <motion.p className="mt-5 text-sm text-blue-100" variants={fadeItem}>
+            ✓ Start free, no credit card required &nbsp;&nbsp; ✓ Work at your own pace &nbsp;&nbsp; ✓ Always know what&apos;s next
+          </motion.p>
+        </motion.div>
+      </motion.section>
     </div>
   );
 };

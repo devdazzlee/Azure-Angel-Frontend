@@ -1,9 +1,36 @@
 /* Azure-Angel-Frontend/src/index.css */
 
 /* Global styles */
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+html,
+body,
+#root {
+  font-family: 'Manrope', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: 'Poppins', 'Manrope', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+}
 
 /* Custom scrollbar for webkit browsers */
 ::-webkit-scrollbar {
