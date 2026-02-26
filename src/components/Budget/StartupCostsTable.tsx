@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { Trash2, Plus, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -224,7 +224,7 @@ const StartupCostsTable: React.FC<StartupCostsTableProps> = ({
                     <Input value={item.name} onChange={(e) => handleUpdateItem(item.id, { name: e.target.value })} className="h-9 border-gray-200/80 focus:border-teal-400 focus:ring-teal-400/20" />
                   </td>
                   <td className="px-3 py-2.5 align-top">
-                    <CurrencyInput value={item.estimated_amount ?? 0} onChange={(value) => handleUpdateItem(item.id, { estimated_amount: value })} min={0} step={100} getSmartStep={getSmartStep} className="w-full" />
+                    <CurrencyInput value={item.estimated_amount ?? 0} onChange={(value) => handleUpdateItem(item.id, { estimated_amount: value })} min={0} step={100} getSmartStep={getSmartStep} adjustmentControl="buttons" className="w-full" />
                   </td>
                   <td className="px-3 py-2.5 align-top">
                     <CurrencyInput value={item.actual_amount ?? 0} onChange={(value) => handleUpdateItem(item.id, { actual_amount: value })} min={0} step={100} getSmartStep={getSmartStep} className="w-full" />

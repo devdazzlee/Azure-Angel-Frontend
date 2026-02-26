@@ -248,7 +248,7 @@ const OperatingExpensesTable: React.FC<OperatingExpensesTableProps> = ({
                     </Tooltip>
                   </td>
                   <td className="px-3 py-2.5 align-top"><Input value={item.name} onChange={(e) => handleUpdateItem(item.id, { name: e.target.value })} className="h-9 border-gray-200/80 focus:border-teal-400 focus:ring-teal-400/20" /></td>
-                  <td className="px-3 py-2.5 align-top"><CurrencyInput value={item.estimated_amount ?? 0} onChange={(value) => handleUpdateItem(item.id, { estimated_amount: value })} min={0} step={10} getSmartStep={getSmartStep} className="w-full" /></td>
+                  <td className="px-3 py-2.5 align-top"><CurrencyInput value={item.estimated_amount ?? 0} onChange={(value) => handleUpdateItem(item.id, { estimated_amount: value })} min={0} step={10} getSmartStep={getSmartStep} adjustmentControl="buttons" className="w-full" /></td>
                   <td className="px-3 py-2.5 align-top"><CurrencyInput value={item.actual_amount ?? 0} onChange={(value) => handleUpdateItem(item.id, { actual_amount: value })} min={0} step={10} getSmartStep={getSmartStep} className="w-full" /></td>
                   <td className="px-3 py-2.5 align-top"><div className={`pt-2 text-sm ${varianceDisplay.className}`}>{varianceDisplay.valueText}</div></td>
                   <td className="px-3 py-2.5 align-top"><Input value={item.description || ''} onChange={(e) => handleUpdateItem(item.id, { description: e.target.value })} className="h-9 border-gray-200/80 focus:border-teal-400 focus:ring-teal-400/20" placeholder="Optional notes" /></td>

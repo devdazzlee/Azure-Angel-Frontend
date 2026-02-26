@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { motion } from 'framer-motion';
@@ -93,6 +93,106 @@ const StepPill = ({ n, text }: { n: number; text: string }) => (
   </div>
 );
 
+type ParsedExpenseSection = 'startup_cost' | 'operating_expense';
+
+const parseAmountFromLine = (line: string): number | null => {
+  const amountMatch = line.match(/\$[\d,]+(?:\.\d+)?/);
+  if (!amountMatch) return null;
+  const amount = Number(amountMatch[0].replace(/[$,]/g, ''));
+  return Number.isFinite(amount) ? amount : null;
+};
+
+const cleanLine = (line: string): string =>
+  line
+    .replace(/\*\*/g, '')
+    .replace(/^[-*+\s]+/, '')
+    .replace(/^\d+[\.\)]\s*/, '')
+    .trim();
+
+const parseEstimatedExpenseItems = (estimatedExpensesMarkdown: string): BudgetItem[] => {
+  if (!estimatedExpensesMarkdown?.trim()) return [];
+
+  const lines = estimatedExpensesMarkdown.split('\n').map(cleanLine).filter(Boolean);
+  const items: BudgetItem[] = [];
+  const seen = new Set<string>();
+  let currentSection: ParsedExpenseSection | null = null;
+
+  lines.forEach((line, index) => {
+    const normalized = line.toLowerCase();
+
+    if (normalized.includes('startup costs')) {
+      currentSection = 'startup_cost';
+      return;
+    }
+
+    if (normalized.includes('monthly operating expenses')) {
+      currentSection = 'operating_expense';
+      return;
+    }
+
+    if (!currentSection) return;
+
+    const amount = parseAmountFromLine(line);
+    if (amount === null) return;
+
+    const namePart = line.includes(':') ? line.split(':')[0] : line;
+    const name = cleanLine(namePart);
+    if (!name) return;
+
+    const descriptionMatch = line.match(/\(([^)]+)\)/);
+    const description = descriptionMatch?.[1]?.trim() || '';
+    const dedupeKey = `${currentSection}:${name.toLowerCase()}`;
+    if (seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
+
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    items.push({
+      id: `angel_${currentSection}_${slug || index}_${index}`,
+      name,
+      category: 'expense',
+      subcategory: currentSection,
+      estimated_amount: amount,
+      actual_amount: undefined,
+      description,
+      is_custom: false,
+      isSelected: true,
+    });
+  });
+
+  return items;
+};
+
+const buildEstimatedExpensesMarkdownFromItems = (items: BudgetItem[]): string => {
+  const startupItems = items.filter((item) => item.category === 'expense' && item.subcategory === 'startup_cost');
+  const operatingItems = items.filter((item) => item.category === 'expense' && item.subcategory === 'operating_expense');
+  const lines: string[] = [];
+
+  if (startupItems.length > 0) {
+    lines.push('**Startup Costs**');
+    startupItems.forEach((item) => {
+      lines.push(
+        `${item.name}: $${(Number(item.estimated_amount) || 0).toLocaleString()}${
+          item.description ? ` (${item.description})` : ''
+        }`
+      );
+    });
+  }
+
+  if (operatingItems.length > 0) {
+    if (lines.length > 0) lines.push('');
+    lines.push('**Monthly Operating Expenses**');
+    operatingItems.forEach((item) => {
+      lines.push(
+        `${item.name}: $${(Number(item.estimated_amount) || 0).toLocaleString()}${
+          item.description ? ` (${item.description})` : ''
+        }`
+      );
+    });
+  }
+
+  return lines.join('\n');
+};
+
 /* ════════════════════════════════════════════════════════════════════════════ */
 
 const PlanToBudgetTransition: React.FC<PlanToBudgetTransitionProps> = ({
@@ -116,6 +216,55 @@ const PlanToBudgetTransition: React.FC<PlanToBudgetTransitionProps> = ({
       : estimatedExpensesProp
         ? String(estimatedExpensesProp)
         : '';
+  const estimatedExpensesStorageKey = useMemo(
+    () => (sessionId ? `venture_estimated_expenses_${sessionId}` : null),
+    [sessionId]
+  );
+  const [cachedEstimatedExpenses, setCachedEstimatedExpenses] = useState('');
+  const effectiveEstimatedExpenses = estimatedExpenses.trim() || cachedEstimatedExpenses;
+  const angelEstimatedItems = useMemo(
+    () => parseEstimatedExpenseItems(effectiveEstimatedExpenses),
+    [effectiveEstimatedExpenses]
+  );
+  const hasSeededAngelEstimatesRef = useRef(false);
+
+  useEffect(() => {
+    if (!estimatedExpensesStorageKey || typeof window === 'undefined') return;
+    const cached = window.localStorage.getItem(estimatedExpensesStorageKey);
+    if (cached) setCachedEstimatedExpenses(cached);
+  }, [estimatedExpensesStorageKey]);
+
+  useEffect(() => {
+    if (!estimatedExpensesStorageKey || typeof window === 'undefined') return;
+    if (!estimatedExpenses.trim()) return;
+    window.localStorage.setItem(estimatedExpensesStorageKey, estimatedExpenses);
+    setCachedEstimatedExpenses(estimatedExpenses);
+  }, [estimatedExpensesStorageKey, estimatedExpenses]);
+
+  // On refresh, transition_data may not include estimated_expenses.
+  // Rebuild the display card from saved budget items so users don't lose context.
+  useEffect(() => {
+    if (!sessionId || effectiveEstimatedExpenses.trim()) return;
+    let cancelled = false;
+
+    const hydrateEstimatedExpensesFromBudget = async () => {
+      try {
+        const response = await budgetService.getBudget(sessionId);
+        if (cancelled || !response?.success || !response.result) return;
+        const markdown = buildEstimatedExpensesMarkdownFromItems(response.result.items || []);
+        if (!markdown.trim()) return;
+        setCachedEstimatedExpenses(markdown);
+        if (estimatedExpensesStorageKey && typeof window !== 'undefined') {
+          window.localStorage.setItem(estimatedExpensesStorageKey, markdown);
+        }
+      } catch (err) {
+        console.error('[PlanToBudgetTransition] Failed to hydrate estimated expenses from budget:', err);
+      }
+    };
+
+    hydrateEstimatedExpensesFromBudget();
+    return () => { cancelled = true; };
+  }, [sessionId, effectiveEstimatedExpenses, estimatedExpensesStorageKey]);
 
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [budgetCompleted, setBudgetCompleted] = useState(false);
@@ -136,6 +285,69 @@ const PlanToBudgetTransition: React.FC<PlanToBudgetTransitionProps> = ({
     if (!showBudgetModal || !sessionId) return;
     let cancelled = false;
 
+    const applyAngelExpenseSeeds = (baseBudget: Budget): { budget: Budget; didSeed: boolean } => {
+      if (hasSeededAngelEstimatesRef.current || angelEstimatedItems.length === 0) {
+        return { budget: baseBudget, didSeed: false };
+      }
+
+      const existingExpenseItems = (baseBudget.items || []).filter((item) => item.category === 'expense');
+      if (existingExpenseItems.length > 0) {
+        return { budget: baseBudget, didSeed: false };
+      }
+
+      hasSeededAngelEstimatesRef.current = true;
+      const nextItems = [...(baseBudget.items || []), ...angelEstimatedItems];
+      const totalEstimatedExpenses = nextItems
+        .filter((item) => item.category === 'expense')
+        .reduce((sum, item) => sum + (Number(item.estimated_amount) || 0), 0);
+
+      return {
+        didSeed: true,
+        budget: {
+          ...baseBudget,
+          items: nextItems,
+          total_estimated_expenses: totalEstimatedExpenses,
+          updated_at: new Date().toISOString(),
+        },
+      };
+    };
+
+    const persistSeededBudget = async (seededBudget: Budget) => {
+      try {
+        const payload = {
+          session_id: sessionId,
+          initial_investment: seededBudget.initial_investment,
+          total_estimated_expenses: seededBudget.total_estimated_expenses,
+          total_estimated_revenue: seededBudget.total_estimated_revenue || 0,
+          items: (seededBudget.items || []).map((item) => ({
+            id: item.id,
+            name: item.name,
+            category: item.category,
+            subcategory: item.subcategory,
+            estimated_amount: item.estimated_amount,
+            actual_amount: item.actual_amount,
+            description: item.description,
+            is_custom: item.is_custom,
+            isSelected: item.isSelected,
+          })),
+        };
+        const saveResponse = await budgetService.saveBudget(sessionId, payload);
+        if (!cancelled && saveResponse?.success && saveResponse.result) {
+          setBudget(saveResponse.result);
+        }
+      } catch (saveErr) {
+        console.error('[PlanToBudgetTransition] Failed to persist seeded Angel estimates:', saveErr);
+      }
+    };
+
+    const cacheEstimatedMarkdown = (items: BudgetItem[]) => {
+      if (!estimatedExpensesStorageKey || typeof window === 'undefined') return;
+      const markdown = buildEstimatedExpensesMarkdownFromItems(items);
+      if (!markdown.trim()) return;
+      window.localStorage.setItem(estimatedExpensesStorageKey, markdown);
+      if (!cancelled) setCachedEstimatedExpenses(markdown);
+    };
+
     const loadBudgetFromDB = async () => {
       try {
         setBudgetLoading(true);
@@ -148,11 +360,29 @@ const PlanToBudgetTransition: React.FC<PlanToBudgetTransitionProps> = ({
           budgetId: response.result?.id,
         });
 
-        if (response.success && response.result && response.result.id) {
-          setBudget(response.result);
+        const baseBudget =
+          response.success && response.result && response.result.id
+            ? response.result
+            : {
+                id: '',
+                session_id: sessionId,
+                initial_investment: 20000,
+                total_estimated_expenses: 0,
+                total_estimated_revenue: 0,
+                items: [],
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              };
+
+        const { budget: nextBudget, didSeed } = applyAngelExpenseSeeds(baseBudget);
+        if (!cancelled) setBudget(nextBudget);
+
+        if (didSeed) {
+          await persistSeededBudget(nextBudget);
+          cacheEstimatedMarkdown(nextBudget.items || []);
+        } else if (!effectiveEstimatedExpenses.trim()) {
+          cacheEstimatedMarkdown(baseBudget.items || []);
         }
-        // If no budget in DB yet, keep the default local state — items will be
-        // created via add_budget_item which calls _ensure_budget_exists
       } catch (err) {
         console.error('[PlanToBudgetTransition] Failed to load budget:', err);
       } finally {
@@ -162,7 +392,7 @@ const PlanToBudgetTransition: React.FC<PlanToBudgetTransitionProps> = ({
 
     loadBudgetFromDB();
     return () => { cancelled = true; };
-  }, [showBudgetModal, sessionId]);
+  }, [showBudgetModal, sessionId, angelEstimatedItems, estimatedExpensesStorageKey, effectiveEstimatedExpenses]);
 
   const handleStartBudget = () => setShowBudgetModal(true);
 
@@ -320,7 +550,7 @@ const PlanToBudgetTransition: React.FC<PlanToBudgetTransitionProps> = ({
           )}
 
           {/* ─── Estimated Expenses ─── */}
-          {estimatedExpenses && (
+          {effectiveEstimatedExpenses && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -342,7 +572,7 @@ const PlanToBudgetTransition: React.FC<PlanToBudgetTransitionProps> = ({
                 </p>
                 <div className="bg-gradient-to-br from-rose-50/80 to-orange-50/60 rounded-xl p-5 border border-rose-100">
                   <div className="text-gray-700 prose prose-sm max-w-none">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{estimatedExpenses}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{effectiveEstimatedExpenses}</ReactMarkdown>
                   </div>
                 </div>
               </div>
