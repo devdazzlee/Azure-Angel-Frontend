@@ -350,9 +350,23 @@ export async function uploadBusinessPlan(
     }
 }
 
+export interface KycResponseConfig {
+    affirmationIntensity: number; // 0-10
+    constructiveFeedbackIntensity: number; // 0-10
+    strictBusinessTypeAttention?: boolean;
+    avoidBlindAgreement?: boolean;
+}
+
+export interface KycContextData {
+    phase: 'gky';
+    stepIndex: number;
+    skipStep?: boolean;
+    responseConfig?: KycResponseConfig;
+}
+
 export async function fetchNextQuestion(
     userMessage: string,
-    contextData: { phase: 'gky'; stepIndex: number; skipStep?: boolean }
+    contextData: KycContextData
 ): Promise<ChatResponse> {
     const token = localStorage.getItem('sb_access_token');
     if (!token) throw new Error('Not authenticated');

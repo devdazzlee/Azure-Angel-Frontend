@@ -44,6 +44,7 @@ import { budgetService } from "../../services/budgetService";
 interface ConversationPair {
   question: string;
   answer: string;
+  acknowledgement?: string;
   questionNumber?: number;
   phase?: 'GKY' | 'BUSINESS_PLAN' | 'ROADMAP' | 'IMPLEMENTATION' | 'PLAN_TO_ROADMAP_TRANSITION' | 'PLAN_TO_SUMMARY_TRANSITION' | 'PLAN_TO_BUDGET_TRANSITION' | 'ROADMAP_TO_IMPLEMENTATION_TRANSITION';
 }
@@ -64,7 +65,7 @@ interface ProgressState {
   percent: number;
   asked_q?: string;  // Current question tag (e.g., "BUSINESS_PLAN.44")
   combined?: boolean;  // Flag for combined progress
-  overall_progress?: {  // Combined progress for GKY + Business Plan (51 total)
+  overall_progress?: {  // Combined progress for GKY + Business Plan (50 total)
     answered: number;
     total: number;
     percent: number;
@@ -106,7 +107,7 @@ const DISPLAY_FALLBACK_CONTEXT: Required<BusinessContextInfo> = {
 // Updated to include PLAN_TO_ROADMAP_TRANSITION phase
 
 const QUESTION_COUNTS = {
-  GKY: 6,  // 6 sequential questions: GKY.01 through GKY.06
+  GKY: 5,  // 5 sequential questions (limited for simplified onboarding)
   BUSINESS_PLAN: 45,  // Updated to 45 questions (9 sections restructured)
   ROADMAP: 1,
   IMPLEMENTATION: 10,
@@ -243,7 +244,7 @@ const deriveQuestionNumber = (
   replyText: string,
   progressPayload?: Record<string, any>
 ): number | null => {
-  // For GKY phase, questions are now sequential (1-6), use directly
+  // For GKY phase, questions are now sequential (1-5), use directly
   if (progressPayload?.phase === 'GKY' && typeof backendQuestionNumber === "number" && !Number.isNaN(backendQuestionNumber)) {
     return backendQuestionNumber;
   }
@@ -672,6 +673,7 @@ export default function ChatPage() {
   };
 
   const [currentQuestion, setCurrentQuestion] = useState("");
+  const [currentAcknowledgement, setCurrentAcknowledgement] = useState("");
   const [currentQuestionNumber, setCurrentQuestionNumber] = useState<number | null>(null);
   const [currentInput, setCurrentInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -684,11 +686,11 @@ export default function ChatPage() {
     percent: 0,
     overall_progress: {
       answered: 0,
-      total: 51, // 6 GKY + 45 Business Plan
+      total: 50, // 5 GKY + 45 Business Plan
       percent: 0,
       phase_breakdown: {
         gky_completed: 0,
-        gky_total: 6,
+        gky_total: 5,
         bp_completed: 0,
         bp_total: 45,
       },
@@ -698,7 +700,7 @@ export default function ChatPage() {
     answered: 0,
     total: QUESTION_COUNTS.GKY,
     overallAnswered: 0,
-    overallTotal: 51, // 6 GKY + 45 Business Plan
+    overallTotal: 50, // 5 GKY + 45 Business Plan
   });
   const [transitionQuote, setTransitionQuote] = useState<MotivationalQuote | null>(null);
   const pickFallbackTransitionQuote = useCallback((exclude?: string) => {
@@ -782,16 +784,14 @@ export default function ChatPage() {
       let phaseAnsweredForDisplay: number;
       
       if (progressData.phase === "GKY" || progressData.phase === "BUSINESS_PLAN") {
-        combinedTotal = 51; // 6 GKY + 45 Business Plan
+        combinedTotal = QUESTION_COUNTS.GKY + QUESTION_COUNTS.BUSINESS_PLAN;
         
         if (progressData.phase === "GKY") {
-          // Backend now sends completed questions count directly, no need to subtract 1
           phaseAnsweredForDisplay = phaseAnswered;
           combinedAnswered = phaseAnsweredForDisplay;
         } else {
-          // For Business Plan, add GKY total (6) to current answered
           phaseAnsweredForDisplay = phaseAnswered;
-          combinedAnswered = 6 + phaseAnswered;
+          combinedAnswered = QUESTION_COUNTS.GKY + phaseAnswered;
         }
       } else {
         combinedTotal = phaseTotal;
@@ -1235,7 +1235,7 @@ export default function ChatPage() {
         // Save the guidance content as the user's answer to the current question
         setHistory((prev) => [
           ...prev,
-          { question: currentQuestion, answer: guidanceContent, questionNumber: currentQuestionNumber },
+          { question: currentQuestion, answer: guidanceContent, acknowledgement: currentAcknowledgement || undefined, questionNumber: currentQuestionNumber },
         ]);
       }
       
@@ -1244,9 +1244,10 @@ export default function ChatPage() {
       const {
         result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number },
       } = await fetchQuestion("Accept", sessionId!);
-      const formatted = formatAngelMessage(reply);
+      const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
       const questionNumber = deriveQuestionNumber(question_number, reply, progress);
-      setCurrentQuestion(formatted);
+      setCurrentQuestion(parsedQ);
+      setCurrentAcknowledgement(ack);
       setCurrentQuestionNumber(questionNumber);
       updateQuestionTracker(progress.phase, questionNumber);
       applyProgressUpdate(progress);
@@ -1297,9 +1298,10 @@ export default function ChatPage() {
       const {
         result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number },
       } = await fetchQuestion("Yes", sessionId!);
-      const formatted = formatAngelMessage(reply);
+      const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
       const questionNumber = deriveQuestionNumber(question_number, reply, progress);
-      setCurrentQuestion(formatted);
+      setCurrentQuestion(parsedQ);
+      setCurrentAcknowledgement(ack);
       setCurrentQuestionNumber(questionNumber);
       updateQuestionTracker(progress.phase, questionNumber);
       applyProgressUpdate(progress);
@@ -1327,9 +1329,10 @@ export default function ChatPage() {
       const {
         result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number },
       } = await fetchQuestion("No", sessionId!);
-      const formatted = formatAngelMessage(reply);
+      const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
       const questionNumber = deriveQuestionNumber(question_number, reply, progress);
-      setCurrentQuestion(formatted);
+      setCurrentQuestion(parsedQ);
+      setCurrentAcknowledgement(ack);
       setCurrentQuestionNumber(questionNumber);
       updateQuestionTracker(progress.phase, questionNumber);
       applyProgressUpdate(progress);
@@ -1357,9 +1360,10 @@ export default function ChatPage() {
       const {
         result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number },
       } = await fetchQuestion("Draft Answer", sessionId!);
-      const formatted = formatAngelMessage(reply);
+      const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
       const questionNumber = deriveQuestionNumber(question_number, reply, progress);
-      setCurrentQuestion(formatted);
+      setCurrentQuestion(parsedQ);
+      setCurrentAcknowledgement(ack);
       setCurrentQuestionNumber(questionNumber);
       updateQuestionTracker(progress.phase, questionNumber);
       applyProgressUpdate(progress);
@@ -1463,9 +1467,10 @@ export default function ChatPage() {
         result: { reply, progress, web_search_status, immediate_response, question_number },
       } = await fetchQuestion("", sessionId!);
       
-      const formatted = formatAngelMessage(reply);
+      const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
       const questionNumber = deriveQuestionNumber(question_number, reply, progress);
-      setCurrentQuestion(formatted);
+      setCurrentQuestion(parsedQ);
+      setCurrentAcknowledgement(ack);
       setCurrentQuestionNumber(questionNumber);
       updateQuestionTracker(progress.phase, questionNumber);
       applyProgressUpdate(progress);
@@ -1962,6 +1967,55 @@ export default function ChatPage() {
     return formatted.trim();
   };
 
+  const parseAngelReply = (raw: string): { acknowledgement: string; question: string } => {
+    if (!raw || typeof raw !== 'string') return { acknowledgement: '', question: String(raw || '') };
+
+    const text = raw.trim();
+
+    const isSectionSummary =
+      /Section Complete/i.test(text) ||
+      (/Summary of Your Information/i.test(text) && /Educational Insights|Critical Considerations/i.test(text));
+    if (isSectionSummary) return { acknowledgement: '', question: formatAngelMessage(text) };
+
+    const isIntro =
+      text.toLowerCase().includes('welcome to founderport') ||
+      text.toLowerCase().includes("hello! i'm angel");
+    if (isIntro) return { acknowledgement: '', question: formatAngelMessage(text) };
+
+    const tagIndex = text.search(/\[\[Q:[A-Z_]+\.\d{2}\]\]/);
+    if (tagIndex > 0) {
+      const ack = text.slice(0, tagIndex).trim();
+      const q = text.slice(tagIndex).trim();
+      if (ack.length > 0) {
+        return { acknowledgement: formatAngelMessage(ack), question: formatAngelMessage(q) };
+      }
+    }
+
+    const questionOfMatch = text.search(/Question\s+\d+\s+of\s+\d+\s*:/i);
+    if (questionOfMatch > 0) {
+      const ack = text.slice(0, questionOfMatch).trim();
+      const q = text.slice(questionOfMatch).trim();
+      if (ack.length > 0) {
+        return { acknowledgement: formatAngelMessage(ack), question: formatAngelMessage(q) };
+      }
+    }
+
+    const paragraphs = text.split(/\n\s*\n/);
+    if (paragraphs.length >= 2) {
+      const boldQuestionIdx = paragraphs.findIndex(
+        (p, i) => i > 0 && /\*\*[^*]{10,}\?\*\*/.test(p.trim())
+      );
+      if (boldQuestionIdx > 0) {
+        const ack = paragraphs.slice(0, boldQuestionIdx).join('\n\n').trim();
+        const q = paragraphs.slice(boldQuestionIdx).join('\n\n').trim();
+        if (ack.length > 0 && q.length > 0) {
+          return { acknowledgement: formatAngelMessage(ack), question: formatAngelMessage(q) };
+        }
+      }
+    }
+
+    return { acknowledgement: '', question: formatAngelMessage(text) };
+  };
 
   // Format questions with bold styling and spacing
   const formatQuestionText = (text: string): string => {
@@ -2676,9 +2730,10 @@ export default function ChatPage() {
           immediate_response: immediate_response,
           question_number: question_number
         });
-        const formatted = formatAngelMessage(reply);
+        const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
         const questionNumber = deriveQuestionNumber(question_number, reply, progress);
-        setCurrentQuestion(formatted);
+        setCurrentQuestion(parsedQ);
+        setCurrentAcknowledgement(ack);
         setCurrentQuestionNumber(questionNumber);
         updateQuestionTracker(progress.phase, questionNumber);
         applyProgressUpdate(progress);
@@ -2744,6 +2799,7 @@ export default function ChatPage() {
       const buildConversationFromHistory = (records: RawChatRecord[]) => {
         const pairs: ConversationPair[] = [];
         let pendingQuestion: string | null = null;
+        let pendingAcknowledgement: string | null = null;
         let pendingNumber: number | null = null;
         let pendingPhase: ConversationPair['phase'] | null = null;
         const phaseCounters: Record<string, number> = {};
@@ -2751,7 +2807,7 @@ export default function ChatPage() {
         records.forEach((record) => {
           if (record.role === 'assistant') {
             if (!record.content) return;
-            const formattedQuestion = formatAngelMessage(record.content);
+            const { acknowledgement, question } = parseAngelReply(record.content);
             const tagMatch = record.content.match(/\[\[Q:([A-Z_]+)\.(\d{2})]]/);
             const rawPhase = tagMatch ? tagMatch[1] : record.phase;
             const rawUpper = rawPhase ? rawPhase.toUpperCase() : 'GKY';
@@ -2767,7 +2823,8 @@ export default function ChatPage() {
               pendingNumber = phaseCounters[normalizedPhase];
             }
 
-            pendingQuestion = formattedQuestion;
+            pendingQuestion = question;
+            pendingAcknowledgement = acknowledgement;
             pendingPhase = normalizedPhase as ConversationPair['phase'];
           } else if (record.role === 'user') {
             if (!pendingQuestion) return;
@@ -2778,16 +2835,18 @@ export default function ChatPage() {
             pairs.push({
               question: pendingQuestion,
               answer: answerText,
+              acknowledgement: pendingAcknowledgement || undefined,
               questionNumber: pendingNumber ?? undefined,
               phase: pendingPhase ?? undefined,
             });
             pendingQuestion = null;
+            pendingAcknowledgement = null;
             pendingNumber = null;
             pendingPhase = null;
           }
         });
 
-        return { pairs, pendingQuestion, pendingNumber, pendingPhase };
+        return { pairs, pendingQuestion, pendingAcknowledgement, pendingNumber, pendingPhase };
       };
 
       try {
@@ -2910,8 +2969,8 @@ export default function ChatPage() {
         const totalPhase = QUESTION_COUNTS[phase as keyof typeof QUESTION_COUNTS] || QUESTION_COUNTS.GKY;
         const phasePercent = totalPhase > 0 ? Math.min(Math.round((answeredPhase / totalPhase) * 100), 100) : 0;
 
-        // Overall progress always includes ALL question phases (GKY + BP = 51)
-        const overallTotal = QUESTION_COUNTS.GKY + QUESTION_COUNTS.BUSINESS_PLAN; // Always 51
+        // Overall progress always includes ALL question phases (GKY + BP = 50)
+        const overallTotal = QUESTION_COUNTS.GKY + QUESTION_COUNTS.BUSINESS_PLAN; // 5 + 45 = 50
         let overallAnswered = 0;
         Object.entries(phaseQuestionSets).forEach(([phaseKey, questions]) => {
           const normalizedPhase = phaseKey.toUpperCase();
@@ -2930,7 +2989,7 @@ export default function ChatPage() {
         const pendingNumber = numberFromTag ?? reconstructed.pendingNumber;
 
         // Calculate phase_breakdown from actual data (don't rely on previous state which is empty on restore)
-        const gkyTotal = QUESTION_COUNTS.GKY || 6;
+        const gkyTotal = QUESTION_COUNTS.GKY || 5;
         const bpTotalCalc = QUESTION_COUNTS.BUSINESS_PLAN || 45;
         let gkyCompleted = 0;
         let bpCompleted = 0;
@@ -3226,6 +3285,7 @@ export default function ChatPage() {
 
         if (reconstructed.pendingQuestion) {
           setCurrentQuestion(reconstructed.pendingQuestion);
+          setCurrentAcknowledgement(reconstructed.pendingAcknowledgement || '');
           setCurrentQuestionNumber(pendingNumber);
           setNeedsInitialQuestion(false);
           setBackendTotals({ answered: answeredPhase, total: totalPhase, overallAnswered, overallTotal });
@@ -3274,7 +3334,7 @@ export default function ChatPage() {
           });
           setHistory([]);
           setNeedsInitialQuestion(true);
-          setBackendTotals({ answered: 0, total: QUESTION_COUNTS.GKY, overallAnswered: 0, overallTotal: 51 });
+          setBackendTotals({ answered: 0, total: QUESTION_COUNTS.GKY, overallAnswered: 0, overallTotal: 50 });
         }
       }
     };
@@ -3294,20 +3354,16 @@ export default function ChatPage() {
       return;
     }
 
-    // Store current question for history
     const previousQuestion = currentQuestion;
+    const previousAcknowledgement = currentAcknowledgement;
     const previousQuestionNumber = currentQuestionNumber;
 
-    // Optimistically update UI immediately - add user's message to history
-    // DO NOT clear currentQuestion - it causes early return and looks like page refresh
     setLoading(true);
     setCurrentInput("");
     
-    // Immediately add user's message to history
-    // Keep currentQuestion visible - UI will show loading state on top of it
     setHistory((prev) => [
       ...prev,
-      { question: previousQuestion, answer: input, questionNumber: previousQuestionNumber },
+      { question: previousQuestion, answer: input, acknowledgement: previousAcknowledgement || undefined, questionNumber: previousQuestionNumber },
     ]);
 
     try {
@@ -3403,9 +3459,10 @@ export default function ChatPage() {
         // regular handleNext → fetchQuestion flow which returns BP Q1.
         // NO modal, NO auto-start, NO upload popup.
         if (transition_phase === "GKY_TO_BUSINESS_PLAN") {
-          const formatted = formatAngelMessage(reply);
-          setCurrentQuestion(formatted);
-          setCurrentQuestionNumber(null);  // Hide "Question X" badge for transition
+          const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
+          setCurrentQuestion(parsedQ);
+          setCurrentAcknowledgement(ack);
+          setCurrentQuestionNumber(null);
           applyProgressUpdate(progress);
           setLoading(false);
           return;
@@ -3420,10 +3477,10 @@ export default function ChatPage() {
         return;
       }
       
-      // Update current question with the new question from API response
-      const formatted = formatAngelMessage(reply);
+      const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
       const nextQuestionNumber = deriveQuestionNumber(question_number, reply, progress);
-      setCurrentQuestion(formatted);
+      setCurrentQuestion(parsedQ);
+      setCurrentAcknowledgement(ack);
       setCurrentQuestionNumber(nextQuestionNumber);
       updateQuestionTracker(progress.phase, nextQuestionNumber);
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
@@ -3634,7 +3691,7 @@ export default function ChatPage() {
       }
 
       const replyText = data.result?.reply ?? '';
-      const formattedReply = formatAngelMessage(replyText);
+      const { acknowledgement: prevAck, question: prevQ } = parseAngelReply(replyText);
       const tagMatch = replyText.match(/\[\[Q:([A-Z_]+)\.(\d{2})]]/);
       const previousQuestionNumber = tagMatch ? parseInt(tagMatch[2], 10) : null;
       const previousPhase = tagMatch ? tagMatch[1] : progress.phase;
@@ -3647,11 +3704,12 @@ export default function ChatPage() {
           }));
         }
 
-        setCurrentQuestion(formattedReply);
+        setCurrentQuestion(prevQ);
+        setCurrentAcknowledgement(prevAck);
         setCurrentQuestionNumber(previousQuestionNumber);
         console.log("✅ Current question reset to previous:", {
           questionNumber: previousQuestionNumber,
-          replyPreview: formattedReply.substring(0, 80),
+          replyPreview: prevQ.substring(0, 80),
         });
 
         // CRITICAL: Sync session progress to backend so reload restores correct question
@@ -3686,20 +3744,22 @@ export default function ChatPage() {
           const buildPairs = (records: RawChatRecord[]) => {
             const pairs: ConversationPair[] = [];
             let pendingQuestion: string | null = null;
+            let pendingAck: string | null = null;
             let pendingNumber: number | null = null;
             let pendingPhase: ConversationPair['phase'] | null = null;
 
             records.forEach((record) => {
               if (record.role === 'assistant') {
                 if (!record.content) return;
-                const formattedQuestion = formatAngelMessage(record.content);
+                const { acknowledgement, question } = parseAngelReply(record.content);
                 const tagMatch = record.content.match(/\[\[Q:([A-Z_]+)\.(\d{2})]]/);
                 const rawPhase = tagMatch ? tagMatch[1] : record.phase;
                 const rawUpper2 = rawPhase ? rawPhase.toUpperCase() : 'GKY';
                 const normalizedPhase = rawUpper2 === 'KYC' ? 'GKY' : rawUpper2;
                 const parsedNumber = tagMatch ? parseInt(tagMatch[2], 10) : null;
 
-                pendingQuestion = formattedQuestion;
+                pendingQuestion = question;
+                pendingAck = acknowledgement;
                 pendingNumber = parsedNumber;
                 pendingPhase = normalizedPhase as ConversationPair['phase'];
               } else if (record.role === 'user') {
@@ -3711,10 +3771,12 @@ export default function ChatPage() {
                 pairs.push({
                   question: pendingQuestion,
                   answer: answerText,
+                  acknowledgement: pendingAck || undefined,
                   questionNumber: pendingNumber ?? undefined,
                   phase: pendingPhase ?? undefined,
                 });
                 pendingQuestion = null;
+                pendingAck = null;
                 pendingNumber = null;
                 pendingPhase = null;
               }
@@ -3953,7 +4015,7 @@ export default function ChatPage() {
   // Overall progress: ensure it's at least as high as currentStep (accounts for initial load where backend hasn't responded yet)
   const rawOverallAnswered = progress.overall_progress?.answered ?? backendTotals.overallAnswered;
   const overallAnswered = currentStep > 0 
-    ? Math.max(rawOverallAnswered, progress.phase === "GKY" ? currentStep : progress.phase === "BUSINESS_PLAN" ? 6 + currentStep : currentStep)
+    ? Math.max(rawOverallAnswered, progress.phase === "GKY" ? currentStep : progress.phase === "BUSINESS_PLAN" ? QUESTION_COUNTS.GKY + currentStep : currentStep)
     : rawOverallAnswered;
   const overallTotal = progress.overall_progress?.total ?? backendTotals.overallTotal;
   const overallPercent = overallTotal > 0 ? Math.round((overallAnswered / overallTotal) * 100) : percent;
@@ -4008,6 +4070,7 @@ export default function ChatPage() {
           // Budget is complete, now transition to roadmap
           setTransitionData(null);
           setCurrentQuestion("");
+          setCurrentAcknowledgement("");
           setLoading(true);
           try {
             const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/transition-decision`, {
@@ -4173,7 +4236,7 @@ export default function ChatPage() {
       // Navigate to a previous question
       const pair = history[number];
       setCurrentQuestion(pair.question);
-      // TODO: Implement API call to actually navigate to this question
+      setCurrentAcknowledgement(pair.acknowledgement || '');
     }
   };
 
@@ -4667,8 +4730,23 @@ export default function ChatPage() {
                           </span>
                         </div>
                       )}
-                      <div className="text-gray-800 whitespace-pre-wrap text-sm">
-                        <QuestionFormatter text={pair.question} phase={progress.phase} />
+                      <div className="space-y-3">
+                        {pair.acknowledgement && (
+                          <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 mb-1.5">Angel Response</p>
+                            <div className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed">
+                              <QuestionFormatter text={pair.acknowledgement} phase={progress.phase} />
+                            </div>
+                          </div>
+                        )}
+                        <div className={pair.acknowledgement ? "rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3" : ""}>
+                          {pair.acknowledgement && (
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-600 mb-1.5">Next Question</p>
+                          )}
+                          <div className="text-gray-800 whitespace-pre-wrap text-sm">
+                            <QuestionFormatter text={pair.question} phase={progress.phase} />
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -4737,7 +4815,22 @@ export default function ChatPage() {
                           </div>
                         </div>
                       ) : (
-                        <QuestionFormatter text={currentQuestion || "Loading..."} phase={progress.phase} />
+                        <div className="space-y-3">
+                          {currentAcknowledgement && (
+                            <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 mb-1.5">Angel Response</p>
+                              <div className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed">
+                                <QuestionFormatter text={currentAcknowledgement} phase={progress.phase} />
+                              </div>
+                            </div>
+                          )}
+                          <div className={currentAcknowledgement ? "rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3" : ""}>
+                            {currentAcknowledgement && (
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-600 mb-1.5">Next Question</p>
+                            )}
+                            <QuestionFormatter text={currentQuestion || "Loading..."} phase={progress.phase} />
+                          </div>
+                        </div>
                       )}
                     </div>
                     
@@ -4940,7 +5033,7 @@ export default function ChatPage() {
               percent: overallPercent,
               phase_breakdown: (() => {
                 const base = progress.overall_progress?.phase_breakdown ?? {
-                  gky_completed: 0, gky_total: 6, bp_completed: 0, bp_total: 45,
+                  gky_completed: 0, gky_total: 5, bp_completed: 0, bp_total: 45,
                 };
                 // Ensure phase_breakdown reflects corrected currentStep
                 if (progress.phase === "GKY" && currentStep > (base.gky_completed ?? 0)) {
@@ -5225,6 +5318,7 @@ export default function ChatPage() {
                     const buildPairs = (records: any[]) => {
                       const pairs: ConversationPair[] = [];
                       let pendingQuestion: string | null = null;
+                      let pendingAck: string | null = null;
                       let pendingNumber: number | null = null;
                       let pendingPhase: ConversationPair['phase'] | null = null;
                       const phaseCounters: Record<string, number> = {};
@@ -5232,11 +5326,10 @@ export default function ChatPage() {
                       records.forEach((record) => {
                         if (record.role === 'assistant') {
                           if (!record.content) return;
-                          // Skip summary messages (they don't have question tags)
                           const hasQuestionTag = record.content.match(/\[\[Q:([A-Z_]+)\.(\d{2})]]/);
-                          if (!hasQuestionTag) return; // Skip summary message
+                          if (!hasQuestionTag) return;
                           
-                          const formattedQuestion = formatAngelMessage(record.content);
+                          const { acknowledgement, question } = parseAngelReply(record.content);
                           const tagMatch = record.content.match(/\[\[Q:([A-Z_]+)\.(\d{2})]]/);
                           const rawPhase = tagMatch ? tagMatch[1] : record.phase;
                           const rawUpper3 = rawPhase ? rawPhase.toUpperCase() : 'GKY';
@@ -5252,7 +5345,8 @@ export default function ChatPage() {
                             pendingNumber = phaseCounters[normalizedPhase];
                           }
 
-                          pendingQuestion = formattedQuestion;
+                          pendingQuestion = question;
+                          pendingAck = acknowledgement;
                           pendingPhase = normalizedPhase as ConversationPair['phase'];
                         } else if (record.role === 'user') {
                           if (!pendingQuestion) return;
@@ -5263,10 +5357,12 @@ export default function ChatPage() {
                           pairs.push({
                             question: pendingQuestion,
                             answer: answerText,
+                            acknowledgement: pendingAck || undefined,
                             questionNumber: pendingNumber ?? undefined,
                             phase: pendingPhase ?? undefined,
                           });
                           pendingQuestion = null;
+                          pendingAck = null;
                           pendingNumber = null;
                           pendingPhase = null;
                         }
@@ -5329,18 +5425,18 @@ export default function ChatPage() {
                   console.warn("Failed to sync progress:", syncError);
                 }
                 
-                const formatted = formatAngelMessage(reply);
+                const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
                 const questionNumber = deriveQuestionNumber(question_number, reply, updatedProgress);
                 
                 console.log(`📊 Derived question number: ${questionNumber}, Expected: ${firstMissingNumber}`);
                 
-                // If we got the wrong question, log a warning
                 if (questionNumber !== firstMissingNumber) {
                   console.warn(`⚠️ Expected question ${firstMissingNumber} but got ${questionNumber}`);
                   console.warn(`⚠️ Reply preview: ${reply.substring(0, 200)}`);
                 }
                 
-                setCurrentQuestion(formatted);
+                setCurrentQuestion(parsedQ);
+                setCurrentAcknowledgement(ack);
                 setCurrentQuestionNumber(questionNumber);
                 updateQuestionTracker(updatedProgress.phase, questionNumber);
                 applyProgressUpdate(updatedProgress);
@@ -5371,9 +5467,10 @@ export default function ChatPage() {
                 const {
                   result: { reply, progress: updatedProgress, question_number },
                 } = await fetchQuestion("", sessionId!);
-                const formatted = formatAngelMessage(reply);
+                const { acknowledgement: ack2, question: parsedQ2 } = parseAngelReply(reply);
                 const questionNumber = deriveQuestionNumber(question_number, reply, updatedProgress);
-                setCurrentQuestion(formatted);
+                setCurrentQuestion(parsedQ2);
+                setCurrentAcknowledgement(ack2);
                 setCurrentQuestionNumber(questionNumber);
                 updateQuestionTracker(updatedProgress.phase, questionNumber);
                 applyProgressUpdate(updatedProgress);

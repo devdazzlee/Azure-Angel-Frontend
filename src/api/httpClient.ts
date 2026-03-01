@@ -4,6 +4,9 @@ import {
   getRefreshToken,
   setSession,
   clearSession,
+  isEmailNotConfirmedError,
+  getEmailPendingVerification,
+  EMAIL_VERIFICATION_MESSAGE,
 } from '../utils/tokenUtils';
 import { toast } from 'react-toastify';
 import type { IRefreshTokenResponse } from '../types/apiTypes';
@@ -30,11 +33,26 @@ function isAxiosError(error: any): boolean {
   return error && error.isAxiosError === true;
 }
 
+const extractErrorMessage = (response: any): string =>
+  response?.data?.detail
+  || response?.data?.error
+  || response?.data?.message
+  || '';
+
 const handleError = (error: any): never => {
   if (isAxiosError(error)) {
     const { response } = error;
     const status = response?.status;
     const errorCode = response?.data?.code;
+    const serverMsg = extractErrorMessage(response);
+
+    if (
+      (status === 400 || status === 401 || status === 403) &&
+      (isEmailNotConfirmedError(serverMsg) || (getEmailPendingVerification() && serverMsg))
+    ) {
+      toast.info(EMAIL_VERIFICATION_MESSAGE, { autoClose: 8000, toastId: 'email-verify' });
+      throw error;
+    }
 
     if (errorCode === ErrorCodes.RATE_LIMIT) {
       toast.error(ErrorMessages[ErrorCodes.RATE_LIMIT]);
@@ -43,18 +61,13 @@ const handleError = (error: any): never => {
 
     switch (status) {
       case 400:
-        // FastAPI standard: check detail field first, then error/message for backward compatibility
-        toast.error(response?.data?.detail || response?.data?.error || response?.data?.message || ErrorMessages[ErrorCodes.INVALID_INPUT]);
+        toast.error(serverMsg || ErrorMessages[ErrorCodes.INVALID_INPUT]);
         break;
-      case 401:
-        // For 401 errors, show the actual error message from the backend
-        // FastAPI returns error in 'detail' field
-        const errorMessage = response?.data?.detail || 
-                            response?.data?.error || 
-                            response?.data?.message || 
-                            ErrorMessages[ErrorCodes.UNAUTHORIZED];
-        toast.error(errorMessage);
+      case 401: {
+        const msg401 = serverMsg || ErrorMessages[ErrorCodes.UNAUTHORIZED];
+        toast.error(msg401);
         break;
+      }
       case 429:
         toast.error(ErrorMessages[ErrorCodes.RATE_LIMIT]);
         break;

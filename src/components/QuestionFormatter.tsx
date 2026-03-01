@@ -11,6 +11,12 @@ export function parseBusinessPlanQuestionParts(inputText: string): {
   helperLines: string[];
   thoughtStarters: string[];
 } {
+  const stripOuterMarkdownBold = (line: string): string => {
+    // The business-plan question renderer displays mainQuestion as plain text,
+    // so normalize wrapped markdown bold to avoid showing literal ** markers.
+    return line.replace(/^\*\*(.+?)\*\*$/u, '$1').trim();
+  };
+
   const rawLines = (inputText || '')
     .replace(/\r\n/g, '\n')
     .split('\n')
@@ -39,7 +45,9 @@ export function parseBusinessPlanQuestionParts(inputText: string): {
 
   const fallbackIndex = nonThoughtLines.findIndex((line) => line && !line.endsWith(':'));
   const resolvedIndex = mainQuestionIndex >= 0 ? mainQuestionIndex : (fallbackIndex >= 0 ? fallbackIndex : 0);
-  const mainQuestion = resolvedIndex >= 0 ? (nonThoughtLines[resolvedIndex] ?? '') : '';
+  const mainQuestion = resolvedIndex >= 0
+    ? stripOuterMarkdownBold(nonThoughtLines[resolvedIndex] ?? '')
+    : '';
   const helperLines = nonThoughtLines
     .filter((_, idx) => idx !== resolvedIndex)
     .filter((line) => !line.endsWith('?'));

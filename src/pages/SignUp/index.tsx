@@ -3,6 +3,7 @@ import { FaEye, FaEyeSlash, FaEnvelope, FaLock, FaArrowRight, FaMagic, FaUser, F
 import { signUp, signIn, acceptTerms, acceptPrivacy } from '../../services/authService';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { setEmailPendingVerification } from '../../utils/tokenUtils';
 import LegalAcceptanceModal from '../../components/LegalAcceptanceModal';
 import { getTermsContent, getPrivacyContent } from '../../utils/legalContent';
 
@@ -112,14 +113,13 @@ const SignupPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Create account
       await signUp({
         fullName: formData.fullName,
         email: formData.email,
         password: formData.password,
         confirmPassword: formData.confirmPassword,
       });
-      console.log('Signup successful');
+      setEmailPendingVerification(formData.email);
 
       // Sign user in so they can accept Terms/Privacy
       try {
@@ -245,6 +245,16 @@ const SignupPage: React.FC = () => {
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Account</h1>
                 <p className="text-gray-700">Sign up to start your journey</p>
               </div>
+            </div>
+
+            {/* IP Protection Promise */}
+            <div className="mx-8 mt-2 rounded-xl border border-teal-100 bg-teal-50/80 p-4">
+              <p className="text-sm leading-relaxed text-slate-700">
+                <span className="font-semibold text-teal-700">The Founderport Promise:</span> Your idea is yours, period.
+                Founderport exists to help you shape and launch your business, not to claim it, share it, or reuse it.
+                The business you create in Founderport stays private to you and is treated with the same discretion and
+                respect we'd expect for our own ideas. We've been there, and know how important this is to you.
+              </p>
             </div>
 
             {/* Form Fields */}

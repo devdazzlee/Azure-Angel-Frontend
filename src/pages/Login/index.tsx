@@ -1,7 +1,13 @@
 import React, { useState } from 'react';
-import { FaEye, FaEyeSlash, FaEnvelope, FaLock, FaArrowRight, FaMagic } from 'react-icons/fa';
+import { FaEye, FaEyeSlash, FaEnvelope, FaLock, FaArrowRight, FaMagic, FaInfoCircle } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
-import { setSession } from '../../utils/tokenUtils';
+import {
+  setSession,
+  clearEmailPendingVerification,
+  getEmailPendingVerification,
+  isEmailNotConfirmedError,
+  EMAIL_VERIFICATION_MESSAGE,
+} from '../../utils/tokenUtils';
 import { toast } from 'react-toastify';
 import { signIn } from '../../api/authService';
 
@@ -17,35 +23,49 @@ const LoginPage: React.FC = () => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [verificationNeeded, setVerificationNeeded] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    if (verificationNeeded) setVerificationNeeded(false);
   };
-// 
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     if (!formData.email || !formData.password) {
       toast.warn('Please fill in all required fields');
+      setIsLoading(false);
       return;
     }
     if (!/\S+@\S+\.\S+/.test(formData.email)) {
       toast.warn('Please enter a valid email address');
+      setIsLoading(false);
       return;
     }
     try {
       const session = await signIn(formData);
+      clearEmailPendingVerification();
       setSession(session.access_token, session.refresh_token);
       setTimeout(() => {
         window.location.href = '/ventures';
       }, 1000);
     } catch (err: any) {
-      console.log('Signin error:', err.message);
-      // Error message is already extracted in authService, just display it
-      // Don't show duplicate toast - httpClient already shows it
-      // But we can set a state to show it in the UI if needed
+      const msg = err?.response?.data?.detail
+        || err?.response?.data?.error
+        || err?.response?.data?.message
+        || err?.message
+        || '';
+
+      const pendingEmail = getEmailPendingVerification();
+      const emailMatchesPending = pendingEmail?.toLowerCase() === formData.email.toLowerCase();
+
+      if (isEmailNotConfirmedError(msg) || emailMatchesPending) {
+        setVerificationNeeded(true);
+        toast.info(EMAIL_VERIFICATION_MESSAGE, { autoClose: 8000 });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -78,6 +98,14 @@ const LoginPage: React.FC = () => {
 
             {/* Form Fields */}
             <form className="p-8 pt-2" onSubmit={handleSubmit}>
+              {verificationNeeded && (
+                <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <FaInfoCircle className="mt-0.5 flex-shrink-0 text-amber-500" />
+                  <p className="text-sm leading-relaxed text-amber-800">
+                    {EMAIL_VERIFICATION_MESSAGE}
+                  </p>
+                </div>
+              )}
               <div className="space-y-6">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700">Email Address</label>

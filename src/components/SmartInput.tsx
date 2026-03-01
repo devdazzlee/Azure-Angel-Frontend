@@ -14,6 +14,52 @@ interface SmartInputProps {
   currentPhase?: string;
 }
 
+// Stable lookup of known choice questions.  Keyed by a substring that must
+// appear in the *question line itself* (not the coaching preamble).  Matching
+// is case-insensitive.
+const KNOWN_CHOICE_QUESTIONS: Record<string, string[]> = {
+  'have you started a business before': ['Yes', 'No'],
+  'what is your preferred communication style': ['Conversational', 'Structured'],
+  "what's your current work situation": ['Full-time employed', 'Part-time', 'Student', 'Unemployed', 'Self-employed/freelancer', 'Other'],
+  'do you already have a business idea in mind': ['Yes', 'No'],
+  'have you shared your business idea with anyone yet': ['Yes', 'No'],
+  'what kind of business are you trying to build': ['Side hustle', 'Small business', 'Scalable startup', 'Nonprofit/social venture', 'Other'],
+  'do you have any initial funding available': ['None', 'Personal savings', 'Friends/family', 'External funding (loan, investor)', 'Other'],
+  'are you planning to seek outside funding in the future': ['Yes', 'No', 'Unsure'],
+  'would you like angel to:': ['Be more hands-on (do more tasks for you)', 'Be more of a mentor (guide but let you take the lead)', 'Alternate based on the task'],
+  'would you like angel to provide detailed financial planning': ['Yes', 'No'],
+  'do you want to connect with service providers': ['Yes', 'No', 'Later'],
+  'how do you plan to generate revenue': ['Product sales', 'Service fees', 'Subscription/membership', 'Advertising revenue', 'Commission/fees', 'Licensing', 'Consulting', 'Other'],
+  'will your business be primarily': ['Online only', 'Physical location only', 'Both online and physical', 'Unsure'],
+  'would you like me to be proactive in suggesting next steps': ['Yes, please be proactive', 'Only when I ask', 'Let me decide each time'],
+  "what's your biggest concern about starting a business": ['Finding customers', 'Managing finances', 'Competition', 'Legal requirements', 'Time management', 'Not sure'],
+  'what is your greatest concern about starting a business': ['Finding customers', 'Managing finances', 'Competition', 'Legal requirements', 'Time management', 'Not sure'],
+  'how do you prefer to learn new business skills': ['Reading articles/books', 'Watching videos/tutorials', 'Hands-on practice', 'Working with mentors', 'Taking courses', 'Other'],
+  'what motivates you most about entrepreneurship': ['Financial independence', 'Creative freedom', 'Making an impact', 'Solving problems', 'Building something lasting', 'Other'],
+  'how would you describe your risk tolerance': ['Very conservative (prefer safe, proven approaches)', 'Moderate (willing to take calculated risks)', 'High (comfortable with uncertainty and big bets)', 'It depends on the situation'],
+  "what's your timeline for launching your business": ['Within 3 months', '3-6 months', '6-12 months', '1-2 years', 'No specific timeline'],
+};
+
+/**
+ * Extract the "question line" from Angel's response text.
+ * We only want to pattern-match against the actual question, not the
+ * educational coaching that precedes it.  The question line is typically
+ * the last sentence ending with "?" or the last non-empty paragraph.
+ */
+function isolateQuestionLine(text: string): string {
+  const paragraphs = text.split(/\n{2,}/);
+  for (let i = paragraphs.length - 1; i >= 0; i--) {
+    const p = paragraphs[i].trim();
+    if (p.length > 0) {
+      const sentences = p.split(/(?<=[.?!])\s+/);
+      const questionSentence = sentences.find(s => s.trim().endsWith('?'));
+      if (questionSentence) return questionSentence.trim();
+      return p;
+    }
+  }
+  return text;
+}
+
 const SmartInput: React.FC<SmartInputProps> = ({
   value,
   onChange,
@@ -27,192 +73,78 @@ const SmartInput: React.FC<SmartInputProps> = ({
   const [showRatingForm, setShowRatingForm] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [dropdownOptions, setDropdownOptions] = useState<string[]>([]);
-  const [dropdownType, setDropdownType] = useState<'yesno' | 'multiple' | null>(null);
+  const [dropdownKey, setDropdownKey] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Detect question type and extract options
   useEffect(() => {
-    const question = currentQuestion.toLowerCase();
-    
-    console.log('🔍 SmartInput: Analyzing question for options detection');
-    console.log('📝 Current question text:', currentQuestion);
-    console.log('🔍 Current phase:', currentPhase);
-    
-    // Check if this is a completion/transition message - disable dropdowns
-    const isCompletionMessage = (
-      question.includes('congratulations') && 
-      (question.includes('completed') || question.includes('profile') || question.includes('complete')) &&
-      (question.includes('business planning phase') || 
-       question.includes('entrepreneurial profile') ||
-       question.includes('business planning') ||
-       question.includes('business plan'))
-    ) || (
-      // Also check for the specific transition phrases
-      question.includes('moving into the exciting business planning phase') ||
-      question.includes("ready to dive into your business planning") ||
-      (question.includes("here's what i've learned about you") && question.includes('congratulations'))
-    );
-    
+    // Increment key every time the question changes so QuestionDropdown
+    // remounts with fresh (empty) selection state.
+    setDropdownKey(k => k + 1);
+
+    const questionLine = isolateQuestionLine(currentQuestion).toLowerCase();
+
+    const isCompletionMessage =
+      questionLine.includes('congratulations') &&
+      (questionLine.includes('completed') || questionLine.includes('profile'));
+
     if (isCompletionMessage) {
-      console.log('🎉 Completion message detected - disabling dropdowns (modal should show)');
       setShowRatingForm(false);
       setShowDropdown(false);
-      setDropdownType(null);
       return;
     }
-    
-    // IMPORTANT: Disable dropdowns for Business Plan phase - all questions should be open-ended
+
     if (currentPhase === 'BUSINESS_PLAN') {
-      console.log('📝 Business Plan phase - using text input only (no dropdowns)');
       setShowRatingForm(false);
       setShowDropdown(false);
-      setDropdownType(null);
       return;
     }
-    
-    // Check for skill rating question - make it more specific
-    const isSkillRatingQuestion = question.includes('how comfortable are you with these business skills');
-    
-    if (isSkillRatingQuestion) {
-      console.log('✅ Detected: Skill rating question');
+
+    if (questionLine.includes('how comfortable are you with these business skills')) {
       setShowRatingForm(true);
       setShowDropdown(false);
       return;
     }
 
-    // Check for Yes/No questions (more flexible patterns)
-    const isYesNoQuestion = (
-      (question.includes('yes') && question.includes('no')) ||
-      (question.includes('yes /') || question.includes('/ no'))
-    ) && (
-      question.includes('have you') || question.includes('do you') || 
-      question.includes('are you') || question.includes('would you') ||
-      question.includes('will you') || question.includes('did you')
-    );
-    
-    if (isYesNoQuestion) {
-      console.log('✅ Detected: Yes/No question');
-      setShowDropdown(true);
-      setDropdownType('yesno');
-      setDropdownOptions(['Yes', 'No']);
-      setShowRatingForm(false);
-      return;
-    }
-
-    // Check for multiple choice questions based on specific patterns
-    const multipleChoiceQuestions = {
-      'what is your preferred communication style': ['Conversational', 'Structured'],
-      'have you started a business before': ['Yes', 'No'],
-      'what\'s your current work situation': ['Full-time employed', 'Part-time', 'Student', 'Unemployed', 'Self-employed/freelancer', 'Other'],
-      'do you already have a business idea in mind': ['Yes', 'No'],
-      'have you shared your business idea with anyone yet': ['Yes', 'No'],
-      'what kind of business are you trying to build': ['Side hustle', 'Small business', 'Scalable startup', 'Nonprofit/social venture', 'Other'],
-      'do you have any initial funding available': ['None', 'Personal savings', 'Friends/family', 'External funding (loan, investor)', 'Other'],
-      'are you planning to seek outside funding in the future': ['Yes', 'No', 'Unsure'],
-      'would you like angel to:': ['Be more hands-on (do more tasks for you)', 'Be more of a mentor (guide but let you take the lead)', 'Alternate based on the task'],
-      'would you like angel to provide detailed financial planning': ['Yes', 'No'],
-      'do you want to connect with service providers': ['Yes', 'No', 'Later'],
-      'how do you plan to generate revenue': ['Product sales', 'Service fees', 'Subscription/membership', 'Advertising revenue', 'Commission/fees', 'Licensing', 'Consulting', 'Other'],
-      'will your business be primarily': ['Online only', 'Physical location only', 'Both online and physical', 'Unsure'],
-      'would you like me to be proactive in suggesting next steps and improvements throughout our process': ['Yes, please be proactive', 'Only when I ask', 'Let me decide each time'],
-      // GKY Questions
-      'what\'s your biggest concern about starting a business': ['Finding customers', 'Managing finances', 'Competition', 'Legal requirements', 'Time management', 'Not sure'],
-      'biggest concern about starting': ['Finding customers', 'Managing finances', 'Competition', 'Legal requirements', 'Time management', 'Not sure'],
-      'how do you prefer to learn new business skills': ['Reading articles/books', 'Watching videos/tutorials', 'Hands-on practice', 'Working with mentors', 'Taking courses', 'Other'],
-      'prefer to learn new business skills': ['Reading articles/books', 'Watching videos/tutorials', 'Hands-on practice', 'Working with mentors', 'Taking courses', 'Other'],
-      'what motivates you most about entrepreneurship': ['Financial independence', 'Creative freedom', 'Making an impact', 'Solving problems', 'Building something lasting', 'Other'],
-      'motivates you most about entrepreneurship': ['Financial independence', 'Creative freedom', 'Making an impact', 'Solving problems', 'Building something lasting', 'Other'],
-      'how would you describe your risk tolerance': ['Very conservative (prefer safe, proven approaches)', 'Moderate (willing to take calculated risks)', 'High (comfortable with uncertainty and big bets)', 'It depends on the situation'],
-      'describe your risk tolerance': ['Very conservative (prefer safe, proven approaches)', 'Moderate (willing to take calculated risks)', 'High (comfortable with uncertainty and big bets)', 'It depends on the situation'],
-      'what\'s your timeline for launching your business': ['Within 3 months', '3-6 months', '6-12 months', '1-2 years', 'No specific timeline'],
-      'timeline for launching your business': ['Within 3 months', '3-6 months', '6-12 months', '1-2 years', 'No specific timeline']
-    };
-
-    // Check if current question matches any multiple choice pattern
-    for (const [pattern, options] of Object.entries(multipleChoiceQuestions)) {
-      if (question.includes(pattern)) {
-        console.log('✅ Detected: Known multiple choice question -', pattern);
+    // Match against the known-choice lookup using the isolated question line.
+    for (const [pattern, options] of Object.entries(KNOWN_CHOICE_QUESTIONS)) {
+      if (questionLine.includes(pattern)) {
         setShowDropdown(true);
-        setDropdownType('multiple');
         setDropdownOptions(options);
         setShowRatingForm(false);
         return;
       }
     }
 
-    // IMPROVED: Check for bullet points, numbered lists, or option separators
-    const hasOptions = currentQuestion.includes('•') || 
-                      currentQuestion.includes('○') ||
-                      currentQuestion.includes('- ') ||
-                      currentQuestion.match(/\n\d+\.\s/) || // Numbered lists
-                      currentQuestion.includes('full-time') || 
-                      currentQuestion.includes('part-time') ||
-                      currentQuestion.includes('Yes /') ||
-                      currentQuestion.includes('/ No');
-    
-    if (hasOptions && !isYesNoQuestion) {
-      console.log('📋 Attempting to extract options from question text...');
-      // Extract options from the question text
-      const options = extractOptionsFromQuestion(currentQuestion);
+    // Fallback: extract structured bullet-point options only when the
+    // question text itself contains bullet markers (•, ○).
+    // We intentionally do NOT match plain hyphens or "yes"/"no" in
+    // free-form coaching text — those cause false positives.
+    if (currentQuestion.includes('•') || currentQuestion.includes('○')) {
+      const options = extractBulletOptions(currentQuestion);
       if (options.length >= 2) {
-        console.log('✅ Detected: Multiple choice from extracted options -', options);
         setShowDropdown(true);
-        setDropdownType('multiple');
         setDropdownOptions(options);
         setShowRatingForm(false);
         return;
       }
     }
 
-    // Default to text input
-    console.log('📝 Default: Using text input (no options detected)');
     setShowRatingForm(false);
     setShowDropdown(false);
-    setDropdownType(null);
   }, [currentQuestion, currentPhase]);
 
-  // Extract options from question text - IMPROVED to handle more formats
-  const extractOptionsFromQuestion = (question: string): string[] => {
-    const lines = question.split('\n');
+  const extractBulletOptions = (question: string): string[] => {
     const options: string[] = [];
-    
-    console.log('🔍 Extracting options from question text:', question);
-    
-    for (const line of lines) {
+    for (const line of question.split('\n')) {
       const trimmed = line.trim();
-      
-      // Handle bullet points: •, -, ○, *
-      if (trimmed.match(/^[•\-○*]\s+/)) {
-        const option = trimmed.replace(/^[•\-○*]\s+/, '').trim();
-        if (option && !option.includes('?') && option.length > 1 && option.length < 100) {
-          options.push(option);
-          console.log('📋 Found bullet point option:', option);
-        }
-      }
-      // Handle numbered lists: 1. 2. 3. etc.
-      else if (trimmed.match(/^\d+\.\s+/)) {
-        const option = trimmed.replace(/^\d+\.\s+/, '').trim();
-        if (option && !option.includes('?') && option.length > 1 && option.length < 100) {
-          options.push(option);
-          console.log('📋 Found numbered option:', option);
-        }
-      }
-      // Handle "Yes / No" or "Yes/No" format
-      else if (trimmed.match(/^(Yes|No)\s*\/?\s*(No|Yes)?$/i)) {
-        if (!options.includes('Yes') && !options.includes('No')) {
-          options.push('Yes', 'No');
-          console.log('📋 Found Yes/No options');
+      const match = trimmed.match(/^[•○]\s+(.+)/);
+      if (match) {
+        const opt = match[1].trim();
+        if (opt && !opt.includes('?') && opt.length > 1 && opt.length < 100) {
+          options.push(opt);
         }
       }
     }
-    
-    // Debug logging
-    if (options.length > 0) {
-      console.log('✅ Extracted options from question:', options);
-    } else {
-      console.log('⚠️ No options found in question text');
-    }
-    
     return options;
   };
 
@@ -233,9 +165,7 @@ const SmartInput: React.FC<SmartInputProps> = ({
   };
 
   const handleDropdownCancel = () => {
-    // Clear selection and revert to text input so user can type instead
     setShowDropdown(false);
-    setDropdownType(null);
     setDropdownOptions([]);
     onChange('');
   };
@@ -271,10 +201,11 @@ const SmartInput: React.FC<SmartInputProps> = ({
     return (
       <div className="w-full">
         <QuestionDropdown
+          key={dropdownKey}
           options={dropdownOptions}
           onSubmit={handleDropdownSubmit}
           onCancel={handleDropdownCancel}
-          placeholder={`Select ${dropdownType === 'yesno' ? 'Yes or No' : 'an option'}...`}
+          placeholder="Select an option..."
           disabled={disabled}
         />
       </div>

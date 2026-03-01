@@ -9,14 +9,24 @@ interface ConversationPair {
   questionNumber?: number;
 }
 
+const clampScale = (value: number, fallback: number) => {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(0, Math.min(10, value));
+};
+
 export default function GkyForm() {
+  const MAX_STEPS = 5;
   const [history, setHistory] = useState<ConversationPair[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState('');
+  const [currentAcknowledgement, setCurrentAcknowledgement] = useState('');
   const [currentQuestionNumber, setCurrentQuestionNumber] = useState<number | null>(null);
   const [currentInput, setCurrentInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
-  const MAX_STEPS = 9;
+  const [businessTypeHint, setBusinessTypeHint] = useState('');
+  const MIN_CONFIDENCE_THRESHOLD = 0.62;
+  const AFFIRMATION_INTENSITY = clampScale(Number(import.meta.env.VITE_KYC_AFFIRMATION_INTENSITY ?? 5), 5);
+  const CONSTRUCTIVE_FEEDBACK_INTENSITY = clampScale(Number(import.meta.env.VITE_KYC_CONSTRUCTIVE_FEEDBACK_INTENSITY ?? 7), 7);
 
   // 🧹 Helper to clean incoming AI responses
   const cleanQuestionText = (text: string): string => {
@@ -26,6 +36,106 @@ export default function GkyForm() {
       .join('\n\n')
       .replace(/Question \d+ of \d+:\s*.*?–\s*/i, '') // remove "Question X of Y: ..."
       .trim();
+  };
+
+  // 🧩 Split Angel reply into acknowledgement and next question
+  const parseAngelReply = (text: string): { acknowledgement: string; question: string } => {
+    const normalized = text
+      .split('\n\n')
+      .filter(p => !p.toLowerCase().startsWith("hello! i'm angel"))
+      .join('\n\n')
+      .trim();
+
+    const questionStart = normalized.search(/Question \d+ of \d+:/i);
+    if (questionStart === -1) {
+      return {
+        acknowledgement: '',
+        question: cleanQuestionText(normalized),
+      };
+    }
+
+    const acknowledgement = normalized.slice(0, questionStart).trim();
+    const questionChunk = normalized.slice(questionStart).trim();
+
+    return {
+      acknowledgement,
+      question: cleanQuestionText(questionChunk),
+    };
+  };
+
+  // 🎯 Capture the user's business type whenever they answer a business-type style prompt.
+  const updateBusinessTypeHint = (question: string, answer: string) => {
+    const q = question.toLowerCase();
+    if (
+      q.includes('type of business') ||
+      q.includes('what business are you') ||
+      q.includes('what kind of business') ||
+      q.includes('industry')
+    ) {
+      const normalized = answer.trim();
+      if (normalized.length >= 3) setBusinessTypeHint(normalized);
+    }
+  };
+
+  const getAffirmationDirective = (scale: number) => {
+    if (scale <= 1) return 'Use neutral acknowledgement only. Avoid praise language.';
+    if (scale <= 3) return 'Use light encouragement focused on progress, not idea quality.';
+    if (scale <= 5) return 'Use balanced affirmation: validate effort and intent without hype.';
+    if (scale <= 7) return 'Use confidence-building language grounded in observable user input.';
+    if (scale <= 9) return 'Use strong motivation while staying realistic and non-exaggerated.';
+    return 'Use maximum supportive tone sparingly, always honest and grounded.';
+  };
+
+  const getConstructiveDirective = (scale: number) => {
+    if (scale <= 2) return 'Provide only minimal critique; ask one clarifying question when needed.';
+    if (scale <= 4) return 'Include gentle constructive feedback when assumptions appear weak.';
+    if (scale <= 6) return 'Provide balanced feedback with 1 concrete refinement suggestion.';
+    if (scale <= 8) return 'Actively challenge weak assumptions and offer practical corrective guidance.';
+    return 'Prioritize rigorous critical feedback: identify risks, assumptions, and next validation steps.';
+  };
+
+  // 🛡️ Build a calibrated guardrail prompt with business-type and feedback controls.
+  const withResponseGuardrails = (input: string) => {
+    const businessTypeGuardrail = businessTypeHint
+      ? `The user's business type is "${businessTypeHint}". Do not assume a different startup category. If unsure, ask a clarification question first.`
+      : 'Do not assume the startup category. Ask the user to clarify business type before category-dependent guidance.';
+
+    const antiBlindAgreement = 'Do not agree automatically with every statement. If assumptions are weak, respectfully challenge them with concrete reasoning.';
+    const noHypeGuardrail = 'Never exaggerate success likelihood and never label clearly flawed assumptions as great.';
+
+    const directives = [
+      `[Response Calibration]`,
+      `Affirmation intensity: ${AFFIRMATION_INTENSITY}/10. ${getAffirmationDirective(AFFIRMATION_INTENSITY)}`,
+      `Constructive feedback intensity: ${CONSTRUCTIVE_FEEDBACK_INTENSITY}/10. ${getConstructiveDirective(CONSTRUCTIVE_FEEDBACK_INTENSITY)}`,
+      businessTypeGuardrail,
+      antiBlindAgreement,
+      noHypeGuardrail,
+    ].join(' ');
+
+    return `${input}\n\n${directives}`;
+  };
+
+  // 📉 Heuristic confidence scoring used to filter likely hallucinations.
+  const calculateResponseConfidence = (reply: string, question: string): number => {
+    let score = 0.9;
+    const text = reply.toLowerCase();
+    const nextQuestion = question.toLowerCase();
+
+    if (!/question \d+ of \d+/i.test(reply)) score -= 0.15;
+    if (reply.trim().length < 80) score -= 0.1;
+    if (/(maybe|perhaps|probably|i think|not sure|unsure)/i.test(text)) score -= 0.15;
+    if (/(i assume|assuming|let's assume)/i.test(text)) score -= 0.2;
+
+    if (businessTypeHint) {
+      const hint = businessTypeHint.toLowerCase();
+      // Penalize if reply/question does not anchor to the known business type.
+      if (!text.includes(hint) && !nextQuestion.includes(hint)) score -= 0.15;
+      // Penalize if model appears to force a different category.
+      const conflictingCategory = /(saas|e-commerce|restaurant|retail|agency|consulting|marketplace)/i.test(text) && !text.includes(hint);
+      if (conflictingCategory) score -= 0.25;
+    }
+
+    return Math.max(0, Math.min(1, score));
   };
 
   // 🔢 Helper to extract question number from AI response
@@ -109,17 +219,24 @@ export default function GkyForm() {
         const { result: { angelReply } } = await fetchNextQuestion('', {
           phase: 'gky',
           stepIndex: 0,
+          responseConfig: {
+            affirmationIntensity: AFFIRMATION_INTENSITY,
+            constructiveFeedbackIntensity: CONSTRUCTIVE_FEEDBACK_INTENSITY,
+            strictBusinessTypeAttention: true,
+            avoidBlindAgreement: true,
+          },
         });
 
         console.log("RESULT USEEFFECT", angelReply);
         
 
-        const firstQ = cleanQuestionText(angelReply);
+        const parsedReply = parseAngelReply(angelReply);
         const questionNumber = extractQuestionNumber(angelReply) || 1; // First question is always 1
 
         // Set no history yet — intro message removed
         setHistory([]);
-        setCurrentQuestion(firstQ);
+        setCurrentAcknowledgement(parsedReply.acknowledgement);
+        setCurrentQuestion(parsedReply.question);
         setCurrentQuestionNumber(questionNumber);
       } catch (error) {
         // All error handling is now centralized in httpClient
@@ -147,21 +264,57 @@ export default function GkyForm() {
     ]);
 
     try {
-      const { result: { angelReply, progress } } = await fetchNextQuestion(input, {
+      updateBusinessTypeHint(currentQuestion, input);
+      const guardedInput = withResponseGuardrails(input);
+
+      const { result: { angelReply, progress } } = await fetchNextQuestion(guardedInput, {
         phase: 'gky',
         stepIndex,
-        skipStep
+        skipStep,
+        responseConfig: {
+          affirmationIntensity: AFFIRMATION_INTENSITY,
+          constructiveFeedbackIntensity: CONSTRUCTIVE_FEEDBACK_INTENSITY,
+          strictBusinessTypeAttention: true,
+          avoidBlindAgreement: true,
+        },
       });
 
-      const nextQuestion = cleanQuestionText(angelReply);
+      const parsedReply = parseAngelReply(angelReply);
+      const confidenceScore = calculateResponseConfidence(angelReply, parsedReply.question);
       const nextQuestionNumber = extractQuestionNumber(angelReply) || (history.length + 2); // +2 because we just added current question to history
 
-      // Trust backend for progress
-      if (!skipStep && typeof progress === 'number') {
-        setStepIndex(progress);
+      if (confidenceScore < MIN_CONFIDENCE_THRESHOLD) {
+        // Filter low-confidence response and force clarification instead of risky assumptions.
+        setCurrentAcknowledgement(
+          "I want to be precise and avoid assumptions. Please confirm the exact type of business you're building so I can tailor the next question correctly."
+        );
+        setCurrentQuestion(
+          businessTypeHint
+            ? `Can you confirm that your business type is "${businessTypeHint}"? If not, please provide the exact business type in one sentence.`
+            : 'Please specify your exact business type (for example: bakery, SaaS for HR teams, digital marketing agency, etc.) so I can continue accurately.'
+        );
+        setCurrentQuestionNumber(currentQuestionNumber ?? (history.length + 1));
+        toast.warning('Low-confidence AI response filtered. Clarification requested.');
+        return;
       }
 
-      setCurrentQuestion(nextQuestion);
+      // Trust backend for progress on confident responses, but hard-cap onboarding to 5 questions.
+      if (!skipStep) {
+        const backendProgress = typeof progress === 'number' ? progress : stepIndex + 1;
+        const cappedProgress = Math.min(backendProgress, MAX_STEPS);
+        setStepIndex(cappedProgress);
+
+        // Stop onboarding at exactly 5 completed questions and don't render a 6th prompt.
+        if (cappedProgress >= MAX_STEPS) {
+          setCurrentAcknowledgement('');
+          setCurrentQuestion('');
+          setCurrentQuestionNumber(null);
+          return;
+        }
+      }
+
+      setCurrentAcknowledgement(parsedReply.acknowledgement);
+      setCurrentQuestion(parsedReply.question);
       setCurrentQuestionNumber(nextQuestionNumber);
     } catch (error) {
       // Roll back if error
@@ -172,7 +325,41 @@ export default function GkyForm() {
     }
   };
 
-  const progressPercentage = ((stepIndex + 1) / MAX_STEPS) * 100;
+  const handleQuickAction = async (command: 'Support' | 'Draft' | 'Scrapping') => {
+    if (loading) return;
+    setCurrentInput(command);
+    await handleNext(command, true);
+  };
+
+  const handlePreviousQuestion = () => {
+    if (loading || history.length === 0) {
+      toast.info('No previous question available.');
+      return;
+    }
+
+    const previousPair = history[history.length - 1];
+    setHistory((prev) => prev.slice(0, -1));
+    setCurrentAcknowledgement('');
+    setCurrentQuestion(previousPair.question);
+    setCurrentQuestionNumber(previousPair.questionNumber ?? null);
+    setCurrentInput(previousPair.answer);
+    setStepIndex((prev) => Math.max(0, prev - 1));
+  };
+
+  const handleSaveDraft = () => {
+    const draft = {
+      savedAt: new Date().toISOString(),
+      history,
+      currentQuestion,
+      currentQuestionNumber,
+      currentInput,
+      stepIndex,
+    };
+    localStorage.setItem('kyc_draft', JSON.stringify(draft));
+    toast.success('Draft saved successfully.');
+  };
+
+  const progressPercentage = (Math.min(stepIndex + 1, MAX_STEPS) / MAX_STEPS) * 100;
 
   if (stepIndex >= MAX_STEPS) {
     return (
@@ -203,7 +390,7 @@ export default function GkyForm() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-[10%]">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gray-900 mb-3">Business Plan Creation</h1>
-          <p className="text-gray-600 text-lg">Angel will guide you through 9 essential questions to build your comprehensive business plan</p>
+          <p className="text-gray-600 text-lg">Angel will guide you through 5 essential questions to start your business plan</p>
         </div>
 
         <div className="mb-12">
@@ -219,8 +406,56 @@ export default function GkyForm() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
-          <div className="xl:col-span-3 space-y-8">
+        <div className="grid grid-cols-1 gap-8 xl:grid-cols-5">
+          {/* Left Action Rail */}
+          <div className="order-2 xl:order-1 xl:col-span-1">
+            <div className="sticky top-8 bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <h3 className="text-sm font-semibold text-gray-800 mb-3">Quick Actions</h3>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2.5 rounded-lg bg-gray-50 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition"
+                  onClick={() => handleQuickAction('Support')}
+                  disabled={loading}
+                >
+                  Support
+                </button>
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2.5 rounded-lg bg-gray-50 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition"
+                  onClick={() => handleQuickAction('Draft')}
+                  disabled={loading}
+                >
+                  Draft
+                </button>
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2.5 rounded-lg bg-gray-50 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition"
+                  onClick={() => handleQuickAction('Scrapping')}
+                  disabled={loading}
+                >
+                  Scrapping
+                </button>
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2.5 rounded-lg bg-gray-50 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handlePreviousQuestion}
+                  disabled={loading || history.length === 0}
+                >
+                  Previous Question
+                </button>
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 transition"
+                  onClick={handleSaveDraft}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="order-1 xl:order-2 xl:col-span-3 space-y-8">
             {history.map((pair, idx) => (
               <div key={idx} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
@@ -282,9 +517,28 @@ export default function GkyForm() {
                         </span>
                       </div>
                     )}
-                    <p className="text-gray-900 font-medium leading-relaxed whitespace-pre-wrap">
-                      {loading ? 'Angel is thinking…' : currentQuestion || 'Loading question...'}
-                    </p>
+                    {loading ? (
+                      <p className="text-gray-900 font-medium leading-relaxed whitespace-pre-wrap">
+                        Angel is thinking…
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {currentAcknowledgement && (
+                          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Angel Response</p>
+                            <p className="mt-1 text-sm leading-relaxed text-emerald-900 whitespace-pre-wrap">
+                              {currentAcknowledgement}
+                            </p>
+                          </div>
+                        )}
+                        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Next Question</p>
+                          <p className="mt-1 text-gray-900 font-medium leading-relaxed whitespace-pre-wrap">
+                            {currentQuestion || 'Loading question...'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
                   </div>
                 </div>
@@ -299,9 +553,9 @@ export default function GkyForm() {
                     return (
                       <div className="space-y-4">
                         <QuestionDropdown
+                          key={currentQuestionNumber ?? stepIndex}
                           options={options}
                           onSubmit={(value) => {
-                            // User must click "Submit" button - this is called only after submit
                             handleNext(value);
                           }}
                           onCancel={() => {
@@ -337,24 +591,6 @@ export default function GkyForm() {
                         }}
                         disabled={loading}
                       />
-                      {/* Quick Commands */}
-                      <div className="flex flex-wrap gap-2">
-                        {['Support', 'Draft', 'Scrapping'].map((cmd) => (
-                          <button
-                            key={cmd}
-                            className="px-3 py-1 bg-gray-100 text-sm text-gray-700 rounded-full hover:bg-blue-100 transition"
-                            onClick={async () => {
-                              if (loading) return;
-                              const command = cmd;
-                              setCurrentInput(command);
-                              await handleNext(command, true); // Pass skipStep = true
-                            }}
-                          >
-                            {cmd}
-                          </button>
-                        ))}
-                      </div>
-
                       <div className="flex justify-between items-center">
                         <p className="text-sm text-gray-500">
                           {currentInput.length} characters
@@ -387,7 +623,7 @@ export default function GkyForm() {
           </div>
 
           {/* Sidebar */}
-          <div className="lg:col-span-1">
+          <div className="order-3 xl:col-span-1">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sticky top-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Your Journey</h3>
               <div className="space-y-4">
