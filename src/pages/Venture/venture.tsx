@@ -2966,8 +2966,13 @@ export default function ChatPage() {
         });
 
         const answeredPhase = phaseQuestionSets[phase]?.size ?? 0;
+        // Backend is source of truth — use max(backend, history-derived) to avoid undercounting
+        // when tags are missing in history or backend has correct count from chat responses
+        const backendAnswered = typeof sessionMeta?.answered_count === "number" ? sessionMeta.answered_count : 0;
+        const effectiveAnsweredPhase = Math.max(answeredPhase, backendAnswered);
+
         const totalPhase = QUESTION_COUNTS[phase as keyof typeof QUESTION_COUNTS] || QUESTION_COUNTS.GKY;
-        const phasePercent = totalPhase > 0 ? Math.min(Math.round((answeredPhase / totalPhase) * 100), 100) : 0;
+        const phasePercent = totalPhase > 0 ? Math.min(Math.round((effectiveAnsweredPhase / totalPhase) * 100), 100) : 0;
 
         // Overall progress always includes ALL question phases (GKY + BP = 50)
         const overallTotal = QUESTION_COUNTS.GKY + QUESTION_COUNTS.BUSINESS_PLAN; // 5 + 45 = 50
@@ -2979,9 +2984,10 @@ export default function ChatPage() {
             overallAnswered += questions.size;
           }
         });
-        // Ensure at least current phase answered count
+        // Use max(history-derived, backend) so we never undercount
+        overallAnswered = Math.max(overallAnswered, backendAnswered);
         if (overallAnswered === 0) {
-          overallAnswered = answeredPhase;
+          overallAnswered = effectiveAnsweredPhase;
         }
         const overallPercent = overallTotal > 0 ? Math.min(Math.round((overallAnswered / overallTotal) * 100), 100) : phasePercent;
 
@@ -2995,11 +3001,11 @@ export default function ChatPage() {
         let bpCompleted = 0;
         
         if (phase === "GKY") {
-          gkyCompleted = Math.min(answeredPhase, gkyTotal);
+          gkyCompleted = Math.min(effectiveAnsweredPhase, gkyTotal);
           bpCompleted = 0;
         } else if (phase === "BUSINESS_PLAN") {
           gkyCompleted = gkyTotal; // GKY is complete if in BP
-          bpCompleted = Math.min(answeredPhase, bpTotalCalc);
+          bpCompleted = Math.min(effectiveAnsweredPhase, bpTotalCalc);
         } else {
           gkyCompleted = gkyTotal;
           bpCompleted = bpTotalCalc;
@@ -3009,7 +3015,7 @@ export default function ChatPage() {
           ...prev,
           phase,
           answered: overallAnswered,
-          phase_answered: answeredPhase,
+          phase_answered: effectiveAnsweredPhase,
           total: totalPhase,
           percent: phasePercent,
           overall_progress: {
@@ -3027,7 +3033,7 @@ export default function ChatPage() {
 
         setPhaseQuestionTracker({
           currentPhase: phase,
-          questionCount: answeredPhase,
+          questionCount: effectiveAnsweredPhase,
           lastQuestionNumber: pendingNumber ?? null,
         });
 
@@ -3042,8 +3048,15 @@ export default function ChatPage() {
             asked_q: askedTag,
           });
         } catch (syncError) {
-          console.warn('Progress sync failed:', syncError);
+          console.warn("Progress sync failed:", syncError);
         }
+
+        setBackendTotals({
+          answered: effectiveAnsweredPhase,
+          total: totalPhase,
+          overallAnswered,
+          overallTotal,
+        });
 
         // CRITICAL: Check if we're in PLAN_TO_SUMMARY_TRANSITION phase
         // If so, fetch business plan summary and artifact
@@ -3065,7 +3078,7 @@ export default function ChatPage() {
               transitionPhase: "PLAN_TO_SUMMARY"
             });
 
-            setBackendTotals({ answered: answeredPhase, total: totalPhase, overallAnswered, overallTotal });
+            setBackendTotals({ answered: effectiveAnsweredPhase, total: totalPhase, overallAnswered, overallTotal });
             setLoading(false);
             return;
           } catch (summaryError) {
@@ -3075,7 +3088,7 @@ export default function ChatPage() {
               businessPlanArtifact: null,
               transitionPhase: "PLAN_TO_SUMMARY"
             });
-            setBackendTotals({ answered: answeredPhase, total: totalPhase, overallAnswered, overallTotal });
+            setBackendTotals({ answered: effectiveAnsweredPhase, total: totalPhase, overallAnswered, overallTotal });
             setLoading(false);
             return;
           }
@@ -3123,7 +3136,7 @@ export default function ChatPage() {
               businessContext: businessContext
             });
             
-            setBackendTotals({ answered: answeredPhase, total: totalPhase, overallAnswered, overallTotal });
+            setBackendTotals({ answered: effectiveAnsweredPhase, total: totalPhase, overallAnswered, overallTotal });
             setLoading(false);
             return;
           } catch (error) {
@@ -3136,7 +3149,7 @@ export default function ChatPage() {
               estimatedExpenses: "",
               businessContext: {}
             });
-            setBackendTotals({ answered: answeredPhase, total: totalPhase, overallAnswered, overallTotal });
+            setBackendTotals({ answered: effectiveAnsweredPhase, total: totalPhase, overallAnswered, overallTotal });
             setLoading(false);
             return;
           }
@@ -3179,7 +3192,7 @@ export default function ChatPage() {
               transitionPhase: "PLAN_TO_ROADMAP"
             });
             
-            setBackendTotals({ answered: answeredPhase, total: totalPhase, overallAnswered, overallTotal });
+            setBackendTotals({ answered: effectiveAnsweredPhase, total: totalPhase, overallAnswered, overallTotal });
             setLoading(false);
             return;
           } catch (summaryError) {
@@ -3190,7 +3203,7 @@ export default function ChatPage() {
               businessPlanArtifact: null,
               transitionPhase: "PLAN_TO_ROADMAP"
             });
-            setBackendTotals({ answered: answeredPhase, total: totalPhase, overallAnswered, overallTotal });
+            setBackendTotals({ answered: effectiveAnsweredPhase, total: totalPhase, overallAnswered, overallTotal });
             setLoading(false);
             return;
           }
@@ -3224,7 +3237,7 @@ export default function ChatPage() {
               if (data.result?.progress) {
                 applyProgressUpdate(data.result.progress);
               }
-              setBackendTotals({ answered: answeredPhase, total: totalPhase, overallAnswered, overallTotal });
+              setBackendTotals({ answered: effectiveAnsweredPhase, total: totalPhase, overallAnswered, overallTotal });
               setLoading(false);
               return;
             } else {
@@ -3288,13 +3301,13 @@ export default function ChatPage() {
           setCurrentAcknowledgement(reconstructed.pendingAcknowledgement || '');
           setCurrentQuestionNumber(pendingNumber);
           setNeedsInitialQuestion(false);
-          setBackendTotals({ answered: answeredPhase, total: totalPhase, overallAnswered, overallTotal });
+          setBackendTotals({ answered: effectiveAnsweredPhase, total: totalPhase, overallAnswered, overallTotal });
           setLoading(false);
           return;
         }
 
         setNeedsInitialQuestion(true);
-        setBackendTotals({ answered: answeredPhase, total: totalPhase, overallAnswered, overallTotal });
+        setBackendTotals({ answered: effectiveAnsweredPhase, total: totalPhase, overallAnswered, overallTotal });
       } catch (error: any) {
         console.error("❌ Failed to restore venture session:", error);
         
@@ -3485,10 +3498,13 @@ export default function ChatPage() {
       updateQuestionTracker(progress.phase, nextQuestionNumber);
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
       
-      // Use AI-powered detection from backend for showing buttons (if available)
+      const COMMAND_INPUTS = ["draft", "support", "scrapping", "scraping", "draft more", "draft answer"];
+      const wasCommand = COMMAND_INPUTS.includes(input.toLowerCase().trim());
+
       if (show_accept_modify !== undefined) {
-        console.log("🤖 AI Detection says show buttons:", show_accept_modify);
         setShowVerificationButtons(show_accept_modify);
+      } else if (wasCommand) {
+        setShowVerificationButtons(true);
       }
       
       // Show immediate response if available
@@ -3986,18 +4002,27 @@ export default function ChatPage() {
     }
   };
 
-  // Use backend progress data directly to avoid calculation mismatches
-  // Use phase-specific answered count for step display.
-  // When the user is ON a question (currentQuestionNumber is set), ensure step is at least 1
-  // so the header never shows "0 of 6" when the user can see Question 1.
-  const rawStep = backendTotals.answered;
-  const currentStep = (rawStep === 0 && currentQuestionNumber && currentQuestionNumber > 0)
-    ? currentQuestionNumber
-    : rawStep;
-  // Use phase-specific totals instead of combined totals for step display
+  // Progress: history is source of truth — each pair = one answered question.
+  // Backend answered_count can lag; never show less than what history proves.
+  const gkyTotal = QUESTION_COUNTS.GKY;
+  const bpTotal = QUESTION_COUNTS.BUSINESS_PLAN;
+  const isGKY = progress.phase === "GKY";
+  const historyPhaseAnswered = isGKY
+    ? Math.min(history.length, gkyTotal)
+    : Math.min(Math.max(0, history.length - gkyTotal), bpTotal);
   const total = backendTotals.total;
-  const percent = total > 0 ? Math.round((currentStep / total) * 100) : 0;
-  
+  const answeredCount = Math.max(backendTotals.answered, historyPhaseAnswered);
+  const percent = total > 0 ? Math.round((answeredCount / total) * 100) : 0;
+
+  const overallTotal = progress.overall_progress?.total ?? backendTotals.overallTotal ?? 50;
+  const historyOverall = Math.min(history.length, overallTotal);
+  const backendOverall = progress.overall_progress?.answered ?? backendTotals.overallAnswered ?? 0;
+  const rawOverallAnswered = Math.max(backendOverall, historyOverall);
+  const overallPercent = overallTotal > 0 ? Math.round((rawOverallAnswered / overallTotal) * 100) : percent;
+
+  // For header "X of Y": show answered count (not inflated by current question)
+  const currentStep = answeredCount;
+
   // Short-form phase labels for the header (user requested abbreviations)
   const phaseDisplayLabel: Record<string, string> = {
     GKY: "GKY",
@@ -4011,14 +4036,6 @@ export default function ChatPage() {
     IMPLEMENTATION: "Implementation",
   };
   const headerPhaseLabel = phaseDisplayLabel[progress.phase] ?? progress.phase;
-
-  // Overall progress: ensure it's at least as high as currentStep (accounts for initial load where backend hasn't responded yet)
-  const rawOverallAnswered = progress.overall_progress?.answered ?? backendTotals.overallAnswered;
-  const overallAnswered = currentStep > 0 
-    ? Math.max(rawOverallAnswered, progress.phase === "GKY" ? currentStep : progress.phase === "BUSINESS_PLAN" ? QUESTION_COUNTS.GKY + currentStep : currentStep)
-    : rawOverallAnswered;
-  const overallTotal = progress.overall_progress?.total ?? backendTotals.overallTotal;
-  const overallPercent = overallTotal > 0 ? Math.round((overallAnswered / overallTotal) * 100) : percent;
 
   // Console logging for calculated display values
   console.log("📊 Display Values Calculated:", {
@@ -4734,9 +4751,9 @@ export default function ChatPage() {
                         {pair.acknowledgement && (
                           <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-4 py-3">
                             <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 mb-1.5">Angel Response</p>
-                            <div className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed">
-                              <QuestionFormatter text={pair.acknowledgement} phase={progress.phase} />
-                            </div>
+                            <p className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed">
+                              {pair.acknowledgement}
+                            </p>
                           </div>
                         )}
                         <div className={pair.acknowledgement ? "rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3" : ""}>
@@ -4819,9 +4836,9 @@ export default function ChatPage() {
                           {currentAcknowledgement && (
                             <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-4 py-3">
                               <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 mb-1.5">Angel Response</p>
-                              <div className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed">
-                                <QuestionFormatter text={currentAcknowledgement} phase={progress.phase} />
-                              </div>
+                              <p className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed">
+                                {currentAcknowledgement}
+                              </p>
                             </div>
                           )}
                           <div className={currentAcknowledgement ? "rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3" : ""}>
@@ -5023,27 +5040,20 @@ export default function ChatPage() {
           onQuestionSelect={handleQuestionSelect}
           currentProgress={{
             phase: progress.phase,
-            answered: currentStep,
+            answered: answeredCount,
             total,
             percent,
-            phase_answered: currentStep,
+            phase_answered: answeredCount,
             overall_progress: {
-              answered: overallAnswered,
+              answered: rawOverallAnswered,
               total: overallTotal,
               percent: overallPercent,
-              phase_breakdown: (() => {
-                const base = progress.overall_progress?.phase_breakdown ?? {
-                  gky_completed: 0, gky_total: 5, bp_completed: 0, bp_total: 45,
-                };
-                // Ensure phase_breakdown reflects corrected currentStep
-                if (progress.phase === "GKY" && currentStep > (base.gky_completed ?? 0)) {
-                  return { ...base, gky_completed: currentStep };
-                }
-                if (progress.phase === "BUSINESS_PLAN" && currentStep > (base.bp_completed ?? 0)) {
-                  return { ...base, bp_completed: currentStep };
-                }
-                return base;
-              })(),
+              phase_breakdown: progress.overall_progress?.phase_breakdown ?? {
+                gky_completed: 0,
+                gky_total: 5,
+                bp_completed: 0,
+                bp_total: 45,
+              },
             },
           }}
           currentQuestionNumber={currentQuestionNumber}
