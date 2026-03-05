@@ -47,7 +47,7 @@ interface ConversationPair {
   answer: string;
   acknowledgement?: string;
   questionNumber?: number;
-  phase?: 'GKY' | 'BUSINESS_PLAN' | 'ROADMAP' | 'IMPLEMENTATION' | 'PLAN_TO_ROADMAP_TRANSITION' | 'PLAN_TO_SUMMARY_TRANSITION' | 'PLAN_TO_BUDGET_TRANSITION' | 'ROADMAP_TO_IMPLEMENTATION_TRANSITION';
+  phase?: 'GKY' | 'BUSINESS_PLAN' | 'ROADMAP' | 'ROADMAP_GENERATED' | 'IMPLEMENTATION' | 'PLAN_TO_ROADMAP_TRANSITION' | 'PLAN_TO_SUMMARY_TRANSITION' | 'PLAN_TO_BUDGET_TRANSITION' | 'ROADMAP_TO_IMPLEMENTATION_TRANSITION';
   /** Draft, Support, Scrapping etc. - display in chat but exclude from progress */
   isCommand?: boolean;
 }
@@ -2650,7 +2650,7 @@ export default function ChatPage() {
     }
   }, [history, currentQuestion, progress.phase, progress.answered]);
 
-  // Auto-scroll to show user message + loader when user sends a message (restore previous behavior)
+  // Auto-scroll to show user message + loader when user sends a message
   useEffect(() => {
     if (pendingUserReply && chatContainerRef.current) {
       if (history.length === 0 && progress.phase === 'GKY') return;
@@ -4880,32 +4880,10 @@ export default function ChatPage() {
                           </div>
                           </div>
                         )
-                      ) : loading ? (
-                        <div className="space-y-3">
-                          {currentAcknowledgement && (
-                            <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/60 px-4 py-3">
-                              <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 mb-1.5">Angel Response</p>
-                              <div className="text-gray-700 text-sm leading-relaxed prose prose-sm max-w-none prose-p:my-1 prose-strong:font-semibold prose-strong:text-gray-900">
-                                <ReactMarkdown
-                                  components={{
-                                    p: ({ children }) => <p className="whitespace-pre-wrap mb-2 last:mb-0">{children}</p>,
-                                    strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
-                                  }}
-                                >
-                                  {currentAcknowledgement}
-                                </ReactMarkdown>
-                              </div>
-                            </div>
-                          )}
-                            <div className={currentAcknowledgement ? "space-y-2" : ""}>
-                              {currentAcknowledgement && (
-                                <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-600">Next Question</p>
-                              )}
-                              <div className={currentAcknowledgement ? "rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3" : ""}>
-                                <QuestionFormatter text={currentQuestion || "Loading..."} phase={progress.phase} />
-                              </div>
-                            </div>
-                          </div>
+                      ) : loading && !pendingUserReply ? (
+                        <div className="space-y-4">
+                          <AngelThinkingLoader />
+                        </div>
                       ) : (
                         <div className="space-y-3">
                             {currentAcknowledgement && (
