@@ -36,6 +36,7 @@ import BusinessQuestionFormatter from "../../components/BusinessQuestionFormatte
 import BackButton from "../../components/BackButton";
 import AngelThinkingLoader from "../../components/AngelThinkingLoader";
 import QuestionFormatter from "../../components/QuestionFormatter";
+import ReactMarkdown from "react-markdown";
 import type { Budget, BudgetItem, APIResponse } from "../../types/apiTypes";
 import BusinessPlanningInstructions from "../../components/BusinessPlanningInstructions";
 // GkyToBusinessPlanIntro modal removed — transition happens inline in chat
@@ -47,6 +48,8 @@ interface ConversationPair {
   acknowledgement?: string;
   questionNumber?: number;
   phase?: 'GKY' | 'BUSINESS_PLAN' | 'ROADMAP' | 'IMPLEMENTATION' | 'PLAN_TO_ROADMAP_TRANSITION' | 'PLAN_TO_SUMMARY_TRANSITION' | 'PLAN_TO_BUDGET_TRANSITION' | 'ROADMAP_TO_IMPLEMENTATION_TRANSITION';
+  /** Draft, Support, Scrapping etc. - display in chat but exclude from progress */
+  isCommand?: boolean;
 }
 
 type RawChatRecord = {
@@ -677,6 +680,8 @@ export default function ChatPage() {
   const [currentQuestionNumber, setCurrentQuestionNumber] = useState<number | null>(null);
   const [currentInput, setCurrentInput] = useState("");
   const [loading, setLoading] = useState(false);
+  /** User's answer displayed while waiting for Angel's reply (keeps question + reply visible during loading) */
+  const [pendingUserReply, setPendingUserReply] = useState<string | null>(null);
   const [backButtonLoading, setBackButtonLoading] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [progress, setProgress] = useState<ProgressState>({
@@ -2645,6 +2650,22 @@ export default function ChatPage() {
     }
   }, [history, currentQuestion, progress.phase, progress.answered]);
 
+  // Auto-scroll to show user message + loader when user sends a message (restore previous behavior)
+  useEffect(() => {
+    if (pendingUserReply && chatContainerRef.current) {
+      if (history.length === 0 && progress.phase === 'GKY') return;
+      const timer = setTimeout(() => {
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTo({
+            top: chatContainerRef.current.scrollHeight,
+            behavior: 'smooth'
+          });
+        }
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [pendingUserReply, history.length, progress.phase]);
+
   // Use useEffect to navigate to roadmap page when roadmap is generated
   useEffect(() => {
     if (roadmapData && roadmapData.isGenerated && !planState.showModal && sessionId) {
@@ -3373,11 +3394,7 @@ export default function ChatPage() {
 
     setLoading(true);
     setCurrentInput("");
-    
-    setHistory((prev) => [
-      ...prev,
-      { question: previousQuestion, answer: input, acknowledgement: previousAcknowledgement || undefined, questionNumber: previousQuestionNumber },
-    ]);
+    setPendingUserReply(input);
 
     try {
       const response = await fetchQuestion(input, sessionId!);
@@ -3405,7 +3422,7 @@ export default function ChatPage() {
       applyProgressUpdate(progress);
       await loadBusinessContext();
       
-      // Handle transition phases - CHECK THIS FIRST before adding to history
+      // Handle transition phases - return early (no history add for modal transitions)
       if (transition_phase === "PLAN_TO_SUMMARY") {
         console.log("🎯 PLAN_TO_SUMMARY transition detected - showing business plan summary first");
         setTransitionData({
@@ -3413,8 +3430,6 @@ export default function ChatPage() {
           businessPlanArtifact: business_plan_artifact || null,
           transitionPhase: transition_phase
         });
-        // Remove optimistic update - show modal instead
-        setHistory((prev) => prev.slice(0, -1));
         setLoading(false);
         return;
       }
@@ -3435,9 +3450,6 @@ export default function ChatPage() {
         
         console.log("📊 Setting transitionData:", transitionDataToSet);
         setTransitionData(transitionDataToSet);
-        
-        // Remove optimistic update - show modal instead
-        setHistory((prev) => prev.slice(0, -1));
         setLoading(false);
         return;
       }
@@ -3460,8 +3472,6 @@ export default function ChatPage() {
             autoClose: 5000
           });
         }
-        // Remove optimistic update - show modal instead
-        setHistory((prev) => prev.slice(0, -1));
         setLoading(false);
         return;
       }
@@ -3491,15 +3501,35 @@ export default function ChatPage() {
       }
       
       const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
-      const nextQuestionNumber = deriveQuestionNumber(question_number, reply, progress);
+      // Section summary: stay on current question until user accepts (don't advance to next)
+      const sectionSummaryMarkers = ["Section Complete", "Summary of Your Information", "Ready to Continue"];
+      const isSectionSummary = show_accept_modify && sectionSummaryMarkers.some((m) => reply?.includes(m));
+      const nextQuestionNumber = isSectionSummary && previousQuestionNumber != null
+        ? previousQuestionNumber
+        : deriveQuestionNumber(question_number, reply, progress);
+
+      const COMMAND_INPUTS = ["draft", "support", "scrapping", "scraping", "draft more", "draft answer"];
+      const wasCommand = COMMAND_INPUTS.includes(input.toLowerCase().trim());
+
+      // Add to history only when Angel reply arrives (progress increments here, not on submit)
+      // Commands (Draft, Support, etc.) add for display but isCommand excludes from progress
+      setHistory((prev) => [
+        ...prev,
+        {
+          question: previousQuestion,
+          answer: input,
+          acknowledgement: ack || undefined,
+          questionNumber: previousQuestionNumber,
+          phase: progress.phase,
+          ...(wasCommand && { isCommand: true }),
+        },
+      ]);
+
       setCurrentQuestion(parsedQ);
       setCurrentAcknowledgement(ack);
       setCurrentQuestionNumber(nextQuestionNumber);
       updateQuestionTracker(progress.phase, nextQuestionNumber);
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
-      
-      const COMMAND_INPUTS = ["draft", "support", "scrapping", "scraping", "draft more", "draft answer"];
-      const wasCommand = COMMAND_INPUTS.includes(input.toLowerCase().trim());
 
       if (show_accept_modify !== undefined) {
         setShowVerificationButtons(show_accept_modify);
@@ -3554,12 +3584,10 @@ export default function ChatPage() {
       toast.error(errorMessage, {
         autoClose: 5000,
       });
-      
-      // Remove optimistic update on error - restore input
-      setHistory((prev) => prev.slice(0, -1));
       setCurrentInput(input);
     } finally {
       setLoading(false);
+      setPendingUserReply(null);
     }
   };
 
@@ -4003,19 +4031,29 @@ export default function ChatPage() {
   };
 
   // Progress: history is source of truth — each pair = one answered question.
-  // Backend answered_count can lag; never show less than what history proves.
+  // Exclude transition ack ("I'm ready"): it has phase GKY but no questionNumber.
   const gkyTotal = QUESTION_COUNTS.GKY;
   const bpTotal = QUESTION_COUNTS.BUSINESS_PLAN;
   const isGKY = progress.phase === "GKY";
+  // Exclude command responses (Draft, Support, etc.) from progress - they don't count as answered
+  const gkyPairs = history.filter(
+    (p) =>
+      !p.isCommand &&
+      ((p.phase === "GKY" && typeof p.questionNumber === "number" && p.questionNumber <= 5) ||
+        (!p.phase && typeof p.questionNumber === "number" && p.questionNumber <= 5))
+  );
+  const bpPairs = history.filter(
+    (p) => p.phase === "BUSINESS_PLAN" && !p.isCommand
+  );
   const historyPhaseAnswered = isGKY
-    ? Math.min(history.length, gkyTotal)
-    : Math.min(Math.max(0, history.length - gkyTotal), bpTotal);
+    ? Math.min(gkyPairs.length, gkyTotal)
+    : Math.min(bpPairs.length, bpTotal);
   const total = backendTotals.total;
   const answeredCount = Math.max(backendTotals.answered, historyPhaseAnswered);
   const percent = total > 0 ? Math.round((answeredCount / total) * 100) : 0;
 
   const overallTotal = progress.overall_progress?.total ?? backendTotals.overallTotal ?? 50;
-  const historyOverall = Math.min(history.length, overallTotal);
+  const historyOverall = Math.min(gkyPairs.length + bpPairs.length, overallTotal);
   const backendOverall = progress.overall_progress?.answered ?? backendTotals.overallAnswered ?? 0;
   const rawOverallAnswered = Math.max(backendOverall, historyOverall);
   const overallPercent = overallTotal > 0 ? Math.round((rawOverallAnswered / overallTotal) * 100) : percent;
@@ -4749,19 +4787,28 @@ export default function ChatPage() {
                       )}
                       <div className="space-y-3">
                         {pair.acknowledgement && (
-                          <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+                          <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/60 px-4 py-3">
                             <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 mb-1.5">Angel Response</p>
-                            <p className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed">
-                              {pair.acknowledgement}
-                            </p>
+                            <div className="text-gray-700 text-sm leading-relaxed prose prose-sm max-w-none prose-p:my-1 prose-strong:font-semibold prose-strong:text-gray-900">
+                              <ReactMarkdown
+                                components={{
+                                  p: ({ children }) => <p className="whitespace-pre-wrap mb-2 last:mb-0">{children}</p>,
+                                  strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+                                }}
+                              >
+                                {pair.acknowledgement}
+                              </ReactMarkdown>
+                            </div>
                           </div>
                         )}
-                        <div className={pair.acknowledgement ? "rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3" : ""}>
+                        <div className={pair.acknowledgement ? "space-y-2" : ""}>
                           {pair.acknowledgement && (
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-600 mb-1.5">Next Question</p>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-600">Next Question</p>
                           )}
-                          <div className="text-gray-800 whitespace-pre-wrap text-sm">
-                            <QuestionFormatter text={pair.question} phase={progress.phase} />
+                          <div className={pair.acknowledgement ? "rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3" : ""}>
+                            <div className="text-gray-800 whitespace-pre-wrap text-sm">
+                              <QuestionFormatter text={pair.question} phase={progress.phase} />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -4786,7 +4833,7 @@ export default function ChatPage() {
               </div>
             ))}
 
-            {/* Current Question */}
+            {/* Current Question - Angel asks (must appear BEFORE user's answer) */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-100">
               <div className="p-3 sm:p-4 border-b border-gray-100 bg-gradient-to-r from-teal-50 to-blue-50">
                 <div className="flex items-start gap-2 sm:gap-3">
@@ -4801,7 +4848,7 @@ export default function ChatPage() {
                     <div className="font-semibold text-gray-800 mb-1 text-sm">
                       Angel
                     </div>
-                    {!loading && (progress.phase === "GKY" || progress.phase === "BUSINESS_PLAN") && currentQuestionNumber && (
+                    {(progress.phase === "GKY" || progress.phase === "BUSINESS_PLAN") && currentQuestionNumber && (
                       <div className="mb-2">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                           Question {currentQuestionNumber}
@@ -4809,10 +4856,11 @@ export default function ChatPage() {
                       </div>
                     )}
                     <div className="text-gray-800 whitespace-pre-wrap text-sm angel-intro-text">
-                      {loading ? (
-                        <AngelThinkingLoader />
-                      ) : progress.phase === "ROADMAP" || progress.phase === "ROADMAP_GENERATED" ? (
-                        <div className="space-y-4">
+                      {progress.phase === "ROADMAP" || progress.phase === "ROADMAP_GENERATED" ? (
+                        loading ? (
+                          <AngelThinkingLoader />
+                        ) : (
+                          <div className="space-y-4">
                           <QuestionFormatter text={currentQuestion || "Your roadmap is ready!"} phase={progress.phase} />
                           <div className="mt-4 flex gap-3">
                             <button
@@ -4830,24 +4878,60 @@ export default function ChatPage() {
                               <span>Start Implementation</span>
                             </button>
                           </div>
-                        </div>
-                      ) : (
+                          </div>
+                        )
+                      ) : loading ? (
                         <div className="space-y-3">
                           {currentAcknowledgement && (
-                            <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+                            <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/60 px-4 py-3">
                               <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 mb-1.5">Angel Response</p>
-                              <p className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed">
-                                {currentAcknowledgement}
-                              </p>
+                              <div className="text-gray-700 text-sm leading-relaxed prose prose-sm max-w-none prose-p:my-1 prose-strong:font-semibold prose-strong:text-gray-900">
+                                <ReactMarkdown
+                                  components={{
+                                    p: ({ children }) => <p className="whitespace-pre-wrap mb-2 last:mb-0">{children}</p>,
+                                    strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+                                  }}
+                                >
+                                  {currentAcknowledgement}
+                                </ReactMarkdown>
+                              </div>
                             </div>
                           )}
-                          <div className={currentAcknowledgement ? "rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3" : ""}>
-                            {currentAcknowledgement && (
-                              <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-600 mb-1.5">Next Question</p>
-                            )}
-                            <QuestionFormatter text={currentQuestion || "Loading..."} phase={progress.phase} />
+                            <div className={currentAcknowledgement ? "space-y-2" : ""}>
+                              {currentAcknowledgement && (
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-600">Next Question</p>
+                              )}
+                              <div className={currentAcknowledgement ? "rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3" : ""}>
+                                <QuestionFormatter text={currentQuestion || "Loading..."} phase={progress.phase} />
+                              </div>
+                            </div>
                           </div>
-                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                            {currentAcknowledgement && (
+                              <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/60 px-4 py-3">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 mb-1.5">Angel Response</p>
+                                <div className="text-gray-700 text-sm leading-relaxed prose prose-sm max-w-none prose-p:my-1 prose-strong:font-semibold prose-strong:text-gray-900">
+                                  <ReactMarkdown
+                                    components={{
+                                      p: ({ children }) => <p className="whitespace-pre-wrap mb-2 last:mb-0">{children}</p>,
+                                      strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+                                    }}
+                                  >
+                                    {currentAcknowledgement}
+                                  </ReactMarkdown>
+                                </div>
+                              </div>
+                            )}
+                            <div className={currentAcknowledgement ? "space-y-2" : ""}>
+                              {currentAcknowledgement && (
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-600">Next Question</p>
+                              )}
+                              <div className={currentAcknowledgement ? "rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3" : ""}>
+                                <QuestionFormatter text={currentQuestion || "Loading..."} phase={progress.phase} />
+                              </div>
+                            </div>
+                          </div>
                       )}
                     </div>
                     
@@ -4855,6 +4939,32 @@ export default function ChatPage() {
                 </div>
               </div>
             </div>
+
+            {/* User's answer + Angel thinking - shown AFTER the question while waiting for response */}
+            {pendingUserReply && (
+              <div className="space-y-4">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-100">
+                  <div className="p-3 sm:p-4 bg-gray-50">
+                    <div className="flex items-start gap-2 sm:gap-3">
+                      <div className="w-6 h-6 bg-gray-300 rounded flex items-center justify-center text-xs flex-shrink-0">
+                        👤
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-gray-800 mb-1 text-sm">
+                          You
+                        </div>
+                        <div className="text-gray-700 whitespace-pre-wrap text-sm">
+                          {pendingUserReply}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+                  <AngelThinkingLoader />
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

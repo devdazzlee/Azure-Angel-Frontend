@@ -31,15 +31,17 @@ const BP_TOTAL_QUESTIONS = 45;
 interface BusinessPlanProgressWidgetProps {
   currentQuestionNumber: number;
   totalQuestions: number;
+  /** Number of BP questions actually answered (0 when viewing Q1 but not yet answered) */
+  bpAnsweredCount: number;
   className?: string;
 }
 
 const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
   currentQuestionNumber,
   totalQuestions,
+  bpAnsweredCount,
   className = ""
 }) => {
-  // Use a consistent total: always 45 internal questions
   const consistentTotal = BP_TOTAL_QUESTIONS;
   const [currentSection, setCurrentSection] = useState<BusinessPlanSection | null>(null);
   const [sectionProgress, setSectionProgress] = useState(0);
@@ -132,44 +134,44 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
   ];
 
   useEffect(() => {
-    // Find current section based on question number
+    // Section to highlight: based on which question user is VIEWING
     const activeSection = sections.find(
-      section => currentQuestionNumber >= section.startQuestion && 
+      section => currentQuestionNumber >= section.startQuestion &&
                  currentQuestionNumber <= section.endQuestion
     );
 
     if (activeSection) {
       setIsAnimating(true);
-      
-      // Calculate section progress
-      // currentQuestionNumber represents the question we're currently ON
-      // "Question X of Y" shows X = position within section
-      // Section progress bar should match: X/Y * 100
-      // e.g., on Q3 of 4 → progress = 3/4 = 75% (user has reached Q3 out of 4)
-      const questionsInSection = activeSection.endQuestion - activeSection.startQuestion + 1;
-      const currentPositionInSection = currentQuestionNumber - activeSection.startQuestion + 1;
-      const progress = (currentPositionInSection / questionsInSection) * 100;
-      
-      setCurrentSection(activeSection);
-      setSectionProgress(Math.min(100, Math.max(0, progress)));
-      
-      // Calculate overall progress — how far through all 45 questions
-      // On Q3 of 45 → 3/45 ≈ 7%
-      const overallProgress = Math.min(100, Math.max(0, (currentQuestionNumber / consistentTotal) * 100));
-      setOverallProgress(overallProgress);
 
-      // Reset animation after transition
+      // Section progress = questions ANSWERED in this section / total in section
+      // ROOT CAUSE FIX: When VIEWING question N, we've completed N-1. Never count the current
+      // question as answered - backend can send answered=N when we're on Q N (section summary Accept).
+      const completedCount = Math.min(bpAnsweredCount, Math.max(0, currentQuestionNumber - 1));
+      const questionsInSection = activeSection.endQuestion - activeSection.startQuestion + 1;
+      const answeredInSection = Math.max(
+        0,
+        Math.min(completedCount, activeSection.endQuestion) - activeSection.startQuestion + 1
+      );
+      const sectionPct = (answeredInSection / questionsInSection) * 100;
+
+      setCurrentSection(activeSection);
+      setSectionProgress(Math.min(100, Math.max(0, sectionPct)));
+
+      // Overall progress = total BP questions answered / 45 (use completedCount for consistency)
+      const overallPct = (completedCount / consistentTotal) * 100;
+      setOverallProgress(Math.min(100, Math.max(0, overallPct)));
+
       setTimeout(() => setIsAnimating(false), 300);
     } else {
-      // If no section found, try to find the closest section
       const nextSection = sections.find(section => currentQuestionNumber < section.startQuestion);
       if (nextSection) {
+        const completedCount = Math.min(bpAnsweredCount, Math.max(0, currentQuestionNumber - 1));
         setCurrentSection(nextSection);
         setSectionProgress(0);
-        setOverallProgress(Math.min(100, Math.max(0, (currentQuestionNumber / consistentTotal) * 100)));
+        setOverallProgress(Math.min(100, Math.max(0, (completedCount / consistentTotal) * 100)));
       }
     }
-  }, [currentQuestionNumber, consistentTotal]);
+  }, [currentQuestionNumber, bpAnsweredCount, consistentTotal]);
 
   if (!currentSection) {
     // Fallback for when question number is outside expected range

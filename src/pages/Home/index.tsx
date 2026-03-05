@@ -138,7 +138,7 @@ const FounderportHome: React.FC = () => {
       const type = hashParams.get('type');
       const error = hashParams.get('error');
       const errorCode = hashParams.get('error_code');
-
+      
       if ((accessToken && type === 'recovery') || error || errorCode) {
         navigate(`/reset-password${hash}`, { replace: true });
       }
@@ -267,10 +267,10 @@ const FounderportHome: React.FC = () => {
         <p className="mt-3 text-center text-base text-slate-500 md:text-lg">
           A guided, phased workflow that takes you from idea to structured plan to actionable steps
         </p>
-        <motion.div
+              <motion.div
           className="mt-6 grid gap-5 overflow-visible md:grid-cols-2 xl:grid-cols-4 xl:gap-10"
           variants={stepsContainer}
-          initial="hidden"
+                initial="hidden"
           whileInView="show"
           viewport={{ once: true, amount: 0.2 }}
         >
@@ -287,7 +287,7 @@ const FounderportHome: React.FC = () => {
                 </div>
                 <div className="relative mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-md ring-4 ring-blue-100">
                   {step.number}
-                </div>
+        </div>
                 <h3 className="relative min-h-[5.5rem] text-2xl font-bold leading-tight text-slate-800">{step.title}</h3>
                 <p className="relative mt-3 text-base leading-relaxed text-slate-600">{step.description}</p>
               </motion.article>
@@ -295,8 +295,8 @@ const FounderportHome: React.FC = () => {
                 <span className="pointer-events-none absolute right-[-1.5rem] top-[56%] z-20 hidden -translate-y-1/2 rounded bg-slate-100 px-1 text-2xl font-bold text-blue-600 xl:block">
                   →
                 </span>
-              )}
-            </div>
+          )}
+        </div>
           ))}
         </motion.div>
       </motion.section>
@@ -312,10 +312,10 @@ const FounderportHome: React.FC = () => {
         <motion.p className="mt-3 text-center text-base text-slate-500 md:text-lg" variants={fadeItem}>
           A centralized platform that brings clarity and structure to your entrepreneurial journey
         </motion.p>
-        <motion.div
+            <motion.div
           className="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3"
           variants={fadeStagger}
-          initial="hidden"
+              initial="hidden"
           whileInView="show"
           viewport={{ once: true, amount: 0.2 }}
         >

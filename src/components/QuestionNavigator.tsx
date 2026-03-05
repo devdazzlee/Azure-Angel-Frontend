@@ -93,27 +93,12 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
   // Use a consistent BP total of 45 (matching backend TOTALS_BY_PHASE)
   const bpTotal = 45;
   
-  // Determine the current BP question number (internal, 1-based)
-  // Priority: phase_answered (phase-specific from backend) > answered > fallback from breakdown
-  let bpCurrentQuestionNumber: number;
-  if (currentPhase === 'BUSINESS_PLAN') {
-    // phase_answered and answered from the backend both represent the current question number
-    // (the question the user is ON), not "completed count"
-    const directQuestionNum = currentProgress.phase_answered ?? currentProgress.answered ?? 0;
-    if (directQuestionNum > 0) {
-      bpCurrentQuestionNumber = Math.min(directQuestionNum, bpTotal);
-    } else if (bpBreakdown?.bp_completed != null) {
-      // Fallback: bp_completed is "completed" count, so add 1 for "current"
-      bpCurrentQuestionNumber = Math.min(Math.max(bpBreakdown.bp_completed + 1, 1), bpTotal);
-    } else {
-      bpCurrentQuestionNumber = 1;
-    }
-  } else {
-    // Not in BP phase — use breakdown completed count
-    bpCurrentQuestionNumber = bpBreakdown?.bp_completed
-      ? Math.min(Math.max(bpBreakdown.bp_completed, 1), bpTotal)
-      : 1;
-  }
+  // Current question user is VIEWING (for section highlight, "Question X of Y" display)
+  const bpCurrentQuestionNumber = Math.min(Math.max(currentQuestionNumber ?? 1, 1), bpTotal);
+  // Number of BP questions ANSWERED (for progress bars)
+  const bpAnsweredCount = currentPhase === 'BUSINESS_PLAN'
+    ? (currentProgress.answered ?? bpBreakdown?.bp_completed ?? 0)
+    : 0;
 
   return (
     <div className="w-80 space-y-4">
@@ -303,6 +288,7 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
         <BusinessPlanProgressWidget
           currentQuestionNumber={bpCurrentQuestionNumber}
           totalQuestions={bpTotal}
+          bpAnsweredCount={bpAnsweredCount}
           className="shadow-xl"
         />
       )}

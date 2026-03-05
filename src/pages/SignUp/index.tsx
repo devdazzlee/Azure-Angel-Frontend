@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+                                        import React, { useState } from 'react';
 import { FaEye, FaEyeSlash, FaEnvelope, FaLock, FaArrowRight, FaMagic, FaUser, FaTimes, FaInfoCircle } from 'react-icons/fa';
 import { signUp, signIn, acceptTerms, acceptPrivacy } from '../../services/authService';
 import { useNavigate } from 'react-router-dom';
