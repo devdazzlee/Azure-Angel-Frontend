@@ -96,7 +96,7 @@ export default function Support() {
       setForm(initialForm);
     } catch (error) {
       console.error('Contact form submission failed', error);
-      toast.error('Could not send message right now. Please try again.');
+      // Error toast is shown by httpClient interceptor with backend details
     } finally {
       setIsSubmitting(false);
     }

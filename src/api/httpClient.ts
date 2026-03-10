@@ -33,11 +33,18 @@ function isAxiosError(error: any): boolean {
   return error && error.isAxiosError === true;
 }
 
-const extractErrorMessage = (response: any): string =>
-  response?.data?.detail
-  || response?.data?.error
-  || response?.data?.message
-  || '';
+const extractErrorMessage = (response: any): string => {
+  // Handle 422 validation errors with details array (Pydantic format)
+  const details = response?.data?.details;
+  if (Array.isArray(details) && details.length > 0) {
+    const messages = details.map((d: { msg?: string }) => d.msg).filter(Boolean);
+    return messages.length > 0 ? messages.join('. ') : '';
+  }
+  return response?.data?.detail
+    || response?.data?.error
+    || response?.data?.message
+    || '';
+};
 
 const handleError = (error: any): never => {
   if (isAxiosError(error)) {
@@ -61,6 +68,9 @@ const handleError = (error: any): never => {
 
     switch (status) {
       case 400:
+        toast.error(serverMsg || ErrorMessages[ErrorCodes.INVALID_INPUT]);
+        break;
+      case 422:
         toast.error(serverMsg || ErrorMessages[ErrorCodes.INVALID_INPUT]);
         break;
       case 401: {
