@@ -72,7 +72,8 @@ const BETA_TESTER_EMAILS = [
   'support@founderport.ai',
   'bhaia9036@gmail.com',
   'femoxov830@3dkai.com',
-  'yaviri3401@bigonla.com'
+  'yaviri3401@bigonla.com',
+  'ragid89049@bigonla.com'
 ].map(email => email.toLowerCase()); // Normalize to lowercase for case-insensitive comparison
 
 const SignupPage: React.FC = () => {
@@ -84,13 +85,15 @@ const SignupPage: React.FC = () => {
     confirmPassword: '',
   });
   const [showPassword, setShowPassword] = useState({ pass: false, confirm: false });
-
+  const [isLoading, setIsLoading] = useState(false);
+  const [showBetaModal, setShowBetaModal] = useState(false);
   
   // Note: Terms/Privacy modals are now handled by AcceptanceGuard after user logs in
   // These states are kept for potential future use but won't be triggered after signup
   const [isAcceptingTerms, setIsAcceptingTerms] = useState(false);
   const [isAcceptingPrivacy, setIsAcceptingPrivacy] = useState(false);
-  console.log('Focused Field 1:', focusedField);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -250,8 +253,6 @@ const SignupPage: React.FC = () => {
                       required
                       value={formData.fullName}
                       onChange={handleChange}
-                      onFocus={() => setFocusedField('fullName')}
-                      onBlur={() => setFocusedField(null)}
                       placeholder="Enter your full name"
                       className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-teal-600 transition"
                     />
@@ -270,8 +271,6 @@ const SignupPage: React.FC = () => {
                       autoComplete="email"
                       value={formData.email}
                       onChange={handleChange}
-                      onFocus={() => setFocusedField('email')}
-                      onBlur={() => setFocusedField(null)}
                       placeholder="Enter your email"
                       className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-teal-600 transition"
                     />
@@ -290,8 +289,6 @@ const SignupPage: React.FC = () => {
                       autoComplete="new-password"
                       value={formData.password}
                       onChange={handleChange}
-                      onFocus={() => setFocusedField('password')}
-                      onBlur={() => setFocusedField(null)}
                       placeholder="Enter your password"
                       className="w-full pl-12 pr-12 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-teal-600 transition"
                     />
@@ -317,8 +314,6 @@ const SignupPage: React.FC = () => {
                       autoComplete="new-password"
                       value={formData.confirmPassword}
                       onChange={handleChange}
-                      onFocus={() => setFocusedField('confirmPassword')}
-                      onBlur={() => setFocusedField(null)}
                       placeholder="Re-enter your password"
                       className="w-full pl-12 pr-12 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-teal-600 transition"
                     />
