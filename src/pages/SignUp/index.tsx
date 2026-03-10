@@ -1,6 +1,6 @@
                                         import React, { useState } from 'react';
 import { FaEye, FaEyeSlash, FaEnvelope, FaLock, FaArrowRight, FaMagic, FaUser, FaTimes, FaInfoCircle } from 'react-icons/fa';
-import { signUp, signIn, acceptTerms, acceptPrivacy } from '../../services/authService';
+import { signUp, acceptTerms, acceptPrivacy } from '../../services/authService';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { setEmailPendingVerification } from '../../utils/tokenUtils';
@@ -68,7 +68,11 @@ const BETA_TESTER_EMAILS = [
   'lixib88356@m3player.com',
   'kgmoore0488@yahoo.com',
   'yasir@buildnext.org',
-  'kgmoore048@gmail.com'
+  'kgmoore048@gmail.com',
+  'support@founderport.ai',
+  'bhaia9036@gmail.com',
+  'femoxov830@3dkai.com',
+  'yaviri3401@bigonla.com'
 ].map(email => email.toLowerCase()); // Normalize to lowercase for case-insensitive comparison
 
 const SignupPage: React.FC = () => {
@@ -80,15 +84,12 @@ const SignupPage: React.FC = () => {
     confirmPassword: '',
   });
   const [showPassword, setShowPassword] = useState({ pass: false, confirm: false });
-  const [isLoading, setIsLoading] = useState(false);
-  const [focusedField, setFocusedField] = useState<string | null>(null);
-  const [showBetaModal, setShowBetaModal] = useState(false);
-  const [showTermsModal, setShowTermsModal] = useState(false);
-  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+
+  
+  // Note: Terms/Privacy modals are now handled by AcceptanceGuard after user logs in
+  // These states are kept for potential future use but won't be triggered after signup
   const [isAcceptingTerms, setIsAcceptingTerms] = useState(false);
   const [isAcceptingPrivacy, setIsAcceptingPrivacy] = useState(false);
-  const [userEmail, setUserEmail] = useState('');
-  const [userPassword, setUserPassword] = useState('');
   console.log('Focused Field 1:', focusedField);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -122,36 +123,13 @@ const SignupPage: React.FC = () => {
       });
       setEmailPendingVerification(formData.email);
 
-      // Sign user in so they can accept Terms/Privacy
-      try {
-        const session = await signIn({
-          email: formData.email,
-          password: formData.password,
-        });
-        
-        // Store session tokens
-        if (session.access_token) {
-          localStorage.setItem('sb_access_token', session.access_token);
-        }
-        if (session.refresh_token) {
-          localStorage.setItem('sb_refresh_token', session.refresh_token);
-        }
-        
-        // Store email/password temporarily for modals
-        setUserEmail(formData.email);
-        setUserPassword(formData.password);
-        
-        // Show Terms modal first
-        setShowTermsModal(true);
-        toast.success('Account created successfully! Please accept the Terms and Conditions.');
-      } catch (signInError: any) {
-        console.error('Sign in after signup failed:', signInError);
-        // If sign in fails, still show modals - user might need to sign in manually
-        setUserEmail(formData.email);
-        setUserPassword(formData.password);
-        setShowTermsModal(true);
-        toast.warning('Account created. Please sign in to continue.');
-      }
+      // Show success message and redirect to verify email page
+      toast.success('Account created successfully! Please check your email to verify your account.');
+      
+      // Redirect to verify email page
+      navigate('/verify-email', {
+        state: { email: formData.email },
+      });
     } catch (err: unknown) {
       console.error('Signup error:', err);
       // Extract error message from Error object (thrown by authService)
@@ -181,9 +159,8 @@ const SignupPage: React.FC = () => {
           // Both already accepted (shouldn't happen, but handle it)
           console.log('Both already accepted, redirecting');
           toast.success('Terms and Privacy Policy accepted!');
-          navigate('/verify-email', {
-            state: { email: userEmail }, 
-          });
+          // Note: This handler won't be called after signup since we redirect immediately
+          // It's kept for potential future use
         } else {
           // Show Privacy modal
           console.log('Showing Privacy Policy modal after Terms acceptance');
@@ -191,10 +168,11 @@ const SignupPage: React.FC = () => {
           toast.success('Terms and Conditions accepted! Please accept the Privacy Policy.');
         }
       }, 300);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error accepting Terms:', err);
       setIsAcceptingTerms(false);
-      toast.error(err?.message || 'Failed to accept Terms and Conditions');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to accept Terms and Conditions';
+      toast.error(errorMessage);
       throw err;
     }
   };
@@ -206,17 +184,16 @@ const SignupPage: React.FC = () => {
       setShowPrivacyModal(false);
       
       if (result.both_accepted) {
-        toast.success('Terms and Privacy Policy accepted! Confirmation email will be sent.');
-        // Redirect to verify email page
-        navigate('/verify-email', {
-          state: { email: userEmail }, 
-        });
+        toast.success('Terms and Privacy Policy accepted!');
+        // Note: This handler won't be called after signup since we redirect immediately
+        // It's kept for potential future use
       } else {
         // This shouldn't happen, but handle it
         toast.warning('Privacy Policy accepted, but Terms acceptance is missing.');
       }
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to accept Privacy Policy');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to accept Privacy Policy';
+      toast.error(errorMessage);
       throw err;
     } finally {
       setIsAcceptingPrivacy(false);

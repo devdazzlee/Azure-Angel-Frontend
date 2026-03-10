@@ -3,6 +3,11 @@ import { FaEye, FaEyeSlash, FaLock, FaArrowRight, FaMagic, FaCheckCircle } from 
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { updatePassword } from '../../services/authService';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const ResetPasswordPage: React.FC = () => {
   const navigate = useNavigate();
@@ -18,73 +23,133 @@ const ResetPasswordPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   useEffect(() => {
-    // Extract token from URL hash or query params
-    // Supabase typically puts it in the hash: #access_token=xxx&type=recovery
-    const hash = window.location.hash;
-    const urlParams = new URLSearchParams(window.location.search);
-    
-    // Check for errors in hash first (Supabase error redirects)
-    if (hash) {
-      const hashParams = new URLSearchParams(hash.substring(1));
+    // Use Supabase client to automatically handle auth redirects and token exchange
+    // This is the standard way Supabase handles password reset links
+    const handleTokenExtraction = async () => {
+      const hash = window.location.hash;
+      const urlParams = new URLSearchParams(window.location.search);
       
-      // Check for error cases
-      const error = hashParams.get('error');
-      const errorCode = hashParams.get('error_code');
-      const errorDescription = hashParams.get('error_description');
+      console.log('ResetPassword: Current URL:', window.location.href);
+      console.log('ResetPassword: Hash:', hash);
+      console.log('ResetPassword: Query params:', Object.fromEntries(urlParams.entries()));
       
-      if (error || errorCode) {
-        // Handle error cases
-        let errorMsg = 'Invalid or expired reset link.';
+      // Check for errors in hash first (Supabase error redirects)
+      if (hash) {
+        const hashParams = new URLSearchParams(hash.substring(1));
         
-        if (errorCode === 'otp_expired' || errorCode === 'token_expired') {
-          errorMsg = 'This password reset link has expired. Password reset links are valid for 1 hour. Please request a new one.';
-        } else if (errorCode === 'invalid_token') {
-          errorMsg = 'This password reset link is invalid. It may have already been used. Please request a new one.';
-        } else if (errorDescription) {
-          errorMsg = decodeURIComponent(errorDescription.replace(/\+/g, ' '));
-        } else if (error) {
-          errorMsg = `Error: ${error}`;
+        // Check for error cases
+        const error = hashParams.get('error');
+        const errorCode = hashParams.get('error_code');
+        const errorDescription = hashParams.get('error_description');
+        
+        if (error || errorCode) {
+          // Handle error cases
+          let errorMsg = 'Invalid or expired reset link.';
+          
+          if (errorCode === 'otp_expired' || errorCode === 'token_expired') {
+            errorMsg = 'This password reset link has expired. Password reset links are valid for 1 hour. Please request a new one.';
+          } else if (errorCode === 'invalid_token') {
+            errorMsg = 'This password reset link is invalid. It may have already been used. Please request a new one.';
+          } else if (errorDescription) {
+            errorMsg = decodeURIComponent(errorDescription.replace(/\+/g, ' '));
+          } else if (error) {
+            errorMsg = `Error: ${error}`;
+          }
+          
+          setErrorMessage(errorMsg);
+          toast.error(errorMsg);
+          
+          // Clean up URL hash
+          window.history.replaceState(null, '', window.location.pathname);
+          
+          // Redirect after showing error
+          setTimeout(() => navigate('/forgot-password'), 4000);
+          return;
         }
+      }
+      
+      // Try multiple methods to extract the token
+      let extractedToken: string | null = null;
+      
+      // Method 1: Check URL hash for access_token (Supabase redirect format)
+      if (hash) {
+        const hashParams = new URLSearchParams(hash.substring(1));
+        const accessToken = hashParams.get('access_token');
+        const type = hashParams.get('type');
         
-        setErrorMessage(errorMsg);
-        toast.error(errorMsg);
+        if (accessToken && type === 'recovery') {
+          console.log('ResetPassword: Found access_token in hash');
+          extractedToken = accessToken;
+        }
+      }
+      
+      // Method 2: Check query params (direct Supabase verify links)
+      if (!extractedToken) {
+        const tokenFromQuery = urlParams.get('token') || urlParams.get('access_token');
+        const typeFromQuery = urlParams.get('type');
         
-        // Clean up URL hash
-        window.history.replaceState(null, '', window.location.pathname);
-        
-        // Redirect after showing error
-        setTimeout(() => navigate('/forgot-password'), 4000);
+        if (tokenFromQuery && typeFromQuery === 'recovery') {
+          console.log('ResetPassword: Found token in query params');
+          extractedToken = tokenFromQuery;
+        }
+      }
+      
+      // Method 3: Use Supabase's getSession() to get token from session
+      if (!extractedToken) {
+        try {
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+          
+          if (sessionError) {
+            console.error('ResetPassword: Session error:', sessionError);
+          }
+          
+          if (session?.access_token) {
+            // Verify this is a recovery session by checking URL
+            const hash = window.location.hash;
+            if (hash) {
+              const hashParams = new URLSearchParams(hash.substring(1));
+              const type = hashParams.get('type');
+              
+              if (type === 'recovery') {
+                console.log('ResetPassword: Found recovery session from getSession()');
+                extractedToken = session.access_token;
+              }
+            } else {
+              // If no hash but we have a session, it might still be recovery
+              // Check if we're on reset-password page (user likely came from email)
+              if (window.location.pathname === '/reset-password') {
+                console.log('ResetPassword: Using session token (assuming recovery from email link)');
+                extractedToken = session.access_token;
+              }
+            }
+          }
+        } catch (err) {
+          console.error('ResetPassword: Error getting session:', err);
+        }
+      }
+      
+      // Set token if found
+      if (extractedToken) {
+        console.log('ResetPassword: Token extracted successfully, length:', extractedToken.length);
+        setToken(extractedToken);
+        // Clean up URL after extracting token
+        if (hash || urlParams.toString()) {
+          window.history.replaceState(null, '', window.location.pathname);
+        }
         return;
       }
       
-      // Check for success case with access_token
-      const accessToken = hashParams.get('access_token');
-      const type = hashParams.get('type');
-      
-      if (accessToken && type === 'recovery') {
-        setToken(accessToken);
-        // Clean up URL hash after extracting token
-        window.history.replaceState(null, '', window.location.pathname);
-        return;
-      }
-    }
-    
-    // Check query params as fallback
-    const tokenFromQuery = urlParams.get('token') || urlParams.get('access_token');
-    
-    if (tokenFromQuery) {
-      setToken(tokenFromQuery);
-      // Clean up URL query params after extracting token
-      window.history.replaceState(null, '', window.location.pathname);
-    }
-    
-    // If no token found and no error, show error
-    if (!tokenFromQuery && !hash) {
+      // If no token found and no error, show error
+      console.log('ResetPassword: No token found in hash, query params, or session');
+      console.log('ResetPassword: Hash:', hash);
+      console.log('ResetPassword: Query params:', Object.fromEntries(urlParams.entries()));
       const errorMsg = 'Invalid or missing reset token. Please request a new password reset link.';
       setErrorMessage(errorMsg);
       toast.error(errorMsg);
       setTimeout(() => navigate('/forgot-password'), 2000);
-    }
+    };
+    
+    handleTokenExtraction();
   }, [navigate]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -227,6 +292,13 @@ const ResetPasswordPage: React.FC = () => {
                 >
                   {isLoading ? 'Updating...' : <>Update Password <FaArrowRight className="ml-2" /></>}
                 </button>
+                
+                {/* Debug info - show why button is disabled */}
+                {!token && !errorMessage && (
+                  <div className="mt-2 text-xs text-gray-500 text-center">
+                    Waiting for reset token... Check browser console for details.
+                  </div>
+                )}
 
                 {/* Back to Login */}
                 <div className="text-center">
