@@ -202,7 +202,7 @@ export const getPrivacyContent = (): string => {
     <h3 style="font-size: 1.25rem; font-weight: bold; margin-top: 1.5rem; margin-bottom: 1rem; color: #0d9488;">Contact Us</h3>
     <p>If you have any questions, concerns, or requests regarding this Privacy Policy or your personal data, please do not hesitate to contact us. We are here to help and committed to addressing any privacy-related issues. You may reach our privacy team through the following:</p>
     <ul style="padding-left: 1.5rem; line-height: 1.8;">
-      <li><strong>Email:</strong> info@founderport.com</li>
+      <li><strong>Email:</strong> support@founderport.ai</li>
       <li><strong>In-App:</strong> If you are logged in, you may also send us a message through the support/chat feature of the Founderport platform for privacy inquiries.</li>
     </ul>
     <p>We will respond to legitimate inquiries as soon as reasonably possible, and at latest within any timeframes required by law.</p>

@@ -759,7 +759,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   // Go to Roadmap
   const handleGoToRoadmap = useCallback(async () => {
     try {
-      toast.loading('Loading Roadmap...', { toastId: 'roadmap-transition' });
+      toast.loading('Loading…', { toastId: 'roadmap-transition' });
       
       const response = await httpClient.post(
         `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/transition-decision`,
@@ -772,7 +772,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       const responseData = response.data as APIResponse<{ roadmap?: any }>;
       
       if (responseData.success) {
-        toast.success('Loading Roadmap!', { toastId: 'roadmap-transition-success' });
+        toast.success('Ready!', { toastId: 'roadmap-transition-success' });
         
         if (responseData.result?.roadmap) {
           setTimeout(() => {

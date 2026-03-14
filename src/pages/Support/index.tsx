@@ -35,12 +35,12 @@ const faqItems = [
   {
     question: 'Can I collaborate with my co-founders or team?',
     answer:
-      'Yes! Our Pro and Enterprise plans include team workspaces where multiple members can contribute to business plans, review financial projections, and track progress together in real time.',
+      'No, but we plan to build this in the future! Team collaboration and shared workspaces are not available in the product yet.',
   },
   {
     question: 'How do I contact support if I have an issue?',
     answer:
-      'You can reach us anytime using the contact form on this page, or email us directly at kevin@founderport.ai. We typically respond within 1–2 business days, and critical issues are prioritized.',
+      'You can reach us anytime using the contact form on this page, or email us directly at support@founderport.ai. We typically respond within 1–2 business days, and critical issues are prioritized.',
   },
 ];
 
@@ -130,7 +130,7 @@ export default function Support() {
           <div className="mt-6 grid gap-3 md:grid-cols-3">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
               <div className="mb-1 flex items-center gap-2 font-semibold"><Mail className="h-4 w-4 text-teal-600" /> Email</div>
-              kevin@founderport.ai
+              <a href="mailto:support@founderport.ai" className="text-teal-700 hover:underline">support@founderport.ai</a>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
               <div className="mb-1 flex items-center gap-2 font-semibold"><MessageSquare className="h-4 w-4 text-teal-600" /> Response</div>
@@ -173,7 +173,7 @@ export default function Support() {
             <div>
               <Label>Subject</Label>
               <Select value={form.subject} onValueChange={(value) => onChange('subject', value)}>
-                <SelectTrigger className="mt-2">
+                <SelectTrigger className="mt-2 w-full min-w-0 bg-white text-slate-900 border-slate-200">
                   <SelectValue placeholder="Select a subject" />
                 </SelectTrigger>
                 <SelectContent>

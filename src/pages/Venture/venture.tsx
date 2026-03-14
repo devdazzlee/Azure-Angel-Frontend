@@ -4094,8 +4094,8 @@ export default function ChatPage() {
   if (loading && currentQuestion === "")
     return (
       <VentureLoader
-        title="Loading Roadmap"
-        subtitle="Please wait while we prepare your next steps"
+        title="Loading…"
+        subtitle="Please wait"
       />
     );
 
@@ -4195,24 +4195,11 @@ export default function ChatPage() {
     );
   }
 
-  // Show loading screen while fetching roadmap to implementation transition
+  // Show loading screen while fetching roadmap → implementation transition (generic copy; no "roadmap" in loading text)
   if (progress.phase === "ROADMAP_TO_IMPLEMENTATION_TRANSITION" && !roadmapToImplementationTransition?.isActive) {
     return (
-      <div className="fixed inset-0 bg-gradient-to-br from-slate-50 to-teal-50 flex items-center justify-center z-50">
-        <div className="text-center">
-          <svg className="animate-spin h-20 w-20 text-orange-500 mx-auto mb-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          <h3 className="text-3xl font-bold text-gray-900 mb-3">🏅 Preparing Your Achievement</h3>
-          <p className="text-lg text-gray-600 mb-6">Loading your roadmap completion celebration...</p>
-          <div className="flex items-center justify-center gap-3 mb-6">
-            <div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-            <div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-            <div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-          </div>
-          <p className="text-base text-gray-500">This will just take a moment...</p>
-        </div>
+      <div className="fixed inset-0 z-50 bg-gradient-to-br from-slate-50 to-teal-50">
+        <VentureLoader title="Loading…" subtitle="Please wait" />
       </div>
     );
   }
@@ -4906,7 +4893,7 @@ export default function ChatPage() {
                                 <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-600">Next Question</p>
                               )}
                               <div className={currentAcknowledgement ? "rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3" : ""}>
-                                <QuestionFormatter text={currentQuestion || "Loading..."} phase={progress.phase} />
+                                <QuestionFormatter text={currentQuestion || "Loading…"} phase={progress.phase} />
                               </div>
                             </div>
                           </div>

@@ -50,19 +50,6 @@ const QuestionDropdown: React.FC<QuestionDropdownProps> = ({
     onCancel?.();
   };
 
-  const getOptionIcon = (option: string) => {
-    const optionLower = option.toLowerCase();
-    if (optionLower.includes('yes')) return '✅';
-    if (optionLower.includes('no')) return '❌';
-    if (optionLower.includes('full-time')) return '💼';
-    if (optionLower.includes('part-time')) return '⏰';
-    if (optionLower.includes('student')) return '🎓';
-    if (optionLower.includes('unemployed')) return '🔍';
-    if (optionLower.includes('freelancer') || optionLower.includes('self-employed')) return '🚀';
-    if (optionLower.includes('other')) return '📝';
-    return '🔹';
-  };
-
   const isSelected = (option: string) => selectedValues.includes(option);
   const hasSelection = selectedValues.length > 0;
 
@@ -102,7 +89,7 @@ const QuestionDropdown: React.FC<QuestionDropdownProps> = ({
             aria-pressed={isSelected(option)}
           >
             <div className={`flex items-center gap-3 ${isYesNoQuestion ? 'flex-col' : ''}`}>
-              {/* Checkbox / Radio indicator */}
+              {/* Checkbox / Radio — no decorative emojis (accessibility + clarity for GKY e.g. business type) */}
               {!isYesNoQuestion && (
                 <div className={`
                   w-5 h-5 flex-shrink-0 rounded${isMultiSelect ? '-md' : '-full'} border-2 flex items-center justify-center transition-colors duration-200
@@ -119,19 +106,8 @@ const QuestionDropdown: React.FC<QuestionDropdownProps> = ({
                 </div>
               )}
 
-              {/* Icon */}
-              <div className={`
-                ${isYesNoQuestion ? 'w-16 h-16' : 'w-10 h-10'} rounded-full flex items-center justify-center text-lg transition-colors duration-200
-                ${isSelected(option)
-                  ? 'bg-teal-500 text-white'
-                  : 'bg-gray-100 text-gray-600'
-                }
-              `}>
-                {getOptionIcon(option)}
-              </div>
-
-              {/* Text */}
-              <div className="flex-1">
+              {/* Text only */}
+              <div className="flex-1 min-w-0">
                 <span className={`
                   font-medium transition-colors duration-200 text-lg
                   ${isSelected(option) ? 'text-teal-700' : 'text-gray-700'}

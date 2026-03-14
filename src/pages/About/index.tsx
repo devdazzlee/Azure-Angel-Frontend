@@ -32,10 +32,7 @@ export default function AboutUs() {
                 className="h-[150px] w-[150px] rounded-full border border-slate-200 object-cover"
               />
               <p className="text-sm leading-relaxed text-slate-700 md:text-base">
-                I&apos;ve had numerous business ideas throughout my life. However, I would typically not follow through because I did not know where to begin.
-                I realized that was a worthy while problem to solve. For much of my career, I&apos;ve devoted my time to helping others solve complicated problems
-                and thought I could apply those same skills to benefit others. I started Founderport to help people achieve their business and financial goals so
-                they could avoid the same issues that had previously prevented me from achieving my entrepreneurial goals.
+                I&apos;ve had numerous business ideas throughout my life. However, I would typically not follow through because I did not know where to begin or it seemed too complex. I realized that was a worthwhile problem to solve. I&apos;ve dedicated most of my professional career to helping others and solving complicated problems. Starting Founderport seemed like a natural combination of my aspirations and skillset. I want to help others navigate the complex process of starting a business to bring their ideas to life and achieve their financial goals. Cheers to the dreamers!
               </p>
             </div>
           </div>

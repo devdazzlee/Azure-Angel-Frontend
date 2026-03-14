@@ -1,6 +1,12 @@
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 
+/** Premium headline pricing — list vs intro offer (one place to update marketing copy). */
+const PREMIUM_PRICING = {
+  listPriceLabel: '$20 Per Month',
+  introOfferLabel: '$0 Per Month Intro Offer',
+} as const;
+
 type ServiceCard = {
   icon: string;
   title: string;
@@ -151,8 +157,17 @@ export default function Services() {
               className="w-full rounded-2xl border-2 border-blue-700 bg-blue-600 px-6 py-5 text-center text-2xl font-bold text-white shadow-sm transition hover:bg-blue-700"
             >
               Premium Tier
-              <br />
-              <span className="text-xl">$20 Per Month</span>
+              <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xl font-semibold">
+                <span className="line-through opacity-80 decoration-2" aria-hidden="true">
+                  {PREMIUM_PRICING.listPriceLabel}
+                </span>
+                <span className="rounded-lg bg-white/15 px-2 py-0.5 text-white ring-1 ring-white/30">
+                  {PREMIUM_PRICING.introOfferLabel}
+                </span>
+              </div>
+              <span className="sr-only">
+                Regular price {PREMIUM_PRICING.listPriceLabel}, currently {PREMIUM_PRICING.introOfferLabel}
+              </span>
             </button>
           </motion.div>
         </motion.section>

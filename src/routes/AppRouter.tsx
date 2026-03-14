@@ -14,7 +14,6 @@ import {
   LearnMore,
   TermsAndConditions,
   PrivacyPolicy,
-  Businesses,
   Startups,
   Enterprise,
   CaseStudies,
@@ -153,8 +152,7 @@ const router = createBrowserRouter([
           },
           {
             path: "/businesses",
-            element: <Businesses />,
-            errorElement: <Businesses />,
+            element: <Navigate to="/" replace />,
           },
           {
             path: "/startups",

@@ -193,7 +193,7 @@ const PrivacyPolicy: React.FC = () => {
           </p>
           
           <div className="bg-teal-50 border-l-4 border-teal-400 p-4 my-6">
-            <p className="font-semibold text-gray-900">Email: privacy@founderport.com</p>
+            <p className="font-semibold text-gray-900">Email: support@founderport.ai</p>
             <p className="mt-2 text-gray-700">Postal Mail: Founderport, Inc., Attn: Privacy Officer, San Diego, CA, USA</p>
             <p className="mt-2 text-gray-700">In-App: If you are logged in, you may also send us a message through the support/chat feature of the Founderport platform for privacy inquiries.</p>
           </div>

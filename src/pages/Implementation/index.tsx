@@ -1140,7 +1140,7 @@ const Implementation: React.FC<ImplementationProps> = ({
                       <div className="animate-spin rounded-full h-12 w-12 border-4 border-teal-200 border-t-teal-600"></div>
                       <div className="absolute inset-0 animate-ping rounded-full h-12 w-12 border-4 border-teal-400 opacity-20"></div>
                     </div>
-                    <span className="mt-4 text-base font-semibold text-gray-700">Loading roadmap...</span>
+                    <span className="mt-4 text-base font-semibold text-gray-700">Loading…</span>
                   </div>
             ) : roadmapContent ? (
               <RoadmapDisplay
