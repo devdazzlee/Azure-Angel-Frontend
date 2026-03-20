@@ -234,15 +234,19 @@ export async function syncSessionProgress(
 
 export async function fetchQuestion(
     content: string,
-    sessionId: string
+    sessionId: string,
+    context?: string
 ): Promise<AngelResponse> {
     const token = localStorage.getItem('sb_access_token');
     if (!token) throw new Error('Not authenticated');
 
     try {
+        const body: { content: string; context?: string } = { content };
+        if (context) body.context = context;
+
         const { data } = await httpClient.post<AngelResponse>(
             `${BASE}/angel/sessions/${sessionId}/chat`,
-            { content },
+            body,
             { headers: { Authorization: `Bearer ${token}` } }
         );
         return data;

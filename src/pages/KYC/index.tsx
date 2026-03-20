@@ -359,8 +359,6 @@ export default function GkyForm() {
     toast.success('Draft saved successfully.');
   };
 
-  const progressPercentage = (Math.min(stepIndex + 1, MAX_STEPS) / MAX_STEPS) * 100;
-
   if (stepIndex >= MAX_STEPS) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
@@ -391,19 +389,6 @@ export default function GkyForm() {
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gray-900 mb-3">Business Plan Creation</h1>
           <p className="text-gray-600 text-lg">Angel will guide you through 5 essential questions to start your business plan</p>
-        </div>
-
-        <div className="mb-12">
-          <div className="flex justify-between items-center mb-3">
-            <span className="text-sm font-medium text-gray-700">Progress</span>
-            <span className="text-sm font-medium text-gray-700">{stepIndex + 1} of {MAX_STEPS}</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div
-              className="bg-gradient-to-r from-blue-500 to-indigo-600 h-2 rounded-full transition-all duration-300 ease-out"
-              style={{ width: `${progressPercentage}%` }}
-            ></div>
-          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-8 xl:grid-cols-5">

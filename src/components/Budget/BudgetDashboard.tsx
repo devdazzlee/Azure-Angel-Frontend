@@ -474,13 +474,26 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
     if (startupHints.some((h) => name.includes(h))) return 'startup';
     if (operatingHints.some((h) => name.includes(h))) return 'operating';
 
-    return 'other';
+    // Check if description indicates this is a revenue item misclassified as expense
+    const descLower = desc.toLowerCase();
+    if (descLower.includes('revenue from') || descLower.includes('income from') || descLower.includes('sales of')) {
+      return 'operating'; // Don't put misclassified revenue items in startup costs
+    }
+
+    // Default unclassified items to operating (safer than startup)
+    return 'operating';
   }, []);
 
-  // Categorized Items
+  // Categorized Items — exclude items with revenue-indicating descriptions
+  // that were misclassified as expenses by the AI
   const expenses = useMemo(() => {
     if (!budget.items || budget.items.length === 0) return [];
-    return budget.items.filter(item => item.category === 'expense');
+    return budget.items.filter(item => {
+      if (item.category !== 'expense') return false;
+      const desc = (item.description || '').toLowerCase();
+      if (desc.includes('revenue from') || desc.includes('income from') || desc.includes('sales of')) return false;
+      return true;
+    });
   }, [budget.items]);
 
   const revenues = useMemo(() => {
@@ -1335,6 +1348,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         handleExportExcel={handleExportExcel}
         budget={budget}
         onContinueToRoadmap={handleGoToRoadmap}
+        onChatWithAngel={() => setIsChatModalOpen(true)}
       />
 
       {/* Selected Items Banner */}

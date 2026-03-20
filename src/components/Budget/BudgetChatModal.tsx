@@ -109,7 +109,7 @@ const BudgetChatModal: React.FC<BudgetChatModalProps> = ({
         .filter((v) => v !== undefined)
         .join('\n');
 
-      const res = await fetchQuestion(content, sessionId);
+      const res = await fetchQuestion(content, sessionId, 'budget_chat');
       const reply = res?.result?.reply || res?.result?.immediate_response || 'No response received.';
 
       const angelResponse: ChatMessage = {

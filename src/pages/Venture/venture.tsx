@@ -24,7 +24,7 @@ import AcceptModifyButtons from "../../components/AcceptModifyButtons";
 import YesNoButtons from "../../components/YesNoButtons";
 import WebSearchIndicator from "../../components/WebSearchIndicator";
 import PlanToRoadmapTransition from "../../components/PlanToRoadmapTransition";
-import PlanToBudgetTransition from "../../components/PlanToBudgetTransition";
+
 import ModifyModal from "../../components/ModifyModal";
 import RoadmapDisplay from "../../components/RoadmapDisplay";
 import RoadmapToImplementationTransition from "../../components/RoadmapToImplementationTransition";
@@ -3435,22 +3435,11 @@ export default function ChatPage() {
       }
 
       if (transition_phase === "PLAN_TO_BUDGET") {
-        console.log("🎯 PLAN_TO_BUDGET transition detected - showing budget setup");
-        const result = (response.result || {}) as any;
-        console.log("📊 Budget transition result:", result);
-        console.log("📊 Full response:", JSON.stringify(response, null, 2));
-        
-        const transitionDataToSet = {
-          businessPlanSummary: business_plan_summary || "",
-          businessPlanArtifact: business_plan_artifact || null,
-          transitionPhase: transition_phase,
-          estimatedExpenses: result.estimated_expenses || "",
-          businessContext: result.business_context || {}
-        };
-        
-        console.log("📊 Setting transitionData:", transitionDataToSet);
-        setTransitionData(transitionDataToSet);
+        console.log("🎯 PLAN_TO_BUDGET transition detected - navigating to full budget page");
         setLoading(false);
+        navigate(`/ventures/${sessionId}/budget`, {
+          state: { fromTransition: true }
+        });
         return;
       }
 
@@ -4116,69 +4105,9 @@ export default function ChatPage() {
   }
 
   if (transitionData && transitionData.transitionPhase === "PLAN_TO_BUDGET") {
-    return (
-      <PlanToBudgetTransition
-        businessPlanSummary={transitionData.businessPlanSummary}
-        estimatedExpenses={transitionData.estimatedExpenses}
-        businessContext={transitionData.businessContext}
-        onComplete={async (budgetData) => {
-          // Budget is complete, now transition to roadmap
-          setTransitionData(null);
-          setCurrentQuestion("");
-          setCurrentAcknowledgement("");
-          setLoading(true);
-          try {
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/transition-decision`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`
-              },
-              body: JSON.stringify({ 
-                decision: 'approve',
-                transition_type: 'budget_to_roadmap'
-              })
-            });
-
-            const data = await response.json();
-            
-            if (data.success) {
-              if (data.result?.progress) {
-                applyProgressUpdate(data.result.progress);
-              }
-              if (data.result?.roadmap) {
-                const roadmapContent = data.result.roadmap;
-                setRoadmapData({
-                  roadmapContent: roadmapContent,
-                  isGenerated: true
-                });
-                setRoadmapState({
-                  showModal: true,
-                  plan: roadmapContent,
-                  loading: false,
-                  error: ""
-                });
-                toast.success("Roadmap Generated");
-              }
-            } else {
-              if (data.requires_subscription) {
-                toast.error(data.message || "Subscription required to proceed to Roadmap phase");
-              } else {
-                toast.error(data.message || "Failed to proceed to roadmap");
-              }
-            }
-          } catch (error: any) {
-            console.error("❌ Failed to proceed to roadmap:", error);
-            toast.error("Failed to proceed to roadmap. Please try again.");
-          } finally {
-            setLoading(false);
-          }
-        }}
-        onRevisit={handleRevisitPlan}
-        loading={loading}
-        sessionId={sessionId}
-      />
-    );
+    // Navigate to full budget page instead of showing modal
+    navigate(`/ventures/${sessionId}/budget`, { state: { fromTransition: true } });
+    setTransitionData(null);
   }
 
   if (transitionData && transitionData.transitionPhase === "PLAN_TO_ROADMAP") {
@@ -4527,12 +4456,14 @@ export default function ChatPage() {
               </button>
             </div>
 
-            <ProgressCircle 
-              progress={percent} 
-              phase={progress.phase} 
-              combined={progress.combined}
-              phase_breakdown={progress.phase_breakdown}
-            />
+            {progress.phase !== 'GKY' && (
+              <ProgressCircle
+                progress={percent}
+                phase={progress.phase}
+                combined={progress.combined}
+                phase_breakdown={progress.phase_breakdown}
+              />
+            )}
 
             {showBusinessPlanButton && (
               <div className="mt-6 flex justify-center">

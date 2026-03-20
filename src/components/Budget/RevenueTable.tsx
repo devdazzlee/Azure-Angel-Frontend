@@ -161,15 +161,13 @@ const RevenueTable: React.FC<RevenueTableProps> = ({
                       <TooltipContent side="right" className="max-w-[180px]">Select to discuss with Angel</TooltipContent>
                     </Tooltip>
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-3 py-2.5 text-sm text-gray-900 max-w-[200px]">
                     {editingStreamId === stream.id ? (
                       <input type="text" value={editingStreamName} onChange={(e) => setEditingStreamName(e.target.value)} onBlur={() => handleSaveNameEdit(stream.id)} onKeyPress={(e) => { if (e.key === 'Enter') handleSaveNameEdit(stream.id); }} className="p-1.5 border border-teal-300 rounded-lg w-full text-sm focus:ring-teal-400 focus:border-teal-400" autoFocus />
                     ) : (
                       <div className="flex items-center group/name">
                         <span className="font-medium">{stream.name}</span>
-                        {stream.isCustom && (
-                          <button onClick={() => handleEditNameClick(stream)} className="ml-2 text-gray-400 hover:text-teal-600 opacity-0 group-hover/name:opacity-100 transition-opacity" title="Edit Stream Name"><BiRename size={14} /></button>
-                        )}
+                        <button onClick={() => handleEditNameClick(stream)} className="ml-2 text-gray-400 hover:text-teal-600 opacity-0 group-hover/name:opacity-100 transition-opacity" title="Edit Stream Name"><BiRename size={14} /></button>
                       </div>
                     )}
                   </td>
@@ -183,9 +181,7 @@ const RevenueTable: React.FC<RevenueTableProps> = ({
                     {formatMoney(stream.revenueProjection, currency)}
                   </td>
                   <td className="px-3 py-2.5 whitespace-nowrap text-right">
-                    {stream.isCustom && (
-                      <button onClick={() => handleRemoveStream(stream.id)} className="text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Remove"><FaTrash size={13} /></button>
-                    )}
+                    <button onClick={() => handleRemoveStream(stream.id)} className="text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Remove"><FaTrash size={13} /></button>
                   </td>
                 </tr>
               ))

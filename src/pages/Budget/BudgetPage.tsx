@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowUp, Menu, X, Download, FileText, ArrowLeft, RefreshCw, Save } from 'lucide-react';
+import { ArrowUp, Menu, X, Download, FileText, ArrowLeft, RefreshCw, Save, Rocket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -29,9 +29,12 @@ import type { APIResponse, Budget, BudgetItem, BusinessContextPayload, RevenueSt
 const BudgetPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const fromTransition = (location.state as any)?.fromTransition === true;
   const [budget, setBudget] = useState<Budget | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [transitioning, setTransitioning] = useState(false);
   const [businessName, setBusinessName] = useState<string | undefined>(undefined);
   const [businessType, setBusinessType] = useState<string>('Startup'); // Default to 'Startup'
 
@@ -44,7 +47,7 @@ const BudgetPage: React.FC = () => {
 
   const fetchBusinessContext = async (sessionId: string) => {
     try {
-      const response = await httpClient.get<APIResponse<{ business_context: BusinessContextPayload }>>(`/api/sessions/${sessionId}/business-context`);
+      const response = await httpClient.get<APIResponse<{ business_context: BusinessContextPayload }>>(`/angel/sessions/${sessionId}/business-context`);
       if (response.data.success && response.data.result?.business_context?.business_type) {
         setBusinessType(response.data.result.business_context.business_type);
         if (response.data.result.business_context.business_name) {
@@ -206,6 +209,38 @@ const BudgetPage: React.FC = () => {
     toast.success('Budget exported successfully');
   };
 
+  const handleContinueToRoadmap = async () => {
+    if (!id) return;
+    setTransitioning(true);
+    try {
+      // Save budget first
+      if (budget) {
+        await budgetService.saveBudget(id, budget);
+      }
+      // Call transition-decision to move to roadmap phase
+      const response = await httpClient.post(`/angel/sessions/${id}/transition-decision`, {
+        decision: 'approve',
+        transition_type: 'budget_to_roadmap'
+      });
+      const data = response.data as any;
+      if (data.success) {
+        toast.success('Budget complete! Generating your roadmap...');
+        navigate(`/ventures/${id}/roadmap`);
+      } else {
+        if (data.requires_subscription) {
+          toast.error(data.message || 'Subscription required to proceed to Roadmap phase');
+        } else {
+          toast.error(data.message || 'Failed to proceed to roadmap');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to proceed to roadmap:', error);
+      toast.error('Failed to proceed to roadmap. Please try again.');
+    } finally {
+      setTransitioning(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -240,7 +275,7 @@ const BudgetPage: React.FC = () => {
       className="min-h-screen bg-gray-50"
     >
       {/* Header */}
-      <div className="bg-white border-b border-gray-200">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center gap-4">
@@ -253,11 +288,17 @@ const BudgetPage: React.FC = () => {
                 Back to Chat
               </Button>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Budget Tracking</h1>
-                <p className="text-gray-600">Manage your business finances</p>
+                <h1 className="text-2xl font-bold text-gray-900">
+                  {fromTransition ? 'Budget Setup' : 'Budget Tracking'}
+                </h1>
+                <p className="text-gray-600">
+                  {fromTransition
+                    ? 'Set up your startup budget, then continue to your roadmap'
+                    : 'Manage your business finances'}
+                </p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
@@ -276,7 +317,7 @@ const BudgetPage: React.FC = () => {
                 <Download className="w-4 h-4" />
                 Export
               </Button>
-              
+
               <Button
                 onClick={saveBudget}
                 disabled={saving}
@@ -289,22 +330,72 @@ const BudgetPage: React.FC = () => {
                 )}
                 {saving ? 'Saving...' : 'Save'}
               </Button>
+
+              {fromTransition && (
+                <Button
+                  onClick={handleContinueToRoadmap}
+                  disabled={transitioning}
+                  className="flex items-center gap-2 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white shadow-md"
+                >
+                  {transitioning ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Rocket className="w-4 h-4" />
+                  )}
+                  {transitioning ? 'Processing...' : 'Continue to Roadmap'}
+                </Button>
+              )}
             </div>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 ${fromTransition ? 'pb-28' : ''}`}>
         <BudgetDashboard
           budget={budget}
           onUpdateBudget={handleUpdateBudget}
           onUpdateItem={handleUpdateItem}
           onDeleteItem={handleDeleteItem}
-          businessType={businessType} // Pass businessType to BudgetDashboard
-          sessionId={id!} // Pass sessionId to BudgetDashboard
+          businessType={businessType}
+          sessionId={id!}
         />
       </div>
+
+      {/* Sticky footer for transition flow */}
+      {fromTransition && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-20">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+            <Button
+              variant="outline"
+              onClick={() => navigate(`/ventures/${id}`)}
+              className="flex items-center gap-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Cancel
+            </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={saveBudget}
+                disabled={saving}
+                variant="outline"
+                className="flex items-center gap-2"
+              >
+                {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {saving ? 'Saving...' : 'Complete Budget Setup'}
+              </Button>
+              <Button
+                onClick={handleContinueToRoadmap}
+                disabled={transitioning}
+                className="flex items-center gap-2 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white shadow-md px-6 py-2.5"
+              >
+                {transitioning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Rocket className="w-4 h-4" />}
+                {transitioning ? 'Processing...' : 'Continue to Roadmap'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 };

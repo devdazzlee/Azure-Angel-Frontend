@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Save, Loader, Download, ArrowRight, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
+import { Save, Loader, Download, ArrowRight, CheckCircle2, XCircle, HelpCircle, MessageSquareText } from 'lucide-react';
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -14,6 +14,7 @@ interface BudgetDashboardHeaderProps {
   handleExportExcel: () => void;
   budget: any;
   onContinueToRoadmap?: () => void;
+  onChatWithAngel?: () => void;
 }
 
 const BudgetDashboardHeader: React.FC<BudgetDashboardHeaderProps> = ({
@@ -24,7 +25,8 @@ const BudgetDashboardHeader: React.FC<BudgetDashboardHeaderProps> = ({
   handleExportPdf,
   handleExportExcel,
   budget,
-  onContinueToRoadmap
+  onContinueToRoadmap,
+  onChatWithAngel
 }) => {
   return (
     <div className="bg-white/80 backdrop-blur-xl border-b border-gray-200/60 shadow-sm mb-8">
@@ -126,6 +128,23 @@ const BudgetDashboardHeader: React.FC<BudgetDashboardHeaderProps> = ({
               </TooltipTrigger>
               <TooltipContent side="bottom">Download budget as Excel spreadsheet</TooltipContent>
             </Tooltip>
+
+            {/* Chat with Angel */}
+            {onChatWithAngel && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={onChatWithAngel}
+                    size="sm"
+                    className="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white shadow-md"
+                  >
+                    <MessageSquareText className="w-3.5 h-3.5 mr-1.5" />
+                    Chat with Angel
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Discuss your budget with Angel AI</TooltipContent>
+              </Tooltip>
+            )}
 
             {/* Continue to Roadmap — prominent CTA in header */}
             {onContinueToRoadmap && (

@@ -5,6 +5,20 @@ module.exports = {
   ],
   theme: {
     extend: {
+      colors: {
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        muted: {
+          DEFAULT: 'hsl(var(--muted))',
+          foreground: 'hsl(var(--muted-foreground))',
+        },
+        accent: {
+          DEFAULT: 'hsl(var(--accent))',
+          foreground: 'hsl(var(--accent-foreground))',
+        },
+        border: 'hsl(var(--border))',
+        ring: 'hsl(var(--ring))',
+      },
       animation: {
         'shimmer': 'shimmer 2s infinite',
         'gradient': 'gradient 3s ease infinite',

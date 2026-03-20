@@ -119,14 +119,11 @@ const BudgetTablesSection: React.FC<BudgetTablesSectionProps> = ({
               <RevenueTable
                 items={dynamicRevenueStreams}
                 onRevenueStreamsChange={(updatedStreams) => {
-                  setDynamicRevenueStreams((prev) => {
-                    const next = [...prev, ...updatedStreams];
-                    saveRevenueStreamsDebounced(next);
-                    setTotalMonthlyRevenue(
-                      next.filter((s) => s.isSelected).reduce((sum, s) => sum + s.revenueProjection, 0)
-                    );
-                    return next;
-                  });
+                  setDynamicRevenueStreams(updatedStreams);
+                  saveRevenueStreamsDebounced(updatedStreams);
+                  setTotalMonthlyRevenue(
+                    updatedStreams.filter((s) => s.isSelected).reduce((sum, s) => sum + s.revenueProjection, 0)
+                  );
                 }}
                 onTotalMonthlyRevenueChange={(totalRevenue) => {
                   setTotalMonthlyRevenue(totalRevenue);
