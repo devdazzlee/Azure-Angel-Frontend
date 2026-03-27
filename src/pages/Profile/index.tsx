@@ -29,6 +29,8 @@ const ProfilePage = () => {
       }
 
       // Fetch subscription status
+      // TODO: ON AUGUST UNCOMMENT THIS - Free intro period until August
+      /* 
       const subscriptionResponse = await fetch(
         `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
         {
@@ -38,6 +40,17 @@ const ProfilePage = () => {
         }
       );
       const subscriptionData = await subscriptionResponse.json();
+      */
+      const subscriptionData: any = {
+        success: true,
+        has_active_subscription: true,
+        user_email: '',
+        subscription: {
+          subscription_status: 'active',
+          amount: 0,
+          currency: 'USD'
+        }
+      };
       setSubscriptionDetails(subscriptionData);
 
       // Fetch ventures count
