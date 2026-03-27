@@ -79,7 +79,7 @@ const Footer: React.FC = () => (
       <div className="mt-10 border-t border-teal-100/80 pt-6">
         <div className="flex flex-col gap-3 rounded-2xl border border-teal-100 bg-white/75 px-4 py-4 text-center shadow-sm backdrop-blur-sm md:flex-row md:items-center md:justify-between md:text-left">
           <p className="text-sm font-medium text-slate-700">
-            © {new Date().getFullYear()} Founderport LLC. All rights reserved.
+            © {new Date().getFullYear()} Founderport. All rights reserved.
           </p>
           <p className="text-sm text-slate-600">
             Website developed using services of{' '}
