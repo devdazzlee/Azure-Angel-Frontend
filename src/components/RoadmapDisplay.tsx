@@ -3,6 +3,7 @@ import { toast } from 'react-toastify';
 import DocumentExportModal from './DocumentExportModal';
 import PaymentForm from './PaymentForm';
 import { PRICING } from '../config/pricing';
+import { checkIsFreeIntroPeriod } from '../utils/freeIntroPeriod';
 
 interface RoadmapDisplayProps {
   roadmapContent: string;
@@ -105,6 +106,13 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
   // Check subscription status from backend on mount
   useEffect(() => {
     const checkSubscriptionStatus = async () => {
+      // 🆓 FREE INTRO PERIOD LOGIC
+      if (checkIsFreeIntroPeriod()) {
+        console.log('🎉 Free intro period active - granting premium access');
+        setHasPaid(true);
+        return;
+      }
+
       try {
         const response = await fetch(
           `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,

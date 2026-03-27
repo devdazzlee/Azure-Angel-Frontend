@@ -6,6 +6,7 @@ import { toast } from 'react-toastify';
 import DocumentExportModal from '../../components/DocumentExportModal';
 import PaymentForm from '../../components/PaymentForm';
 import { PRICING, checkPaymentStatus, markAsPaid } from '../../config/pricing';
+import { checkIsFreeIntroPeriod } from '../../utils/freeIntroPeriod';
 
 interface LocationState {
   businessPlan?: string;
@@ -34,6 +35,14 @@ const BusinessPlanView: React.FC = () => {
   // Check subscription status from backend on mount
   useEffect(() => {
     const checkSubscriptionStatus = async () => {
+      // 🆓 FREE INTRO PERIOD LOGIC
+      if (checkIsFreeIntroPeriod()) {
+        console.log('🎉 Free intro period active - granting premium access');
+        setHasPaid(true);
+        setCheckingSubscription(false);
+        return;
+      }
+
       try {
         const response = await fetch(
           `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
@@ -512,6 +521,12 @@ const BusinessPlanView: React.FC = () => {
             onClick={async () => {
               if (!sessionId) return;
               
+              // 🆓 FREE INTRO PERIOD LOGIC
+              if (checkIsFreeIntroPeriod()) {
+                navigate(`/ventures/${sessionId}`);
+                return;
+              }
+
               try {
                 // Check subscription before allowing roadmap access
                 const subscriptionCheck = await fetch(

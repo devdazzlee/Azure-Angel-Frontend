@@ -7,6 +7,7 @@ import BusinessPlanPaywall from './BusinessPlanPaywall';
 import DocumentExportModal from './DocumentExportModal';
 import PaymentForm from './PaymentForm';
 import { PRICING } from '../config/pricing';
+import { checkIsFreeIntroPeriod } from '../utils/freeIntroPeriod';
 
 interface PlanToRoadmapTransitionProps {
   businessPlanSummary: string;
@@ -436,6 +437,14 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
   // Check subscription status from backend on mount and show payment modal if needed
   useEffect(() => {
     const checkSubscriptionStatus = async () => {
+      // 🆓 FREE INTRO PERIOD LOGIC (Valid until August 30, 2026)
+      // If we are within the free intro period, bypass the Stripe subscription entirely!
+      if (checkIsFreeIntroPeriod()) {
+        console.log('🎉 Free intro period active - granting premium access automatically');
+        setHasPaid(true);
+        return;
+      }
+
       try {
         const response = await fetch(
           `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
