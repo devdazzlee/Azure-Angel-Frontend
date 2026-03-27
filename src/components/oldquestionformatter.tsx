@@ -65,24 +65,12 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
     next = next.replace(/\[\[Q:[A-Z_]+\.\d{2}]]\s*/g, "");
     next = next.replace(/Question\s+\d+(?:\s+of\s+\d+)?/gi, '').trim();
     next = next.replace(/([A-Za-z0-9,;:)])\s*\n+\s*\?/g, '$1?');
-
-    // RESILIENCE FIX: Handle bolding across paragraphs/newlines (broken markdown from AI)
-    // Ensures that **Text\n\nMore** becomes **Text**\n\n**More** so it renders correctly.
-    next = next.replace(/\*\*([^*]+?)\*\*/gs, (match, inner) => {
-      if (inner.includes('\n\n')) {
-        return inner
-          .split('\n\n')
-          .filter(part => part.trim())
-          .map(part => `**${part.trim()}**`)
-          .join('\n\n');
-      }
-      return match;
-    });
-
     return next;
   }, [text]);
 
   // Detect draft/command/auto-research responses that should NOT be parsed/reordered
+  // These are responses to Draft/Support/Scrapping commands or auto-research questions
+  // that have their own structure and should be rendered as-is to preserve order
   const isDraftOrCommandResponse = useMemo(() => {
     const commandPrefixes = [
       /^Here's a (research-backed )?draft/i,
@@ -94,10 +82,15 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
       /^Here's what I've captured so far/i,
     ];
     const isCommandPrefix = commandPrefixes.some(regex => regex.test(processedText.trim()));
+    
+    // Also detect auto-research responses (contain 🔍 research result sections)
     const hasAutoResearch = /🔍\s*\*\*.*(?:Research|Suggested|Estimated).*\*\*/i.test(processedText);
+    
     return isCommandPrefix || hasAutoResearch;
   }, [processedText]);
 
+  // Detect section summary responses (e.g. "🎯 **Product/Service Details Section Complete**")
+  // These must be rendered via ReactMarkdown, NOT the business-plan question parser
   const isSectionSummary = useMemo(() => {
     const trimmed = processedText.trim();
     return (
@@ -109,13 +102,18 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
 
   const businessPlanParts = useMemo(() => {
     if (phase !== 'BUSINESS_PLAN') return null;
+    // Skip parsing for draft/command responses - they have their own structure
+    // and should be rendered as-is to preserve the original order
     if (isDraftOrCommandResponse) return null;
+    // Skip parsing for section summaries - they need full ReactMarkdown rendering
     if (isSectionSummary) return null;
+
     return parseBusinessPlanQuestionParts(processedText);
   }, [phase, processedText, isDraftOrCommandResponse, isSectionSummary]);
 
-  // Section summary: render via ReactMarkdown with clean styling
+  // Section summary: render via ReactMarkdown with clean styling (no destructive stripping)
   if (isSectionSummary) {
+    // Light cleanup: remove [[ACCEPT_MODIFY_BUTTONS]] tag if it leaked through
     const cleanedSummary = processedText
       .replace(/\[\[ACCEPT_MODIFY_BUTTONS\]\]/g, '')
       .replace(/\n{3,}/g, '\n\n')
@@ -152,14 +150,7 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
       <div className="question-formatter">
         {businessPlanParts.mainQuestion ? (
           <div className="font-bold text-gray-900 text-base leading-relaxed">
-            <ReactMarkdown
-              components={{
-                p: ({ children }) => <p className="m-0 inline">{children}</p>,
-                strong: ({ children }) => <strong className="font-bold text-gray-900" style={{ fontWeight: 700 }}>{children}</strong>
-              }}
-            >
-              {businessPlanParts.mainQuestion}
-            </ReactMarkdown>
+            {businessPlanParts.mainQuestion}
           </div>
         ) : null}
 
@@ -193,40 +184,62 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
 
   let mutableText = processedText;
 
+  // Step 4: ROOT CAUSE FIX - Handle heading+question patterns
+  // Process line by line to handle both same-line and multi-line cases
+  
   const lines = mutableText.split('\n');
   const processedLines: string[] = [];
   let i = 0;
   
   while (i < lines.length) {
     const line = lines[i].trim();
+    
+    // Check if line contains heading+question on same line
     const sameLineMatch = line.match(/(🧠|💡|📌|📋|🚀|🧩|🌍)?\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):\s+([A-Z][^?\n]{15,}?\?)/iu);
     
     if (sameLineMatch) {
       const emoji = sameLineMatch[1] || '';
       const heading = sameLineMatch[2];
       const question = sameLineMatch[3].trim();
-      if (question && question.endsWith('?') && question.length >= 15) {
+      
+      // Validate question
+      if (question && 
+          question.endsWith('?') && 
+          question.length >= 15 &&
+          question.toLowerCase() !== heading.toLowerCase() &&
+          !question.toLowerCase().startsWith('thought starter') &&
+          !question.toLowerCase().startsWith('quick tip')) {
         processedLines.push(`${emoji} ${heading}: **${question}**`);
         i++;
         continue;
       }
     }
     
+    // Check if line is JUST a heading (ends with colon)
     const headingOnlyMatch = line.match(/^(🧠|💡|📌|📋|🚀|🧩|🌍)?\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):\s*$/iu);
+    
     if (headingOnlyMatch) {
+      // Look for question on next line(s)
       let questionFound = false;
       let questionText = '';
       let linesToSkip = 0;
+      
       for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
         const nextLine = lines[j].trim();
-        if (nextLine && nextLine.endsWith('?') && nextLine.length >= 15) {
+        if (nextLine && 
+            /^[A-Z]/.test(nextLine) && 
+            nextLine.endsWith('?') &&
+            nextLine.length >= 15 &&
+            !nextLine.toLowerCase().includes('thought starter') &&
+            !nextLine.toLowerCase().includes('quick tip')) {
           questionText = nextLine;
           linesToSkip = j - i;
           questionFound = true;
           break;
         }
       }
-      if (questionFound) {
+      
+      if (questionFound && questionText) {
         const emoji = headingOnlyMatch[1] || '';
         const heading = headingOnlyMatch[2];
         processedLines.push(`${emoji} ${heading}: **${questionText}**`);
@@ -234,31 +247,56 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
         continue;
       }
     }
+    
+    // Regular line
     processedLines.push(line);
     i++;
   }
   
   mutableText = processedLines.join('\n');
+
+  // Step 5: Normalize whitespace
   mutableText = mutableText.replace(/\n{3,}/g, '\n\n');
   mutableText = mutableText.replace(/\r\n/g, '\n');
 
-  // Step 6: FIXED - Don't strip existing double asterisks
-  // mutableText = mutableText.replace(/\*\*([^*]+\?)\*\*/g, '$1'); 
+  // Step 6: Bold all remaining questions (not already in heading+question patterns)
+  mutableText = mutableText.replace(/\*\*([^*]+\?)\*\*/g, '$1');
   mutableText = mutableText.replace(/([A-Z][A-Za-z0-9\s,'"()-]{10,}?\?)/g, (match, question) => {
-    if (question.includes('**') || match.includes('**')) return match;
+    if (question.includes('**')) return match;
+    // Skip if already part of heading+question pattern
     const beforeText = mutableText.substring(0, mutableText.indexOf(match));
     const lineWithMatch = (beforeText + match).split('\n').pop() || '';
     if (/(🧠|💡|📌|📋|🚀|🧩|🌍)?\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):/u.test(lineWithMatch)) {
-      return match;
+      return match; // Already processed
     }
     return `**${question}**`;
   });
 
+  // Step 7: Clean up formatting
   mutableText = mutableText.replace(/(?<!\*)\*(?!\*)/g, '');
   mutableText = mutableText.replace(/#+/g, '');
   mutableText = mutableText.replace(/^[-–—•]+\s*/gm, '');
+
+  // Step 8: Add spacing for regular questions
   mutableText = mutableText.replace(/([^:\-–—\n🧠💡📌📋🚀🧩🌍])\s*(\*\*[^*]+\?\*\*)/gu, '$1\n\n$2');
   mutableText = mutableText.replace(/(\*\*[^*]+\?\*\*)([^\n])/g, '$1\n\n$2');
+  
+  // Step 9: Ensure proper spacing around heading+question patterns
+  mutableText = mutableText.replace(
+    /([^\n])\s*((🧠|💡|📌|📋|🚀|🧩|🌍)\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):\s*\*\*[^*]+\?\*\*)/gu,
+    '$1\n\n$2'
+  );
+  
+  mutableText = mutableText.replace(
+    /((🧠|💡|📌|📋|🚀|🧩|🌍)\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):)\s*\n+\s*(\*\*[^*]+\?\*\*)/gu,
+    '$1 $3'
+  );
+  
+  mutableText = mutableText.replace(
+    /((🧠|💡|📌|📋|🚀|🧩|🌍)\s*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):\s*\*\*[^*]+\?\*\*)\s*\n\n/gu,
+    '$1\n'
+  );
+
   mutableText = mutableText.replace(/\n{3,}/g, '\n\n');
 
   return (
@@ -275,7 +313,11 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
           p: ({ children }) => {
             const text = String(children);
             if (text.match(/(🧠|💡|📌|📋|🚀|🧩|🌍).*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):.*\*\*.*\?\*\*/u)) {
-              return <p className="mb-2 leading-relaxed text-gray-800" style={{ display: 'block' }}>{children}</p>;
+              return (
+                <p className="mb-2 leading-relaxed text-gray-800" style={{ display: 'block', whiteSpace: 'normal' }}>
+                  {children}
+                </p>
+              );
             }
             return <p className="mb-2 leading-relaxed text-gray-800">{children}</p>;
           },
