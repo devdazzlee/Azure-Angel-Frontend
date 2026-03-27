@@ -67,7 +67,35 @@ const BudgetPage: React.FC = () => {
       setLoading(true);
       const response = await budgetService.getBudget(id!);
       if (response.success) {
-        setBudget(response.result);
+        let currentBudget = response.result;
+        
+        // Check if there are any existing expenses (revenue streams might exist from setup)
+        const existingExpenses = currentBudget.items ? currentBudget.items.filter((i: any) => i.category === 'expense') : [];
+        
+        // If budget has no expense items, try to pre-populate using AI estimates
+        if (existingExpenses.length === 0) {
+          try {
+            toast.info('Analyzing business plan to generate your budget...', { autoClose: 3000 });
+            const estimates = await budgetService.generateEstimatedExpenses(id!);
+            
+            if (estimates.success && estimates.result && estimates.result.length > 0) {
+              const updatedBudget = {
+                ...currentBudget,
+                items: [...(currentBudget.items || []), ...estimates.result]
+              };
+              
+              const saved = await budgetService.saveBudget(id!, updatedBudget);
+              if (saved.success) {
+                currentBudget = saved.result;
+                toast.success('Budget items generated from your business plan!');
+              }
+            }
+          } catch (err) {
+            console.error('Failed to pre-populate budget items:', err);
+          }
+        }
+        
+        setBudget(currentBudget);
       } else {
         // If no budget exists, create an empty one via API so the UI stays API-driven
         const created = await budgetService.saveBudget(id!, {
@@ -78,7 +106,29 @@ const BudgetPage: React.FC = () => {
           items: [],
         });
         if (created.success) {
-          setBudget(created.result);
+          let currentBudget = created.result;
+          
+          try {
+            toast.info('Analyzing business plan to generate your budget...', { autoClose: 3000 });
+            const estimates = await budgetService.generateEstimatedExpenses(id!);
+            
+            if (estimates.success && estimates.result && estimates.result.length > 0) {
+              const updatedBudget = {
+                ...currentBudget,
+                items: [...(currentBudget.items || []), ...estimates.result]
+              };
+              
+              const saved = await budgetService.saveBudget(id!, updatedBudget);
+              if (saved.success) {
+                currentBudget = saved.result;
+                toast.success('Budget items generated from your business plan!');
+              }
+            }
+          } catch (err) {
+            console.error('Failed to pre-populate budget items:', err);
+          }
+          
+          setBudget(currentBudget);
         } else {
           toast.error(created.message || 'Failed to initialize budget');
           setBudget(null);
@@ -277,21 +327,22 @@ const BudgetPage: React.FC = () => {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center py-4 gap-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-6 w-full md:w-auto">
               <Button
                 variant="ghost"
                 onClick={() => navigate(`/ventures/${id}`)}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 text-gray-500 hover:text-gray-900 border border-transparent hover:border-gray-200"
               >
                 <ArrowLeft className="w-4 h-4" />
-                Back to Chat
+                <span>Back to Chat</span>
               </Button>
+              <div className="hidden sm:block h-10 border-l border-gray-200"></div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
                   {fromTransition ? 'Budget Setup' : 'Budget Tracking'}
                 </h1>
-                <p className="text-gray-600">
+                <p className="text-sm text-gray-500 mt-0.5">
                   {fromTransition
                     ? 'Set up your startup budget, then continue to your roadmap'
                     : 'Manage your business finances'}
@@ -299,50 +350,59 @@ const BudgetPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 hide-scrollbar">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleExportExcel}
-                className="flex items-center gap-2 text-green-600 hover:text-green-700 border-green-600"
+                className="flex items-center gap-2 text-green-600 hover:text-green-700 border-green-200 hover:bg-green-50 shrink-0"
               >
                 <Download className="w-4 h-4" />
-                Export to Excel
+                Excel
               </Button>
               <Button
                 variant="outline"
+                size="sm"
                 onClick={exportBudget}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 shrink-0 hidden lg:flex"
               >
                 <Download className="w-4 h-4" />
-                Export
+                CSV
               </Button>
 
               <Button
+                variant="outline"
+                size="sm"
                 onClick={saveBudget}
                 disabled={saving}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 shrink-0"
               >
                 {saving ? (
                   <RefreshCw className="w-4 h-4 animate-spin" />
                 ) : (
                   <Save className="w-4 h-4" />
                 )}
-                {saving ? 'Saving...' : 'Save'}
+                <span className="hidden sm:inline">{saving ? 'Saving...' : 'Save'}</span>
               </Button>
 
               {fromTransition && (
                 <Button
+                  size="sm"
                   onClick={handleContinueToRoadmap}
                   disabled={transitioning}
-                  className="flex items-center gap-2 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white shadow-md"
+                  className="flex items-center gap-2 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white shadow-md ml-1 shrink-0"
                 >
                   {transitioning ? (
                     <RefreshCw className="w-4 h-4 animate-spin" />
                   ) : (
                     <Rocket className="w-4 h-4" />
                   )}
-                  {transitioning ? 'Processing...' : 'Continue to Roadmap'}
+                  <span className="hidden sm:inline">
+                    {transitioning ? 'Processing...' : 'Continue to Roadmap'}
+                  </span>
+                  <span className="sm:hidden">
+                    {transitioning ? '...' : 'Roadmap'}
+                  </span>
                 </Button>
               )}
             </div>
