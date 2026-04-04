@@ -1,5 +1,5 @@
-                                        import React, { useState } from 'react';
-import { FaEye, FaEyeSlash, FaEnvelope, FaLock, FaArrowRight, FaMagic, FaUser, FaTimes, FaInfoCircle } from 'react-icons/fa';
+import React, { useEffect, useRef, useState } from 'react';
+import { FaEye, FaEyeSlash, FaEnvelope, FaLock, FaArrowRight, FaMagic, FaUser } from 'react-icons/fa';
 import { signUp, acceptTerms, acceptPrivacy } from '../../services/authService';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -14,68 +14,79 @@ interface SignupFormData {
   confirmPassword: string;
 }
 
-// Beta Tester Email List - Only these emails can sign up
-const BETA_TESTER_EMAILS = [
-  'muhammadkonain98@gmail.com',
-  'liz.mitros@gmail.com',
-  'khadijashah15@gmail.com',
-  's_hamza_h@hotmail.com',
-  'nzehranaz@gmail.com',
-  'sgc.143@gmail.com',
-  'yasirshasan@gmail.com',
-  'kevin@founderport.ai',
-  'm.minhal.kanani@gmail.com',
-  'ryansummersmail@gmail.com',
-  'tharper1124@gmail.com',
-  'ayocum02@yahoo.com',
-  'thomas.corey33@gmail.com',
-  'mappelman@kpmg.com',
-  'michelle.igoshi.harner@gmail.com',
-  'adam.harner@gmail.com',
-  'aaron_zelt@hotmail.com',
-  'walid@vikk.ai',
-  'kylemwalk@gmail.com',
-  'nam.isaac@gmail.com',
-  'arcane.psr22@gmail.com',
-  'sarastuart@ucla.edu',
-  'ryan@hyperdrivelab.com',
-  'mrsnicoleramos@gmail.com',
-  'josh@thepromethean.ai',
-  'phanley09@gmail.com',
-  'lindsaykray@gmail.com',
-  'akvinikadze1@gmail.com',
-  'calderoni23619@gmail.com',
-  'taniadelatorre1@gmail.com',
-  'kristinbraden@hotmail.com',
-  'juancvieyra@icloud.com',
-  'gutierrez6dany@gmail.com',
-  'kweybright3910@icloud.com',
-  'ufa.asu@gmail.com',
-  'williamrigby@pm.me',
-  'nora.romaya@gmail.com',
-  's.farwa.f@gmail.com',
-  'nafisa.jassani@gmail.com',
-  'ahmedrazagithub@gmail.com',
-  'rawsonleavitt@gmail.com',
-  'cifotis172@dubokutv.com',
-  'niraseg404@dubokutv.com',
-  'mkarpen@msn.com',
-  'minhal.webcloners@gmail.com',
-  'muhammadkonain8@gmail.com',
-  'goyis36860@m3player.com',
-  'hayil40085@gamintor.com',
-  'minhal2206a@aptechgdn.net',
-  'lixib88356@m3player.com',
-  'kgmoore0488@yahoo.com',
-  'yasir@buildnext.org',
-  'kgmoore048@gmail.com',
-  'support@founderport.ai',
-  'bhaia9036@gmail.com',
-  'femoxov830@3dkai.com',
-  'yaviri3401@bigonla.com',
-  'ragid89049@bigonla.com',
-  'wavemoy602@fabaos.com'
-].map(email => email.toLowerCase()); // Normalize to lowercase for case-insensitive comparison
+async function ensureRecaptchaV2ScriptLoaded(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  if (window.grecaptcha && typeof window.grecaptcha.render === 'function') return;
+
+  const existing = document.querySelector<HTMLScriptElement>('script[data-recaptcha-v2="true"]');
+  if (existing) {
+    await new Promise<void>((resolve, reject) => {
+      existing.addEventListener('load', () => resolve(), { once: true });
+      existing.addEventListener('error', () => reject(new Error('Failed to load reCAPTCHA')), { once: true });
+    });
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const settleOnce = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      fn();
+    };
+
+    const timeout = window.setTimeout(() => {
+      settleOnce(() => reject(new Error('reCAPTCHA load timed out')));
+    }, 10000);
+
+    (window as any).__fpRecaptchaOnload = () => {
+      window.clearTimeout(timeout);
+      settleOnce(resolve);
+    };
+
+    const script = document.createElement('script');
+    script.src = 'https://www.google.com/recaptcha/api.js?onload=__fpRecaptchaOnload&render=explicit';
+    script.async = true;
+    script.defer = true;
+    script.dataset.recaptchaV2 = 'true';
+    script.onload = () => {
+      if (window.grecaptcha && typeof window.grecaptcha.render === 'function') {
+        window.clearTimeout(timeout);
+        settleOnce(resolve);
+      }
+    };
+    script.onerror = () => {
+      window.clearTimeout(timeout);
+      settleOnce(() => reject(new Error('Failed to load reCAPTCHA')));
+    };
+    document.body.appendChild(script);
+  });
+}
+
+async function ensureRecaptchaV3ScriptLoaded(siteKey: string): Promise<void> {
+  if (typeof window === 'undefined') return;
+  if (window.grecaptcha && typeof (window.grecaptcha as any).execute === 'function') return;
+
+  const existing = document.querySelector<HTMLScriptElement>('script[data-recaptcha-v3="true"]');
+  if (existing) {
+    await new Promise<void>((resolve, reject) => {
+      existing.addEventListener('load', () => resolve(), { once: true });
+      existing.addEventListener('error', () => reject(new Error('Failed to load reCAPTCHA')), { once: true });
+    });
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = `https://www.google.com/recaptcha/api.js?render=${encodeURIComponent(siteKey)}`;
+    script.async = true;
+    script.defer = true;
+    script.dataset.recaptchaV3 = 'true';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load reCAPTCHA'));
+    document.body.appendChild(script);
+  });
+}
 
 const SignupPage: React.FC = () => {
   const navigate = useNavigate();
@@ -87,7 +98,9 @@ const SignupPage: React.FC = () => {
   });
   const [showPassword, setShowPassword] = useState({ pass: false, confirm: false });
   const [isLoading, setIsLoading] = useState(false);
-  const [showBetaModal, setShowBetaModal] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const recaptchaContainerRef = useRef<HTMLDivElement | null>(null);
+  const recaptchaWidgetIdRef = useRef<number | null>(null);
   
   // Note: Terms/Privacy modals are now handled by AcceptanceGuard after user logs in
   // These states are kept for potential future use but won't be triggered after signup
@@ -95,6 +108,47 @@ const SignupPage: React.FC = () => {
   const [isAcceptingPrivacy, setIsAcceptingPrivacy] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+
+  const recaptchaSiteKey = (import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined)?.trim();
+  const recaptchaVersion = (import.meta.env.VITE_RECAPTCHA_VERSION as string | undefined)?.toLowerCase().trim();
+  const isRecaptchaEnabled = Boolean(recaptchaSiteKey);
+  const recaptchaMode: 'v2' | 'v3' = recaptchaVersion === 'v3' ? 'v3' : 'v2';
+
+  useEffect(() => {
+    if (!recaptchaSiteKey) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        if (recaptchaMode === 'v2') {
+          await ensureRecaptchaV2ScriptLoaded();
+          if (cancelled) return;
+          if (!recaptchaContainerRef.current) return;
+          if (!window.grecaptcha || typeof window.grecaptcha.render !== 'function') return;
+          if (recaptchaWidgetIdRef.current !== null) return;
+
+          const widgetId = window.grecaptcha.render(recaptchaContainerRef.current, {
+            sitekey: recaptchaSiteKey,
+            callback: (token: string) => setCaptchaToken(token),
+            'expired-callback': () => setCaptchaToken(null),
+            'error-callback': () => setCaptchaToken(null),
+          });
+
+          recaptchaWidgetIdRef.current = widgetId;
+          return;
+        }
+
+        await ensureRecaptchaV3ScriptLoaded(recaptchaSiteKey);
+      } catch (error) {
+        console.error('Failed to initialize reCAPTCHA', error);
+        toast.error('Captcha failed to load. Please refresh and try again.');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [recaptchaMode, recaptchaSiteKey]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -109,11 +163,36 @@ const SignupPage: React.FC = () => {
       return;
     }
 
-    // Check if email is in beta tester list
-    const emailLower = formData.email.toLowerCase().trim();
-    if (!BETA_TESTER_EMAILS.includes(emailLower)) {
-      setShowBetaModal(true);
-      return;
+    let captchaToSend: string | undefined = undefined;
+    if (isRecaptchaEnabled) {
+      if (recaptchaMode === 'v2') {
+        if (!captchaToken) {
+          toast.error('Please complete the captcha.');
+          return;
+        }
+        captchaToSend = captchaToken;
+      } else if (recaptchaMode === 'v3') {
+        try {
+          await ensureRecaptchaV3ScriptLoaded(recaptchaSiteKey as string);
+          if (!window.grecaptcha || typeof window.grecaptcha.execute !== 'function') {
+            toast.error('Captcha failed to load. Please refresh and try again.');
+            return;
+          }
+
+          if (typeof window.grecaptcha.ready === 'function') {
+            await new Promise<void>((resolve) => window.grecaptcha?.ready?.(() => resolve()));
+          }
+
+          captchaToSend = await window.grecaptcha.execute(recaptchaSiteKey, { action: 'signup' });
+        } catch (error) {
+          console.error('Failed to execute reCAPTCHA', error);
+          toast.error('Captcha verification failed. Please try again.');
+          return;
+        }
+      } else {
+        toast.error('Captcha is still loading. Please try again in a moment.');
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -124,6 +203,7 @@ const SignupPage: React.FC = () => {
         email: formData.email,
         password: formData.password,
         confirmPassword: formData.confirmPassword,
+        captchaToken: captchaToSend,
       });
       setEmailPendingVerification(formData.email);
 
@@ -143,6 +223,10 @@ const SignupPage: React.FC = () => {
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
+      if (isRecaptchaEnabled && recaptchaMode === 'v2' && window.grecaptcha && recaptchaWidgetIdRef.current !== null) {
+        window.grecaptcha.reset(recaptchaWidgetIdRef.current);
+        setCaptchaToken(null);
+      }
     }
   };
 
@@ -328,6 +412,26 @@ const SignupPage: React.FC = () => {
                   </div>
                 </div>
 
+                {/* reCAPTCHA */}
+                {isRecaptchaEnabled && recaptchaMode === 'v2' && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Verification</label>
+                    <div className="w-full rounded-lg border border-gray-200 bg-white p-3 flex justify-center">
+                      <div ref={recaptchaContainerRef} />
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      This site is protected by reCAPTCHA and the Google Privacy Policy and Terms of Service apply.
+                    </p>
+                  </div>
+                )}
+                {isRecaptchaEnabled && recaptchaMode === 'v3' && (
+                  <div className="w-full rounded-lg border border-gray-200 bg-white p-3">
+                    <p className="text-xs text-gray-500">
+                      This site is protected by reCAPTCHA and the Google Privacy Policy and Terms of Service apply.
+                    </p>
+                  </div>
+                )}
+
                 {/* Submit Button */}
                 <button
                   type="submit"
@@ -348,89 +452,6 @@ const SignupPage: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* Beta Access Modal */}
-      {showBetaModal && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-          style={{ animation: 'fadeIn 0.3s ease-out' }}
-        >
-          <div 
-            className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
-            style={{ animation: 'slideUp 0.4s ease-out' }}
-          >
-            {/* Gradient Header */}
-            <div className="relative bg-gradient-to-r from-teal-500 via-blue-500 to-indigo-600 p-6">
-              <div className="absolute inset-0 bg-gradient-to-r from-teal-400/20 via-blue-400/20 to-indigo-400/20"></div>
-              <div className="relative flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl">
-                    <FaInfoCircle className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-white">Beta Access Only</h2>
-                    <p className="text-teal-100 text-sm mt-1">Limited Access Program</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowBetaModal(false)}
-                  className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-                >
-                  <FaTimes className="w-5 h-5 text-white" />
-                </button>
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="p-6 space-y-4">
-              <div className="flex items-start gap-4">
-                <div className="p-3 bg-gradient-to-br from-yellow-100 to-orange-100 rounded-xl flex-shrink-0">
-                  <FaInfoCircle className="w-6 h-6 text-yellow-600" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    We're Currently in Beta
-                  </h3>
-                  <p className="text-gray-600 leading-relaxed">
-                    We are currently in beta version and only available for testing participants. 
-                    If you believe you should have access, please contact our support team.
-                  </p>
-                </div>
-              </div>
-
-              {/* Features List */}
-              <div className="bg-gradient-to-br from-teal-50 to-blue-50 rounded-xl p-4 border border-teal-100">
-                <p className="text-sm font-semibold text-gray-700 mb-2">What's Next?</p>
-                <ul className="space-y-2 text-sm text-gray-600">
-                  <li className="flex items-start gap-2">
-                    <span className="text-teal-500 mt-0.5">•</span>
-                    <span>Contact support if you're a beta tester</span>
-                  </li>
-                </ul>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setShowBetaModal(false)}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-teal-500 to-teal-600 text-white font-semibold rounded-lg hover:from-teal-600 hover:to-teal-700 transition-all shadow-md hover:shadow-lg"
-                >
-                  Got It
-                </button>
-                <button
-                  onClick={() => {
-                    setShowBetaModal(false);
-                    window.location.href = 'mailto:support@founderport.ai?subject=Beta Access Request';
-                  }}
-                  className="px-4 py-3 bg-white border-2 border-teal-500 text-teal-600 font-semibold rounded-lg hover:bg-teal-50 transition-all"
-                >
-                  Contact Support
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Terms and Conditions Modal */}
       {showTermsModal && (
@@ -465,28 +486,6 @@ const SignupPage: React.FC = () => {
           isLoading={isAcceptingPrivacy}
         />
       )}
-
-      {/* Modal Animations */}
-      <style>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px) scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-      `}</style>
     </div>
   );
 };

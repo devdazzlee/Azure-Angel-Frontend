@@ -11,20 +11,28 @@ export async function signUp({
   email,
   password,
   confirmPassword,
+  captchaToken,
 }: {
   fullName: string;
   contactNumber: string;
   email: string;
   password: string;
   confirmPassword: string;
+  captchaToken?: string;
 }): Promise<void> {
-  await httpClient.post('/auth/signup', {
+  const payload: Record<string, unknown> = {
     full_name: fullName,
     contact_number: contactNumber,
     email,
     password,
     confirm_password: confirmPassword,
-  });
+  };
+
+  if (captchaToken) {
+    payload.captcha_token = captchaToken;
+  }
+
+  await httpClient.post('/auth/signup', payload);
 }
 
 export async function signIn({ email, password }: { email: string; password: string }): Promise<Session> {

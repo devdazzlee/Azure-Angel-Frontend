@@ -52,19 +52,27 @@ export async function signUp({
     email,
     password,
     confirmPassword,
+    captchaToken,
 }: {
     fullName: string;
     email: string;
     password: string;
     confirmPassword: string;
+    captchaToken?: string;
 }): Promise<void> {
     try {
-        await axios.post<void>(`${BASE}/auth/signup`, {
+        const payload: Record<string, unknown> = {
             full_name: fullName,
             email,
             password,
             confirm_password: confirmPassword,
-        });
+        };
+
+        if (captchaToken) {
+            payload.captcha_token = captchaToken;
+        }
+
+        await axios.post<void>(`${BASE}/auth/signup`, payload);
     } catch (err: any) {
         // FastAPI standard: errors in response.data.detail
         // Also check message field for backward compatibility
