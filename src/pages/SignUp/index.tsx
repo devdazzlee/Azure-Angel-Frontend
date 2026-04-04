@@ -125,7 +125,7 @@ const SignupPage: React.FC = () => {
         captchaToSend = captchaToken;
       } else if (recaptchaMode === 'v3') {
         try {
-          await ensureRecaptchaV3ScriptLoaded(recaptchaSiteKey as string);
+          loadRecaptchaV3Script(recaptchaSiteKey as string);
           if (!window.grecaptcha || typeof window.grecaptcha.execute !== 'function') {
             toast.error('Captcha failed to load. Please refresh and try again.');
             return;
