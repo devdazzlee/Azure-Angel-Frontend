@@ -2,6 +2,7 @@ export {};
 
 declare global {
   interface Window {
+    __recaptchaV2Onload?: () => void;
     grecaptcha?: {
       render: (
         container: HTMLElement,

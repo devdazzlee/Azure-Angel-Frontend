@@ -14,78 +14,14 @@ interface SignupFormData {
   confirmPassword: string;
 }
 
-async function ensureRecaptchaV2ScriptLoaded(): Promise<void> {
-  if (typeof window === 'undefined') return;
-  if (window.grecaptcha && typeof window.grecaptcha.render === 'function') return;
-
-  const existing = document.querySelector<HTMLScriptElement>('script[data-recaptcha-v2="true"]');
-  if (existing) {
-    await new Promise<void>((resolve, reject) => {
-      existing.addEventListener('load', () => resolve(), { once: true });
-      existing.addEventListener('error', () => reject(new Error('Failed to load reCAPTCHA')), { once: true });
-    });
-    return;
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    let settled = false;
-    const settleOnce = (fn: () => void) => {
-      if (settled) return;
-      settled = true;
-      fn();
-    };
-
-    const timeout = window.setTimeout(() => {
-      settleOnce(() => reject(new Error('reCAPTCHA load timed out')));
-    }, 10000);
-
-    (window as any).__fpRecaptchaOnload = () => {
-      window.clearTimeout(timeout);
-      settleOnce(resolve);
-    };
-
-    const script = document.createElement('script');
-    script.src = 'https://www.google.com/recaptcha/api.js?onload=__fpRecaptchaOnload&render=explicit';
-    script.async = true;
-    script.defer = true;
-    script.dataset.recaptchaV2 = 'true';
-    script.onload = () => {
-      if (window.grecaptcha && typeof window.grecaptcha.render === 'function') {
-        window.clearTimeout(timeout);
-        settleOnce(resolve);
-      }
-    };
-    script.onerror = () => {
-      window.clearTimeout(timeout);
-      settleOnce(() => reject(new Error('Failed to load reCAPTCHA')));
-    };
-    document.body.appendChild(script);
-  });
-}
-
-async function ensureRecaptchaV3ScriptLoaded(siteKey: string): Promise<void> {
-  if (typeof window === 'undefined') return;
-  if (window.grecaptcha && typeof (window.grecaptcha as any).execute === 'function') return;
-
-  const existing = document.querySelector<HTMLScriptElement>('script[data-recaptcha-v3="true"]');
-  if (existing) {
-    await new Promise<void>((resolve, reject) => {
-      existing.addEventListener('load', () => resolve(), { once: true });
-      existing.addEventListener('error', () => reject(new Error('Failed to load reCAPTCHA')), { once: true });
-    });
-    return;
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = `https://www.google.com/recaptcha/api.js?render=${encodeURIComponent(siteKey)}`;
-    script.async = true;
-    script.defer = true;
-    script.dataset.recaptchaV3 = 'true';
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load reCAPTCHA'));
-    document.body.appendChild(script);
-  });
+function loadRecaptchaV3Script(siteKey: string): void {
+  if (document.querySelector('script[data-recaptcha-v3]')) return;
+  const script = document.createElement('script');
+  script.src = `https://www.google.com/recaptcha/api.js?render=${encodeURIComponent(siteKey)}`;
+  script.async = true;
+  script.defer = true;
+  script.dataset.recaptchaV3 = 'true';
+  document.body.appendChild(script);
 }
 
 const SignupPage: React.FC = () => {
@@ -99,6 +35,7 @@ const SignupPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState({ pass: false, confirm: false });
   const [isLoading, setIsLoading] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const recaptchaWrapperRef = useRef<HTMLDivElement | null>(null);
   const recaptchaContainerRef = useRef<HTMLDivElement | null>(null);
   const recaptchaWidgetIdRef = useRef<number | null>(null);
   
@@ -116,37 +53,52 @@ const SignupPage: React.FC = () => {
 
   useEffect(() => {
     if (!recaptchaSiteKey) return;
-    let cancelled = false;
 
-    (async () => {
+    if (recaptchaMode === 'v3') {
+      loadRecaptchaV3Script(recaptchaSiteKey);
+      return;
+    }
+
+    // v2: render the checkbox widget
+    let done = false;
+
+    function doRender() {
+      if (done || !recaptchaContainerRef.current) return;
+      if (!window.grecaptcha || typeof window.grecaptcha.render !== 'function') return;
       try {
-        if (recaptchaMode === 'v2') {
-          await ensureRecaptchaV2ScriptLoaded();
-          if (cancelled) return;
-          if (!recaptchaContainerRef.current) return;
-          if (!window.grecaptcha || typeof window.grecaptcha.render !== 'function') return;
-          if (recaptchaWidgetIdRef.current !== null) return;
-
-          const widgetId = window.grecaptcha.render(recaptchaContainerRef.current, {
-            sitekey: recaptchaSiteKey,
-            callback: (token: string) => setCaptchaToken(token),
-            'expired-callback': () => setCaptchaToken(null),
-            'error-callback': () => setCaptchaToken(null),
-          });
-
-          recaptchaWidgetIdRef.current = widgetId;
-          return;
-        }
-
-        await ensureRecaptchaV3ScriptLoaded(recaptchaSiteKey);
-      } catch (error) {
-        console.error('Failed to initialize reCAPTCHA', error);
+        done = true;
+        const widgetId = window.grecaptcha.render(recaptchaContainerRef.current, {
+          sitekey: recaptchaSiteKey!,
+          callback: (token: string) => setCaptchaToken(token),
+          'expired-callback': () => setCaptchaToken(null),
+          'error-callback': () => setCaptchaToken(null),
+        });
+        recaptchaWidgetIdRef.current = widgetId;
+      } catch (e) {
+        done = false;
+        console.error('Failed to render reCAPTCHA:', e);
         toast.error('Captcha failed to load. Please refresh and try again.');
       }
-    })();
+    }
+
+    if (window.grecaptcha) {
+      window.grecaptcha.ready(doRender);
+    } else {
+      window.__recaptchaV2Onload = doRender;
+      if (!document.querySelector('script[data-recaptcha-v2]')) {
+        const script = document.createElement('script');
+        script.src = 'https://www.google.com/recaptcha/api.js?onload=__recaptchaV2Onload&render=explicit';
+        script.async = true;
+        script.defer = true;
+        script.dataset.recaptchaV2 = 'true';
+        script.onerror = () => toast.error('Captcha failed to load. Please refresh and try again.');
+        document.body.appendChild(script);
+      }
+    }
 
     return () => {
-      cancelled = true;
+      done = true;
+      recaptchaWidgetIdRef.current = null;
     };
   }, [recaptchaMode, recaptchaSiteKey]);
 
@@ -414,22 +366,29 @@ const SignupPage: React.FC = () => {
 
                 {/* reCAPTCHA */}
                 {isRecaptchaEnabled && recaptchaMode === 'v2' && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Verification</label>
-                    <div className="w-full rounded-lg border border-gray-200 bg-white p-3 flex justify-center">
+                  <div>
+                    <div
+                      ref={recaptchaWrapperRef}
+                      className="w-full flex items-center overflow-hidden"
+                      style={{ minHeight: '78px' }}
+                    >
                       <div ref={recaptchaContainerRef} />
                     </div>
-                    <p className="text-xs text-gray-500">
-                      This site is protected by reCAPTCHA and the Google Privacy Policy and Terms of Service apply.
+                    <p className="mt-2 text-center text-xs text-gray-400">
+                      Protected by reCAPTCHA — Google{' '}
+                      <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer" className="underline hover:text-teal-600">Privacy</a>
+                      {' '}&amp;{' '}
+                      <a href="https://policies.google.com/terms" target="_blank" rel="noreferrer" className="underline hover:text-teal-600">Terms</a>
                     </p>
                   </div>
                 )}
                 {isRecaptchaEnabled && recaptchaMode === 'v3' && (
-                  <div className="w-full rounded-lg border border-gray-200 bg-white p-3">
-                    <p className="text-xs text-gray-500">
-                      This site is protected by reCAPTCHA and the Google Privacy Policy and Terms of Service apply.
-                    </p>
-                  </div>
+                  <p className="text-center text-xs text-gray-400">
+                    Protected by reCAPTCHA — Google{' '}
+                    <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer" className="underline hover:text-teal-600">Privacy</a>
+                    {' '}&amp;{' '}
+                    <a href="https://policies.google.com/terms" target="_blank" rel="noreferrer" className="underline hover:text-teal-600">Terms</a>
+                  </p>
                 )}
 
                 {/* Submit Button */}
