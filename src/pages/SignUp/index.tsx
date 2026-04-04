@@ -46,7 +46,7 @@ const SignupPage: React.FC = () => {
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
-  const recaptchaSiteKey = (import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined)?.trim();
+  const recaptchaSiteKey = '6Ldfo6YsAAAAAEwH4FSqKnbdWCwuWLZ9FVZFYk79';
   const recaptchaVersion = (import.meta.env.VITE_RECAPTCHA_VERSION as string | undefined)?.toLowerCase().trim();
   const isRecaptchaEnabled = Boolean(recaptchaSiteKey);
   const recaptchaMode: 'v2' | 'v3' = recaptchaVersion === 'v3' ? 'v3' : 'v2';
