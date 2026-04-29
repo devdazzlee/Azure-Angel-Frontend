@@ -36,6 +36,7 @@ import Layout from "../features/Dashboard";
 import ChatLayout from "../layout/chatLayout";
 import TestQuestionFormatter from "../pages/TestQuestionFormatter";
 import AcceptanceGuard from "../components/AcceptanceGuard";
+import RootLayout from "../layout/RootLayout";
 
 const isAuthenticated = (): boolean =>
   !!localStorage.getItem("sb_access_token");
@@ -54,6 +55,7 @@ const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) =>
 const router = createBrowserRouter([
   {
     path: "/",
+    element: <RootLayout />,
     errorElement: <ErrorBoundaryPage />,
     children: [
       {
