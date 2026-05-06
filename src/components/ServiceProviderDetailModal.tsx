@@ -1,12 +1,9 @@
 import React, { useState } from 'react';
-import { 
-  X, 
-  MapPin, 
-  Globe, 
-  Phone, 
-  Mail, 
-  Star, 
-  DollarSign, 
+import {
+  X,
+  MapPin,
+  Star,
+  DollarSign,
   CheckCircle,
   ExternalLink,
   Briefcase,
@@ -27,6 +24,7 @@ interface ServiceProvider {
   category?: string;
   address?: string;
   rating?: number;
+  rating_source?: string; // Where the rating was sourced from (e.g. "Google", "Yelp")
   website?: string;
   email?: string;
   phone?: string;
@@ -36,16 +34,32 @@ interface ServiceProviderDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   provider: ServiceProvider | null;
+  // The user's business city, used for the "Business Location" stat. The
+  // modal still falls back to a generic label if it isn't provided.
+  businessLocation?: string;
   onContactProvider?: (provider: ServiceProvider) => void;
 }
+
+// Strip leading "Website: " / "Contact: " labels and trim. Returns the URL
+// or null if the string doesn't look like one.
+const extractWebsiteUrl = (value?: string | null): string | null => {
+  if (!value) return null;
+  const trimmed = value.replace(/^\s*(?:website|contact|url)\s*:\s*/i, '').trim();
+  if (!trimmed) return null;
+  // Accept obvious URLs and bare domains.
+  const looksLikeUrl = /^(?:https?:\/\/|www\.)/i.test(trimmed) || /^[a-z0-9-]+(\.[a-z0-9-]+)+/i.test(trimmed);
+  if (!looksLikeUrl) return null;
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+};
 
 const ServiceProviderDetailModal: React.FC<ServiceProviderDetailModalProps> = ({
   isOpen,
   onClose,
   provider,
+  businessLocation,
   onContactProvider
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'details' | 'contact'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'details'>('overview');
 
   if (!isOpen || !provider) return null;
 
@@ -55,26 +69,19 @@ const ServiceProviderDetailModal: React.FC<ServiceProviderDetailModalProps> = ({
     }
   };
 
-  const handleContactClick = () => {
-    if (onContactProvider && provider) {
-      onContactProvider(provider);
-    }
-    
-    // If provider has a website, open it
-    if (provider.website) {
-      window.open(provider.website.startsWith('http') ? provider.website : `https://${provider.website}`, '_blank');
-    } else if (provider.contact_method?.includes('Website:')) {
-      const website = provider.contact_method.split('Website:')[1].trim();
-      window.open(website.startsWith('http') ? website : `https://${website}`, '_blank');
-    }
-  };
+  // Resolve the best URL we have for the provider, in priority order:
+  //   1. an explicit `website` field
+  //   2. a URL embedded in `contact_method` (e.g. "Website: example.com")
+  //   3. a Google search for the provider name as a discoverable fallback,
+  //      so the button is never a dead end — the user can always reach
+  //      a real contact channel from here.
+  const websiteUrl = extractWebsiteUrl(provider.website) ?? extractWebsiteUrl(provider.contact_method);
+  const contactUrl = websiteUrl ?? `https://www.google.com/search?q=${encodeURIComponent(provider.name)}`;
+  const contactLabelIsWebsite = Boolean(websiteUrl);
 
-  const getRatingColor = (rating?: number) => {
-    if (!rating) return 'text-gray-400';
-    if (rating >= 4.5) return 'text-green-500';
-    if (rating >= 4.0) return 'text-yellow-500';
-    return 'text-orange-500';
-  };
+  const ratingSourceLabel = provider.rating_source && provider.rating_source.trim()
+    ? provider.rating_source.trim()
+    : 'aggregated public reviews';
 
   const specialtiesList = provider.specialties ? provider.specialties.split(',').map(s => s.trim()) : [];
 
@@ -112,7 +119,7 @@ const ServiceProviderDetailModal: React.FC<ServiceProviderDetailModalProps> = ({
               <p className="text-white/90 text-lg mb-3">{provider.type}</p>
               
               {provider.rating && (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <div className="flex items-center gap-1">
                     {[...Array(5)].map((_, i) => (
                       <Star
@@ -127,6 +134,9 @@ const ServiceProviderDetailModal: React.FC<ServiceProviderDetailModalProps> = ({
                   </div>
                   <span className="text-white/90 font-semibold text-lg">
                     {provider.rating.toFixed(1)}
+                  </span>
+                  <span className="text-white/75 text-xs font-medium">
+                    Source: {ratingSourceLabel}
                   </span>
                 </div>
               )}
@@ -157,16 +167,6 @@ const ServiceProviderDetailModal: React.FC<ServiceProviderDetailModalProps> = ({
             >
               Details & Specialties
             </button>
-            <button
-              onClick={() => setActiveTab('contact')}
-              className={`flex-1 px-6 py-4 font-medium transition-all ${
-                activeTab === 'contact'
-                  ? 'text-blue-600 border-b-2 border-blue-600 bg-white'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-              }`}
-            >
-              Contact Info
-            </button>
           </div>
         </div>
 
@@ -191,12 +191,12 @@ const ServiceProviderDetailModal: React.FC<ServiceProviderDetailModalProps> = ({
                   <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <DollarSign className="h-5 w-5 text-green-600" />
-                      <span className="text-sm font-medium text-green-900">Pricing</span>
+                      <span className="text-sm font-medium text-green-900">Estimated Pricing</span>
                     </div>
                     <p className="text-lg font-bold text-green-900">{provider.estimated_cost}</p>
                   </div>
                 )}
-                
+
                 {provider.category && (
                   <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-2">
@@ -206,16 +206,46 @@ const ServiceProviderDetailModal: React.FC<ServiceProviderDetailModalProps> = ({
                     <p className="text-lg font-bold text-blue-900 capitalize">{provider.category}</p>
                   </div>
                 )}
-                
-                {provider.local && (
+
+                {(provider.local || businessLocation) && (
                   <div className="bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <MapPin className="h-5 w-5 text-purple-600" />
-                      <span className="text-sm font-medium text-purple-900">Service Area</span>
+                      <span className="text-sm font-medium text-purple-900">Business Location</span>
                     </div>
-                    <p className="text-lg font-bold text-purple-900">Local Provider</p>
+                    <p className="text-lg font-bold text-purple-900">
+                      {businessLocation && businessLocation.trim()
+                        ? businessLocation.trim()
+                        : 'Local Provider'}
+                    </p>
                   </div>
                 )}
+              </div>
+
+              {/* Next Steps — moved here from the deleted Contact Info tab. */}
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-6">
+                <h4 className="font-semibold text-indigo-900 mb-4 flex items-center gap-2">
+                  <Clock className="h-5 w-5" />
+                  Next Steps
+                </h4>
+                <ol className="space-y-3 text-indigo-800">
+                  <li className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 bg-indigo-500 text-white rounded-full flex items-center justify-center text-sm font-bold">1</span>
+                    <span>Use the website link below to reach out to {provider.name}.</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 bg-indigo-500 text-white rounded-full flex items-center justify-center text-sm font-bold">2</span>
+                    <span>Mention your business needs and ask about their services.</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 bg-indigo-500 text-white rounded-full flex items-center justify-center text-sm font-bold">3</span>
+                    <span>Request a consultation or quote for your specific requirements.</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 bg-indigo-500 text-white rounded-full flex items-center justify-center text-sm font-bold">4</span>
+                    <span>Compare with other providers to find the best fit.</span>
+                  </li>
+                </ol>
               </div>
 
               {/* Key Considerations */}
@@ -308,105 +338,6 @@ const ServiceProviderDetailModal: React.FC<ServiceProviderDetailModalProps> = ({
             </div>
           )}
 
-          {activeTab === 'contact' && (
-            <div className="space-y-6 animate-fadeIn">
-              {/* Contact Methods */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <Phone className="h-5 w-5 text-blue-600" />
-                  How to Contact
-                </h3>
-                
-                <div className="space-y-4">
-                  {provider.contact_method && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
-                          <Globe className="h-5 w-5 text-white" />
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-medium text-blue-900 mb-1">Primary Contact Method</p>
-                          <p className="text-blue-800">{provider.contact_method}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {provider.address && (
-                    <div className="bg-green-50 border border-green-200 rounded-xl p-5">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
-                          <MapPin className="h-5 w-5 text-white" />
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-medium text-green-900 mb-1">Location</p>
-                          <p className="text-green-800">{provider.address}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {provider.phone && (
-                    <div className="bg-purple-50 border border-purple-200 rounded-xl p-5">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
-                          <Phone className="h-5 w-5 text-white" />
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-medium text-purple-900 mb-1">Phone</p>
-                          <a href={`tel:${provider.phone}`} className="text-purple-800 hover:underline">
-                            {provider.phone}
-                          </a>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {provider.email && (
-                    <div className="bg-orange-50 border border-orange-200 rounded-xl p-5">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0">
-                          <Mail className="h-5 w-5 text-white" />
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-medium text-orange-900 mb-1">Email</p>
-                          <a href={`mailto:${provider.email}`} className="text-orange-800 hover:underline">
-                            {provider.email}
-                          </a>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Next Steps */}
-              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-6">
-                <h4 className="font-semibold text-indigo-900 mb-4 flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
-                  Next Steps
-                </h4>
-                <ol className="space-y-3 text-indigo-800">
-                  <li className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 bg-indigo-500 text-white rounded-full flex items-center justify-center text-sm font-bold">1</span>
-                    <span>Use the contact information above to reach out to {provider.name}</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 bg-indigo-500 text-white rounded-full flex items-center justify-center text-sm font-bold">2</span>
-                    <span>Mention your business needs and ask about their services</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 bg-indigo-500 text-white rounded-full flex items-center justify-center text-sm font-bold">3</span>
-                    <span>Request a consultation or quote for your specific requirements</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 bg-indigo-500 text-white rounded-full flex items-center justify-center text-sm font-bold">4</span>
-                    <span>Compare with other providers to find the best fit</span>
-                  </li>
-                </ol>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Footer Actions */}
@@ -419,22 +350,19 @@ const ServiceProviderDetailModal: React.FC<ServiceProviderDetailModalProps> = ({
           </button>
           
           <div className="flex items-center gap-3">
-            <button
-              onClick={handleContactClick}
+            <a
+              href={contactUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => {
+                if (onContactProvider && provider) onContactProvider(provider);
+              }}
               className="px-6 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold rounded-lg transition-all flex items-center gap-2 shadow-md hover:shadow-lg"
+              title={contactLabelIsWebsite ? `Open ${provider.name}'s website` : `Search for ${provider.name}`}
             >
-              {provider.website || provider.contact_method?.includes('Website:') ? (
-                <>
-                  <ExternalLink className="h-4 w-4" />
-                  Visit Website
-                </>
-              ) : (
-                <>
-                  <Phone className="h-4 w-4" />
-                  Contact Provider
-                </>
-              )}
-            </button>
+              <ExternalLink className="h-4 w-4" />
+              {contactLabelIsWebsite ? 'Visit Website' : 'Find on the web'}
+            </a>
           </div>
         </div>
       </div>

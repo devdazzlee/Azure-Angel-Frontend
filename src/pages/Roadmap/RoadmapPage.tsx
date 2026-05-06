@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { fetchRoadmapPlan } from "../../services/authService";
+import { isRoadmapStepCompleted } from "../../utils/roadmapMatching";
 
 interface RoadmapStage {
   title: string;
@@ -9,9 +10,7 @@ interface RoadmapStage {
   tasks: Array<{
     task: string;
     description: string;
-    dependencies: string;
     angelRole: string;
-    status: string;
   }>;
 }
 
@@ -23,6 +22,11 @@ const RoadmapPage: React.FC = () => {
   const [error, setError] = useState<string>("");
   const [isDownloading, setIsDownloading] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  /** Synchronous guard so rapid double-clicks cannot start two transitions before React re-renders. */
+  const implementationTransitionLockRef = useRef(false);
+  // Real completions sourced from the Implementation phase. Used to overlay
+  // a checkmark on the corresponding roadmap rows.
+  const [completedRoadmapStepKeys, setCompletedRoadmapStepKeys] = useState<string[]>([]);
 
   useEffect(() => {
     const loadRoadmap = async () => {
@@ -46,6 +50,68 @@ const RoadmapPage: React.FC = () => {
     };
 
     loadRoadmap();
+  }, [sessionId]);
+
+  // Pull the user's actual Implementation completions so we can render the
+  // real Status overlay instead of the LLM-generated guess. Done via raw
+  // fetch so a transient session-fetch error doesn't surface a toast — the
+  // roadmap simply renders without completion checkmarks in that case.
+  useEffect(() => {
+    if (!sessionId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = localStorage.getItem("sb_access_token");
+        if (!token) return;
+        const response = await fetch(
+          `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!response.ok) return;
+        const data = await response.json();
+        if (cancelled) return;
+        const keys = data?.result?.business_context?.completed_roadmap_step_keys;
+        if (Array.isArray(keys)) {
+          setCompletedRoadmapStepKeys(keys);
+        }
+      } catch {
+        // Non-fatal: roadmap simply won't show completion checkmarks.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+
+  // When returning from Implementation in the same tab, session data may update;
+  // refresh completion keys whenever the page becomes visible again.
+  useEffect(() => {
+    if (!sessionId) return;
+    const refreshCompletions = async () => {
+      try {
+        const token = localStorage.getItem("sb_access_token");
+        if (!token) return;
+        const response = await fetch(
+          `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!response.ok) return;
+        const data = await response.json();
+        const keys = data?.result?.business_context?.completed_roadmap_step_keys;
+        if (Array.isArray(keys)) {
+          setCompletedRoadmapStepKeys(keys);
+        }
+      } catch {
+        /* non-fatal */
+      }
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void refreshCompletions();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [sessionId]);
 
   // Parse roadmap content into stages and tables
@@ -73,23 +139,19 @@ const RoadmapPage: React.FC = () => {
           const headerRow = tableLines[0].split('|').map(c => c.trim()).filter(c => c);
           const taskIndex = headerRow.findIndex(h => h.toLowerCase().includes('task'));
           const descIndex = headerRow.findIndex(h => h.toLowerCase().includes('description'));
-          const depIndex = headerRow.findIndex(h => h.toLowerCase().includes('dependencies'));
           const roleIndex = headerRow.findIndex(h => h.toLowerCase().includes('angel'));
-          const statusIndex = headerRow.findIndex(h => h.toLowerCase().includes('status'));
 
           for (let j = 1; j < tableLines.length; j++) {
             const row = tableLines[j];
             if (row.match(/^[\s\-|:]+\|$/)) continue;
-            
+
             const cells = row.split('|').map(c => c.trim()).filter(c => c);
-            
-            if (cells.length >= 4 && cells[taskIndex]) {
+
+            if (cells.length >= 3 && taskIndex >= 0 && cells[taskIndex]) {
               currentStage.tasks.push({
                 task: (cells[taskIndex] || '').replace(/\*\*/g, ''),
-                description: (cells[descIndex] || '').replace(/\*\*/g, ''),
-                dependencies: (cells[depIndex] || '').replace(/\*\*/g, ''),
-                angelRole: (cells[roleIndex] || '').replace(/\*\*/g, ''),
-                status: (cells[statusIndex] || '⏳').trim(),
+                description: (descIndex >= 0 ? cells[descIndex] || '' : '').replace(/\*\*/g, ''),
+                angelRole: (roleIndex >= 0 ? cells[roleIndex] || '' : '').replace(/\*\*/g, ''),
               });
             }
           }
@@ -149,23 +211,19 @@ const RoadmapPage: React.FC = () => {
           const headerRow = tableLines[0].split('|').map(c => c.trim()).filter(c => c);
           const taskIndex = headerRow.findIndex(h => h.toLowerCase().includes('task'));
           const descIndex = headerRow.findIndex(h => h.toLowerCase().includes('description'));
-          const depIndex = headerRow.findIndex(h => h.toLowerCase().includes('dependencies'));
           const roleIndex = headerRow.findIndex(h => h.toLowerCase().includes('angel'));
-          const statusIndex = headerRow.findIndex(h => h.toLowerCase().includes('status'));
 
           for (let j = 1; j < tableLines.length; j++) {
             const row = tableLines[j];
             if (row.match(/^[\s\-|:]+\|$/)) continue;
-            
+
             const cells = row.split('|').map(c => c.trim()).filter(c => c);
-            
-            if (cells.length >= 4 && cells[taskIndex]) {
+
+            if (cells.length >= 3 && taskIndex >= 0 && cells[taskIndex]) {
               currentStage.tasks.push({
                 task: (cells[taskIndex] || '').replace(/\*\*/g, ''),
-                description: (cells[descIndex] || '').replace(/\*\*/g, ''),
-                dependencies: (cells[depIndex] || '').replace(/\*\*/g, ''),
-                angelRole: (cells[roleIndex] || '').replace(/\*\*/g, ''),
-                status: (cells[statusIndex] || '⏳').trim(),
+                description: (descIndex >= 0 ? cells[descIndex] || '' : '').replace(/\*\*/g, ''),
+                angelRole: (roleIndex >= 0 ? cells[roleIndex] || '' : '').replace(/\*\*/g, ''),
               });
             }
           }
@@ -181,23 +239,19 @@ const RoadmapPage: React.FC = () => {
       const headerRow = tableLines[0].split('|').map(c => c.trim()).filter(c => c);
       const taskIndex = headerRow.findIndex(h => h.toLowerCase().includes('task'));
       const descIndex = headerRow.findIndex(h => h.toLowerCase().includes('description'));
-      const depIndex = headerRow.findIndex(h => h.toLowerCase().includes('dependencies'));
       const roleIndex = headerRow.findIndex(h => h.toLowerCase().includes('angel'));
-      const statusIndex = headerRow.findIndex(h => h.toLowerCase().includes('status'));
 
       for (let j = 1; j < tableLines.length; j++) {
         const row = tableLines[j];
         if (row.match(/^[\s\-|:]+\|$/)) continue;
-        
+
         const cells = row.split('|').map(c => c.trim()).filter(c => c);
-        
-        if (cells.length >= 4 && cells[taskIndex]) {
+
+        if (cells.length >= 3 && taskIndex >= 0 && cells[taskIndex]) {
           currentStage.tasks.push({
             task: (cells[taskIndex] || '').replace(/\*\*/g, ''),
-            description: (cells[descIndex] || '').replace(/\*\*/g, ''),
-            dependencies: (cells[depIndex] || '').replace(/\*\*/g, ''),
-            angelRole: (cells[roleIndex] || '').replace(/\*\*/g, ''),
-            status: (cells[statusIndex] || '⏳').trim(),
+            description: (descIndex >= 0 ? cells[descIndex] || '' : '').replace(/\*\*/g, ''),
+            angelRole: (roleIndex >= 0 ? cells[roleIndex] || '' : '').replace(/\*\*/g, ''),
           });
         }
       }
@@ -230,18 +284,6 @@ const RoadmapPage: React.FC = () => {
     } finally {
       setIsDownloading(false);
     }
-  };
-
-  const getStatusIcon = (status: string) => {
-    const statusText = status.trim().toLowerCase();
-    if (statusText === '✓' || statusText === '✅' || statusText.includes('complete') || statusText.includes('done')) {
-      return { icon: '✅', color: 'text-green-600' };
-    } else if (statusText === '→' || statusText === '🔜' || statusText.includes('soon') || statusText.includes('upcoming')) {
-      return { icon: '🔜', color: 'text-blue-600' };
-    } else if (statusText === '⏳' || statusText.includes('progress') || statusText.includes('pending')) {
-      return { icon: '⏳', color: 'text-orange-600' };
-    }
-    return { icon: status.trim() || '⏳', color: 'text-orange-600' };
   };
 
   return (
@@ -331,6 +373,10 @@ const RoadmapPage: React.FC = () => {
               </div>
             </div>
 
+            <div className="mb-6 rounded-lg border border-indigo-100 bg-white/80 px-4 py-3 text-center text-sm text-gray-700 shadow-sm">
+              Created using government, academic and industry resources.
+            </div>
+
             {/* Stages */}
             <div className="space-y-8">
               {stages.map((stage, stageIdx) => (
@@ -356,7 +402,9 @@ const RoadmapPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Tasks Table - KEEPING EXACTLY AS IS */}
+                  {/* Tasks Table — Status column shows the user's actual
+                      Implementation completions; the LLM-guessed status and
+                      dependencies columns are intentionally removed. */}
                   <div className="overflow-x-auto">
                     <table className="min-w-full border-collapse">
                       <thead className="bg-gray-50">
@@ -368,9 +416,6 @@ const RoadmapPage: React.FC = () => {
                             Description
                           </th>
                           <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wide border-b border-gray-200">
-                            Dependencies
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wide border-b border-gray-200">
                             Angel's Role
                           </th>
                           <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wide border-b border-gray-200 w-20">
@@ -380,7 +425,7 @@ const RoadmapPage: React.FC = () => {
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                         {stage.tasks.map((task, taskIdx) => {
-                          const statusInfo = getStatusIcon(task.status);
+                          const completed = isRoadmapStepCompleted(task.task, completedRoadmapStepKeys);
                           return (
                             <tr
                               key={taskIdx}
@@ -389,7 +434,7 @@ const RoadmapPage: React.FC = () => {
                               } hover:bg-indigo-50 transition-colors`}
                             >
                               <td className="px-4 py-4 align-top">
-                                <div className="text-sm font-semibold text-gray-900">
+                                <div className={`text-sm font-semibold ${completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
                                   {task.task}
                                 </div>
                               </td>
@@ -399,19 +444,24 @@ const RoadmapPage: React.FC = () => {
                                 </div>
                               </td>
                               <td className="px-4 py-4 align-top">
-                                <div className="text-sm text-gray-600 italic">
-                                  {task.dependencies || 'None'}
-                                </div>
-                              </td>
-                              <td className="px-4 py-4 align-top">
                                 <div className="text-sm text-indigo-700">
                                   {task.angelRole}
                                 </div>
                               </td>
                               <td className="px-4 py-4 align-top text-center">
-                                <span className={`text-2xl ${statusInfo.color}`}>
-                                  {statusInfo.icon}
-                                </span>
+                                {completed ? (
+                                  <span
+                                    className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-green-100 text-green-700"
+                                    title="Completed in Implementation"
+                                    aria-label="Completed"
+                                  >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-300 text-xs">—</span>
+                                )}
                               </td>
                             </tr>
                           );
@@ -448,11 +498,17 @@ const RoadmapPage: React.FC = () => {
                 )}
               </button>
               <button
+                type="button"
                 onClick={async () => {
-                  if (!sessionId) return;
-                  
+                  if (!sessionId || isTransitioning || implementationTransitionLockRef.current) return;
+                  implementationTransitionLockRef.current = true;
+
+                  // Flip the button into the loading state synchronously so the
+                  // user gets an instant acknowledgement of their click — the
+                  // network round-trips happen after this paint.
+                  setIsTransitioning(true);
+
                   try {
-                    // Check subscription before allowing implementation transition
                     const subscriptionCheck = await fetch(
                       `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
                       {
@@ -463,17 +519,14 @@ const RoadmapPage: React.FC = () => {
                     );
 
                     const subscriptionData = await subscriptionCheck.json();
-                    
+
                     if (!subscriptionData.success || !subscriptionData.has_active_subscription || subscriptionData.payment_failed) {
                       toast.error('Subscription required to proceed to Implementation phase. Please subscribe to continue.');
-                      // TODO: Show payment modal
+                      setIsTransitioning(false);
+                      implementationTransitionLockRef.current = false;
                       return;
                     }
 
-                    setIsTransitioning(true);
-                    toast.info("Preparing implementation transition...");
-                    
-                    // Call the roadmap to implementation transition endpoint
                     const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/roadmap-to-implementation-transition`, {
                       method: 'POST',
                       headers: {
@@ -483,11 +536,9 @@ const RoadmapPage: React.FC = () => {
                     });
 
                     const data = await response.json();
-                    
+
                     if (data.success) {
                       toast.success("Implementation transition prepared!");
-                      // Navigate back to chat page - it will detect ROADMAP_TO_IMPLEMENTATION_TRANSITION phase
-                      // The backend has already updated the session phase in the database
                       navigate(`/ventures/${sessionId}`);
                     } else {
                       if (data.requires_subscription) {
@@ -496,11 +547,13 @@ const RoadmapPage: React.FC = () => {
                         toast.error(data.message || "Failed to prepare implementation transition");
                       }
                       setIsTransitioning(false);
+                      implementationTransitionLockRef.current = false;
                     }
                   } catch (error) {
                     console.error("Error preparing implementation transition:", error);
                     toast.error("Something went wrong.");
                     setIsTransitioning(false);
+                    implementationTransitionLockRef.current = false;
                   }
                 }}
                 disabled={isTransitioning}

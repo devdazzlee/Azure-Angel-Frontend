@@ -1,11 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { FaEye, FaEyeSlash, FaEnvelope, FaLock, FaArrowRight, FaMagic, FaUser } from 'react-icons/fa';
-import { signUp, acceptTerms, acceptPrivacy } from '../../services/authService';
-import { useNavigate } from 'react-router-dom';
+import { signUp } from '../../services/authService';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { setEmailPendingVerification } from '../../utils/tokenUtils';
-import LegalAcceptanceModal from '../../components/LegalAcceptanceModal';
-import { getTermsContent, getPrivacyContent } from '../../utils/legalContent';
 
 interface SignupFormData {
   fullName: string;
@@ -35,16 +33,10 @@ const SignupPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState({ pass: false, confirm: false });
   const [isLoading, setIsLoading] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
   const recaptchaWrapperRef = useRef<HTMLDivElement | null>(null);
   const recaptchaContainerRef = useRef<HTMLDivElement | null>(null);
   const recaptchaWidgetIdRef = useRef<number | null>(null);
-  
-  // Note: Terms/Privacy modals are now handled by AcceptanceGuard after user logs in
-  // These states are kept for potential future use but won't be triggered after signup
-  const [isAcceptingTerms, setIsAcceptingTerms] = useState(false);
-  const [isAcceptingPrivacy, setIsAcceptingPrivacy] = useState(false);
-  const [showTermsModal, setShowTermsModal] = useState(false);
-  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   const recaptchaSiteKey = '6Ldfo6YsAAAAAEwH4FSqKnbdWCwuWLZ9FVZFYk79';
   const recaptchaVersion = (import.meta.env.VITE_RECAPTCHA_VERSION as string | undefined)?.toLowerCase().trim();
@@ -115,6 +107,11 @@ const SignupPage: React.FC = () => {
       return;
     }
 
+    if (!acceptedLegal) {
+      toast.error('Please acknowledge the Terms and Conditions and Privacy Policy to continue.');
+      return;
+    }
+
     let captchaToSend: string | undefined = undefined;
     if (isRecaptchaEnabled) {
       if (recaptchaMode === 'v2') {
@@ -155,6 +152,7 @@ const SignupPage: React.FC = () => {
         email: formData.email,
         password: formData.password,
         confirmPassword: formData.confirmPassword,
+        acceptedTermsAndPrivacy: acceptedLegal,
         captchaToken: captchaToSend,
       });
       setEmailPendingVerification(formData.email);
@@ -179,64 +177,6 @@ const SignupPage: React.FC = () => {
         window.grecaptcha.reset(recaptchaWidgetIdRef.current);
         setCaptchaToken(null);
       }
-    }
-  };
-
-  const handleAcceptTerms = async (name: string, date: string) => {
-    setIsAcceptingTerms(true);
-    try {
-      console.log('Accepting Terms with:', { name, date });
-      const result = await acceptTerms(name, date);
-      console.log('Terms acceptance result:', result);
-      
-      // Close Terms modal first
-      setShowTermsModal(false);
-      setIsAcceptingTerms(false);
-      
-      // Small delay to ensure Terms modal closes before Privacy modal opens
-      setTimeout(() => {
-        if (result.both_accepted) {
-          // Both already accepted (shouldn't happen, but handle it)
-          console.log('Both already accepted, redirecting');
-          toast.success('Terms and Privacy Policy accepted!');
-          // Note: This handler won't be called after signup since we redirect immediately
-          // It's kept for potential future use
-        } else {
-          // Show Privacy modal
-          console.log('Showing Privacy Policy modal after Terms acceptance');
-          setShowPrivacyModal(true);
-          toast.success('Terms and Conditions accepted! Please accept the Privacy Policy.');
-        }
-      }, 300);
-    } catch (err: unknown) {
-      console.error('Error accepting Terms:', err);
-      setIsAcceptingTerms(false);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to accept Terms and Conditions';
-      toast.error(errorMessage);
-      throw err;
-    }
-  };
-
-  const handleAcceptPrivacy = async (name: string, date: string) => {
-    setIsAcceptingPrivacy(true);
-    try {
-      const result = await acceptPrivacy(name, date);
-      setShowPrivacyModal(false);
-      
-      if (result.both_accepted) {
-        toast.success('Terms and Privacy Policy accepted!');
-        // Note: This handler won't be called after signup since we redirect immediately
-        // It's kept for potential future use
-      } else {
-        // This shouldn't happen, but handle it
-        toast.warning('Privacy Policy accepted, but Terms acceptance is missing.');
-      }
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to accept Privacy Policy';
-      toast.error(errorMessage);
-      throw err;
-    } finally {
-      setIsAcceptingPrivacy(false);
     }
   };
 
@@ -391,11 +331,44 @@ const SignupPage: React.FC = () => {
                   </p>
                 )}
 
+                {/* Terms & Privacy acknowledgement */}
+                <div className="flex items-start gap-3">
+                  <input
+                    id="acceptedLegal"
+                    name="acceptedLegal"
+                    type="checkbox"
+                    checked={acceptedLegal}
+                    onChange={(e) => setAcceptedLegal(e.target.checked)}
+                    className="mt-1 h-5 w-5 rounded border-gray-300 text-teal-600 focus:ring-teal-600 cursor-pointer"
+                  />
+                  <label htmlFor="acceptedLegal" className="text-sm text-gray-700 leading-relaxed cursor-pointer">
+                    I have read and agree to the{' '}
+                    <Link
+                      to="/terms-and-conditions"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-teal-600 hover:underline font-medium"
+                    >
+                      Terms and Conditions
+                    </Link>
+                    {' '}and{' '}
+                    <Link
+                      to="/privacy-policy"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-teal-600 hover:underline font-medium"
+                    >
+                      Privacy Policy
+                    </Link>
+                    .
+                  </label>
+                </div>
+
                 {/* Submit Button */}
                 <button
                   type="submit"
-                  disabled={isLoading}
-                  className="w-full flex items-center justify-center py-3 bg-gradient-to-r from-teal-500 to-teal-600 text-white font-semibold rounded-lg hover:from-teal-600 hover:to-teal-700 transition"
+                  disabled={isLoading || !acceptedLegal}
+                  className="w-full flex items-center justify-center py-3 bg-gradient-to-r from-teal-500 to-teal-600 text-white font-semibold rounded-lg hover:from-teal-600 hover:to-teal-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {isLoading ? 'Creating account...' : <>Sign Up <FaArrowRight className="ml-2" /></>}
                 </button>
@@ -412,39 +385,6 @@ const SignupPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Terms and Conditions Modal */}
-      {showTermsModal && (
-        <LegalAcceptanceModal
-          key="terms-modal"
-          isOpen={showTermsModal}
-          onClose={() => {
-            // Don't allow closing - user must accept
-            toast.warning('You must accept the Terms and Conditions to proceed.');
-          }}
-          onAccept={handleAcceptTerms}
-          title="Terms and Conditions"
-          content={getTermsContent()}
-          type="terms"
-          isLoading={isAcceptingTerms}
-        />
-      )}
-
-      {/* Privacy Policy Modal */}
-      {showPrivacyModal && (
-        <LegalAcceptanceModal
-          key="privacy-modal"
-          isOpen={showPrivacyModal}
-          onClose={() => {
-            // Don't allow closing - user must accept
-            toast.warning('You must accept the Privacy Policy to proceed.');
-          }}
-          onAccept={handleAcceptPrivacy}
-          title="Privacy Policy"
-          content={getPrivacyContent()}
-          type="privacy"
-          isLoading={isAcceptingPrivacy}
-        />
-      )}
     </div>
   );
 };

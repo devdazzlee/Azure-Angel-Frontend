@@ -26,6 +26,46 @@ import BudgetDashboard from '@/components/Budget/BudgetDashboard';
 
 import type { APIResponse, Budget, BudgetItem, BusinessContextPayload, RevenueStream } from '@/types/apiTypes';
 
+/** Stable IDs so duplicate effect runs (e.g. React Strict Mode) do not stack the same toast. */
+const TOAST_BUDGET_ANALYZING = 'budget-prepop-analyzing-from-plan';
+const TOAST_BUDGET_GENERATED = 'budget-prepop-generated-from-plan';
+
+async function prepopulateExpenseItemsFromPlan(sessionId: string, currentBudget: Budget): Promise<Budget> {
+  const existingExpenses = currentBudget.items
+    ? currentBudget.items.filter((i: BudgetItem) => i.category === 'expense')
+    : [];
+  if (existingExpenses.length > 0) {
+    return currentBudget;
+  }
+
+  try {
+    toast.info('Analyzing business plan to generate your budget...', {
+      toastId: TOAST_BUDGET_ANALYZING,
+      autoClose: 3000,
+    });
+    const estimates = await budgetService.generateEstimatedExpenses(sessionId);
+
+    if (estimates.success && estimates.result && estimates.result.length > 0) {
+      const updatedBudget = {
+        ...currentBudget,
+        items: [...(currentBudget.items || []), ...estimates.result],
+      };
+
+      const saved = await budgetService.saveBudget(sessionId, updatedBudget);
+      if (saved.success) {
+        toast.success('Budget items generated from your business plan!', {
+          toastId: TOAST_BUDGET_GENERATED,
+        });
+        return saved.result;
+      }
+    }
+  } catch (err) {
+    console.error('Failed to pre-populate budget items:', err);
+  }
+
+  return currentBudget;
+}
+
 const BudgetPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -68,33 +108,7 @@ const BudgetPage: React.FC = () => {
       const response = await budgetService.getBudget(id!);
       if (response.success) {
         let currentBudget = response.result;
-        
-        // Check if there are any existing expenses (revenue streams might exist from setup)
-        const existingExpenses = currentBudget.items ? currentBudget.items.filter((i: any) => i.category === 'expense') : [];
-        
-        // If budget has no expense items, try to pre-populate using AI estimates
-        if (existingExpenses.length === 0) {
-          try {
-            toast.info('Analyzing business plan to generate your budget...', { autoClose: 3000 });
-            const estimates = await budgetService.generateEstimatedExpenses(id!);
-            
-            if (estimates.success && estimates.result && estimates.result.length > 0) {
-              const updatedBudget = {
-                ...currentBudget,
-                items: [...(currentBudget.items || []), ...estimates.result]
-              };
-              
-              const saved = await budgetService.saveBudget(id!, updatedBudget);
-              if (saved.success) {
-                currentBudget = saved.result;
-                toast.success('Budget items generated from your business plan!');
-              }
-            }
-          } catch (err) {
-            console.error('Failed to pre-populate budget items:', err);
-          }
-        }
-        
+        currentBudget = await prepopulateExpenseItemsFromPlan(id!, currentBudget);
         setBudget(currentBudget);
       } else {
         // If no budget exists, create an empty one via API so the UI stays API-driven
@@ -107,27 +121,7 @@ const BudgetPage: React.FC = () => {
         });
         if (created.success) {
           let currentBudget = created.result;
-          
-          try {
-            toast.info('Analyzing business plan to generate your budget...', { autoClose: 3000 });
-            const estimates = await budgetService.generateEstimatedExpenses(id!);
-            
-            if (estimates.success && estimates.result && estimates.result.length > 0) {
-              const updatedBudget = {
-                ...currentBudget,
-                items: [...(currentBudget.items || []), ...estimates.result]
-              };
-              
-              const saved = await budgetService.saveBudget(id!, updatedBudget);
-              if (saved.success) {
-                currentBudget = saved.result;
-                toast.success('Budget items generated from your business plan!');
-              }
-            }
-          } catch (err) {
-            console.error('Failed to pre-populate budget items:', err);
-          }
-          
+          currentBudget = await prepopulateExpenseItemsFromPlan(id!, currentBudget);
           setBudget(currentBudget);
         } else {
           toast.error(created.message || 'Failed to initialize budget');

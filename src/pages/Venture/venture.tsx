@@ -1523,16 +1523,17 @@ export default function ChatPage() {
       setLoading(true);
       toast.info("Starting implementation phase...");
       
-      // Call the start implementation endpoint
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/start-implementation`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`
-        }
-      });
-
-      const data = await response.json();
+      // Use httpClient so expired access tokens trigger the shared refresh-token
+      // interceptor (raw fetch with localStorage bypasses that and yields 401).
+      const { data } = await httpClient.post<{
+        success: boolean;
+        message?: string;
+        requires_subscription?: boolean;
+        result?: {
+          progress?: ProgressState;
+          reply?: string;
+        };
+      }>(`/angel/sessions/${sessionId}/start-implementation`, {});
       
       if (data.success) {
         toast.success("Implementation phase activated!");
@@ -1559,13 +1560,17 @@ export default function ChatPage() {
       } else {
         toast.error(data.message || "Failed to start implementation");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("❌ Error starting implementation:", error);
-      const errorMessage = 
-        error?.message ||
-        error?.response?.data?.detail ||
-        error?.response?.data?.error ||
-        error?.response?.data?.message ||
+      const err = error as {
+        response?: { data?: { detail?: string; error?: string; message?: string } };
+        message?: string;
+      };
+      const errorMessage =
+        err?.response?.data?.detail ||
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        err?.message ||
         "Failed to start implementation. Please try again.";
       toast.error(errorMessage);
     } finally {
@@ -3090,7 +3095,7 @@ export default function ChatPage() {
             const sessionData = sessionResponse.data as { success?: boolean; result?: any };
             const freshSession = sessionData?.success ? sessionData.result : null;
 
-            const summary = freshSession?.business_plan_summary || "Your business plan has been completed successfully!";
+            const summary = freshSession?.business_plan_summary || "";
             const artifact = freshSession?.business_plan_artifact || null;
 
             setTransitionData({
@@ -3105,7 +3110,7 @@ export default function ChatPage() {
           } catch (summaryError) {
             console.error("Failed to fetch business plan data for summary transition:", summaryError);
             setTransitionData({
-              businessPlanSummary: "Your business plan has been completed successfully!",
+              businessPlanSummary: "",
               businessPlanArtifact: null,
               transitionPhase: "PLAN_TO_SUMMARY"
             });
@@ -3137,7 +3142,7 @@ export default function ChatPage() {
             
             // Get transition data from session
             const transitionData = freshSession?.transition_data || {};
-            const summary = freshSession?.business_plan_summary || transitionData.business_plan_summary || "Your business plan has been completed successfully!";
+            const summary = freshSession?.business_plan_summary || transitionData.business_plan_summary || "";
             const artifact = freshSession?.business_plan_artifact || transitionData.business_plan_artifact || null;
             const estimatedExpenses = transitionData.estimated_expenses || "";
             const businessContext = transitionData.business_context || {};
@@ -3162,9 +3167,8 @@ export default function ChatPage() {
             return;
           } catch (error) {
             console.error("❌ Error restoring budget transition:", error);
-            // Fallback: still set transition data even if fetch fails
             setTransitionData({
-              businessPlanSummary: "Your business plan has been completed successfully!",
+              businessPlanSummary: "",
               businessPlanArtifact: null,
               transitionPhase: "PLAN_TO_BUDGET",
               estimatedExpenses: "",
@@ -3196,7 +3200,7 @@ export default function ChatPage() {
             });
             
             // Get summary and artifact from fresh session data
-            const summary = freshSession?.business_plan_summary || "Your business plan has been completed successfully!";
+            const summary = freshSession?.business_plan_summary || "";
             const artifact = freshSession?.business_plan_artifact || null;
             
             // If artifact is still being generated, show a message
@@ -3218,9 +3222,8 @@ export default function ChatPage() {
             return;
           } catch (summaryError) {
             console.error("Failed to fetch business plan data:", summaryError);
-            // Fallback: still show modal with default message
             setTransitionData({
-              businessPlanSummary: "Your business plan has been completed successfully!",
+              businessPlanSummary: "",
               businessPlanArtifact: null,
               transitionPhase: "PLAN_TO_ROADMAP"
             });
@@ -4096,6 +4099,7 @@ export default function ChatPage() {
         businessPlanArtifact={transitionData.businessPlanArtifact}
         onApprove={() => handleApprovePlan("summary_to_budget")}
         onRevisit={handleRevisitPlan}
+        onExitToChat={() => setTransitionData(null)}
         loading={loading}
         sessionId={sessionId}
         initialQuote={transitionQuote}
@@ -4117,6 +4121,7 @@ export default function ChatPage() {
         businessPlanArtifact={transitionData.businessPlanArtifact}
         onApprove={handleApprovePlan}
         onRevisit={handleRevisitPlan}
+        onExitToChat={() => setTransitionData(null)}
         loading={loading}
         sessionId={sessionId}
         initialQuote={transitionQuote}

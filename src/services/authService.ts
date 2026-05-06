@@ -52,12 +52,14 @@ export async function signUp({
     email,
     password,
     confirmPassword,
+    acceptedTermsAndPrivacy,
     captchaToken,
 }: {
     fullName: string;
     email: string;
     password: string;
     confirmPassword: string;
+    acceptedTermsAndPrivacy: boolean;
     captchaToken?: string;
 }): Promise<void> {
     try {
@@ -66,6 +68,7 @@ export async function signUp({
             email,
             password,
             confirm_password: confirmPassword,
+            accepted_terms_and_privacy: acceptedTermsAndPrivacy,
         };
 
         if (captchaToken) {

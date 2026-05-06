@@ -1,9 +1,15 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import DocumentExportModal from './DocumentExportModal';
 import PaymentForm from './PaymentForm';
 import { PRICING } from '../config/pricing';
 import { checkIsFreeIntroPeriod } from '../utils/freeIntroPeriod';
+import { isRoadmapStepCompleted } from '../utils/roadmapMatching';
+
+// Feature flag: the "Why This Roadmap Works" stats are hidden until we have
+// real, sourced metrics to put behind them. The block below stays in the tree
+// gated by this flag so it can be revived without re-implementing it.
+const SHOW_ROADMAP_STATS = false;
 
 interface RoadmapDisplayProps {
   roadmapContent: string;
@@ -12,6 +18,11 @@ interface RoadmapDisplayProps {
   loading?: boolean;
   sessionId?: string;
   hideStartButton?: boolean; // Hide button if already in Implementation phase
+  // Normalized step keys that the user has actually completed during the
+  // Implementation phase. Used to overlay real status on roadmap rows
+  // instead of relying on the LLM-generated Status column (which is just
+  // a guess at generation time).
+  completedRoadmapStepKeys?: string[];
 }
 
 interface EditSection {
@@ -22,70 +33,14 @@ interface EditSection {
   phase?: string;
 }
 
-interface MotivationalQuote {
-  quote: string;
-  author: string;
-  category?: string;
-}
-
-const FALLBACK_QUOTES: MotivationalQuote[] = [
-  {
-    quote: "Success is not final; failure is not fatal: it is the courage to continue that counts.",
-    author: "Winston Churchill",
-    category: "Persistence"
-  },
-  {
-    quote: "The way to get started is to quit talking and begin doing.",
-    author: "Walt Disney",
-    category: "Action"
-  },
-  {
-    quote: "Innovation distinguishes between a leader and a follower.",
-    author: "Steve Jobs",
-    category: "Innovation"
-  },
-  {
-    quote: "The future belongs to those who believe in the beauty of their dreams.",
-    author: "Eleanor Roosevelt",
-    category: "Dreams"
-  },
-  {
-    quote: "Don't be afraid to give up the good to go for the great.",
-    author: "John D. Rockefeller",
-    category: "Excellence"
-  },
-  {
-    quote: "Opportunities don't happen, you create them.",
-    author: "Chris Grosser",
-    category: "Opportunity"
-  },
-  {
-    quote: "If you really look closely, most overnight successes took a long time.",
-    author: "Steve Jobs",
-    category: "Discipline"
-  },
-  {
-    quote: "Dream big. Start small. Act now.",
-    author: "Robin Sharma",
-    category: "Momentum"
-  }
-];
-
-const pickFallbackQuote = (exclude?: string): MotivationalQuote => {
-  const available = FALLBACK_QUOTES.filter((q) => q.quote !== exclude);
-  const pool = available.length > 0 ? available : FALLBACK_QUOTES;
-  // Use timestamp + random for better randomization
-  const seed = Date.now() + Math.random();
-  return pool[Math.floor(seed % pool.length)];
-};
-
 const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
   roadmapContent,
   onStartImplementation,
   onEditRoadmap,
   loading = false,
   sessionId,
-  hideStartButton = false
+  hideStartButton = false,
+  completedRoadmapStepKeys = []
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -95,13 +50,6 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
   const [editingSection, setEditingSection] = useState<EditSection | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [hasPaid, setHasPaid] = useState(false); // Track payment status
-  const [quoteState, setQuoteState] = useState<MotivationalQuote>(() => pickFallbackQuote());
-  
-  const TRANSITION_QUOTE_STORAGE_PREFIX = "angel_roadmap_quote_";
-  const storageKey = useMemo(
-    () => `${TRANSITION_QUOTE_STORAGE_PREFIX}${sessionId ?? 'anonymous'}`,
-    [sessionId]
-  );
 
   // Check subscription status from backend on mount
   useEffect(() => {
@@ -144,22 +92,6 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
 
     checkSubscriptionStatus();
   }, []);
-
-  useEffect(() => {
-    // Get last quote from storage to avoid repetition
-    const lastQuote = typeof window !== 'undefined' 
-      ? localStorage.getItem(storageKey) ?? undefined 
-      : undefined;
-    
-    // Pick a different quote if we have one stored
-    const newQuote = pickFallbackQuote(lastQuote);
-    setQuoteState(newQuote);
-    
-    // Store this quote to avoid repetition next time
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(storageKey, newQuote.quote);
-    }
-  }, [storageKey]);
 
   const formatTableCell = (cell: string): string =>
     cell
@@ -290,14 +222,15 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
       h.toLowerCase().includes('specific sources')
     );
 
-    // Check for new roadmap table format: Task | Description | Dependencies | Angel's Role | Status
+    // Check for the roadmap task table. The original columns the LLM emits are
+    // Task | Description | Dependencies | Angel's Role | Status — we render
+    // only Task / Description / Angel's Role and overlay a real Status from
+    // the user's actual Implementation completions.
     const isRoadmapTable =
-      headerCells.length >= 5 &&
+      headerCells.length >= 4 &&
       headerCells[0].toLowerCase().includes('task') &&
       headerCells[1].toLowerCase().includes('description') &&
-      headerCells[2].toLowerCase().includes('dependencies') &&
-      headerCells[3].toLowerCase().includes("angel") &&
-      headerCells[4].toLowerCase().includes('status');
+      headerCells.some(h => h.toLowerCase().includes("angel"));
     
     // Legacy step table format check
     const isStepTable =
@@ -307,8 +240,15 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
       headerCells[2].toLowerCase().includes('timeline') &&
       headerCells[3].toLowerCase().includes('research source');
 
-    // Render new roadmap table format: Task | Description | Dependencies | Angel's Role | Status
+    // Render the roadmap task table — Task | Description | Angel's Role.
+    // Dependencies are intentionally dropped (per UX request) and Status is
+    // overlaid from real Implementation completions instead of using the
+    // LLM-generated value.
     if (isRoadmapTable) {
+      const taskIdx = headerCells.findIndex(h => h.toLowerCase().includes('task'));
+      const descIdx = headerCells.findIndex(h => h.toLowerCase().includes('description'));
+      const angelIdx = headerCells.findIndex(h => h.toLowerCase().includes("angel"));
+
       return (
         <div
           key={key}
@@ -334,9 +274,6 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
                   <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100">
                     Description
                   </th>
-                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100 hidden lg:table-cell">
-                    Dependencies
-                  </th>
                   <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-semibold text-indigo-600 uppercase tracking-wide border-b border-indigo-100 hidden md:table-cell">
                     Angel's Role
                   </th>
@@ -347,12 +284,11 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
               </thead>
               <tbody>
                 {dataRows.map((row, rowIdx) => {
-                  const [task = '', description = '', dependencies = '', angelRole = '', status = '⬜'] = row;
-                  const statusIcon = status.trim() === '✓' || status.trim() === '✅' ? '✓' : 
-                                    status.trim() === '→' || status.toLowerCase().includes('soon') ? '→' : '⬜';
-                  const statusColor = statusIcon === '✓' ? 'text-green-600' : 
-                                     statusIcon === '→' ? 'text-orange-600' : 'text-gray-400';
-                  
+                  const task = (taskIdx >= 0 ? row[taskIdx] : '') || '';
+                  const description = (descIdx >= 0 ? row[descIdx] : '') || '';
+                  const angelRole = (angelIdx >= 0 ? row[angelIdx] : '') || '';
+                  const completed = isRoadmapStepCompleted(task, completedRoadmapStepKeys);
+
                   return (
                     <tr
                       key={rowIdx}
@@ -362,7 +298,7 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
                     >
                       <td className="px-3 sm:px-4 py-3 sm:py-4 align-top">
                         <div
-                          className="text-sm sm:text-base font-bold text-gray-900"
+                          className={`text-sm sm:text-base font-bold ${completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}
                           dangerouslySetInnerHTML={{ __html: formatTableCell(task) }}
                         />
                       </td>
@@ -372,12 +308,6 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
                           dangerouslySetInnerHTML={{ __html: formatTableCell(description) }}
                         />
                       </td>
-                      <td className="px-3 sm:px-4 py-3 sm:py-4 align-top hidden lg:table-cell">
-                        <div
-                          className="text-xs sm:text-sm text-gray-600 italic"
-                          dangerouslySetInnerHTML={{ __html: formatTableCell(dependencies) }}
-                        />
-                      </td>
                       <td className="px-3 sm:px-4 py-3 sm:py-4 align-top hidden md:table-cell">
                         <div
                           className="text-xs sm:text-sm text-indigo-700"
@@ -385,9 +315,19 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
                         />
                       </td>
                       <td className="px-2 sm:px-4 py-3 sm:py-4 align-top text-center">
-                        <span className={`text-xl sm:text-2xl ${statusColor}`}>
-                          {statusIcon}
-                        </span>
+                        {completed ? (
+                          <span
+                            className="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-green-100 text-green-700"
+                            title="Completed in Implementation"
+                            aria-label="Completed"
+                          >
+                            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -1097,114 +1037,14 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
 
       {/* Content */}
       <div className="max-w-6xl mx-auto px-4 py-4 sm:py-8">
-        {/* Research Foundation Banner */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-lg p-4 sm:p-6 mb-6 sm:mb-8 text-white shadow-xl">
-          <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 mb-4">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
-              <span className="text-xl sm:text-2xl">🔬</span>
-            </div>
-            <div className="text-center sm:text-left flex-1">
-              <h2 className="text-lg sm:text-xl md:text-2xl font-bold mb-1">Launch Roadmap</h2>
-              <p className="text-blue-100 text-xs sm:text-sm md:text-base font-medium">Built on Government Sources, Academic Research & Industry Reports</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl">🏛️</span>
-                <span className="font-semibold text-sm">Government Sources</span>
-              </div>
-              <p className="text-blue-100 text-xs">SBA, IRS, SEC, state agencies, regulatory bodies</p>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl">🎓</span>
-                <span className="font-semibold text-sm">Academic Research</span>
-              </div>
-              <p className="text-blue-100 text-xs">Universities, Google Scholar, JSTOR, peer-reviewed journals</p>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl">📰</span>
-                <span className="font-semibold text-sm">Industry Reports</span>
-              </div>
-              <p className="text-blue-100 text-xs">Bloomberg, WSJ, Forbes, Harvard Business Review</p>
-            </div>
-          </div>
-          <div className="mt-4 bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20">
-            <p className="text-blue-50 text-xs sm:text-sm">
-              <strong>Verification Promise:</strong> Every recommendation has been validated against current best practices and cited with specific sources 
-              to ensure you have authoritative, verified guidance for your business launch.
-            </p>
-          </div>
-        </div>
-
-        {/* Planning Champion Achievement */}
-        <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-lg p-4 sm:p-6 mb-6 sm:mb-8">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="w-16 h-16 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full flex items-center justify-center text-white text-2xl">
-              🏆
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">Planning Champion Achievement</h2>
-              <p className="text-gray-600">Congratulations on completing your comprehensive business planning!</p>
-            </div>
-          </div>
-          <div className="bg-white/50 rounded-lg p-4 mb-4">
-            <blockquote className="text-lg font-medium text-gray-800 italic mb-2">
-              "{quoteState.quote}"
-            </blockquote>
-            <cite className="text-sm text-gray-600">– {quoteState.author}</cite>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-green-600">✅</span>
-              <span>Business Planning Complete</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-green-600">✅</span>
-              <span>Market Research Done</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-green-600">✅</span>
-              <span>Financial Strategy Set</span>
-            </div>
-          </div>
+        {/* Compact source attribution — replaces the previous research-sources banner +
+            verification promise + planning-champion / table-format blocks. */}
+        <div className="mb-6 sm:mb-8 rounded-lg border border-indigo-100 bg-white/70 px-4 py-3 text-center text-sm text-gray-700 shadow-sm">
+          Created using government, academic and industry resources.
         </div>
 
         {/* Roadmap Content */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          {/* Table Format Info Banner */}
-          <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border-b-2 border-amber-200 px-4 sm:px-6 py-3 sm:py-4">
-            <div className="flex items-start gap-3">
-              <span className="text-2xl">📊</span>
-              <div className="flex-1">
-                <h3 className="font-bold text-amber-900 mb-2">Table-Based Roadmap Format</h3>
-                <p className="text-sm text-amber-800 mb-2">
-                  Your roadmap is organized in easy-to-scan tables showing:
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-amber-700">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold">→</span>
-                    <span><strong>Step Name:</strong> What you need to do</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold">→</span>
-                    <span><strong>Step Description:</strong> Detailed guidance</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold">→</span>
-                    <span><strong>Timeline:</strong> How long it takes</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold">→</span>
-                    <span><strong>Research Source:</strong> Government, Academic, or Industry citations</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
           <div className="p-4 sm:p-6 md:p-8" ref={contentRef} id="roadmap-content">
             <div className="prose prose-sm sm:prose-base md:prose-lg max-w-none roadmap-content">
               {renderMarkdownTable(roadmapContent)}
@@ -1327,24 +1167,27 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
           </div>
         </div>
 
-        {/* Success Statistics */}
-        <div className="mt-8 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg p-6 border border-indigo-200">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 text-center">Why This Roadmap Works</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
-            <div>
-              <div className="text-3xl font-bold text-indigo-600 mb-2">3x</div>
-              <div className="text-sm text-gray-600">Higher success rate with structured launch plans</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-purple-600 mb-2">100%</div>
-              <div className="text-sm text-gray-600">Research-backed recommendations from authoritative sources</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-blue-600 mb-2">12</div>
-              <div className="text-sm text-gray-600">Months of comprehensive guidance from planning to launch</div>
+        {/* Success Statistics — hidden via SHOW_ROADMAP_STATS feature flag.
+            Kept in the tree so it can be revived once we have real metrics. */}
+        {SHOW_ROADMAP_STATS && (
+          <div className="mt-8 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg p-6 border border-indigo-200">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 text-center">Why This Roadmap Works</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+              <div>
+                <div className="text-3xl font-bold text-indigo-600 mb-2">3x</div>
+                <div className="text-sm text-gray-600">Higher success rate with structured launch plans</div>
+              </div>
+              <div>
+                <div className="text-3xl font-bold text-purple-600 mb-2">100%</div>
+                <div className="text-sm text-gray-600">Research-backed recommendations from authoritative sources</div>
+              </div>
+              <div>
+                <div className="text-3xl font-bold text-blue-600 mb-2">12</div>
+                <div className="text-sm text-gray-600">Months of comprehensive guidance from planning to launch</div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Edit Roadmap Modal */}

@@ -7,6 +7,8 @@ import DocumentExportModal from '../../components/DocumentExportModal';
 import PaymentForm from '../../components/PaymentForm';
 import { PRICING, checkPaymentStatus, markAsPaid } from '../../config/pricing';
 import { checkIsFreeIntroPeriod } from '../../utils/freeIntroPeriod';
+import { useAppDispatch, useAppSelector } from '../../store';
+import { upsertTransitionSession } from '../../store/businessPlanTransitionSlice';
 
 interface LocationState {
   businessPlan?: string;
@@ -19,18 +21,47 @@ const BusinessPlanView: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const locationState = location.state as LocationState;
+  const dispatch = useAppDispatch();
+  const normalizedSessionId = sessionId ?? 'anonymous';
+  const cachedTransition = useAppSelector(
+    (state) => state.businessPlanTransition.bySessionId[normalizedSessionId]
+  );
   const contentRef = useRef<HTMLDivElement>(null);
   
   // Initialize with data from navigation state if available
-  const [businessPlan, setBusinessPlan] = useState<string>(locationState?.businessPlan || '');
-  const [businessPlanSummary, setBusinessPlanSummary] = useState<string>(locationState?.businessPlanSummary || '');
-  const [loading, setLoading] = useState(!locationState?.businessPlan); // Only load if no data passed
+  const [businessPlan, setBusinessPlan] = useState<string>(
+    locationState?.businessPlan || cachedTransition?.artifact || ''
+  );
+  const [businessPlanSummary, setBusinessPlanSummary] = useState<string>(
+    locationState?.businessPlanSummary || cachedTransition?.summary || ''
+  );
+  const [loading, setLoading] = useState(!locationState?.businessPlan && !cachedTransition?.artifact); // Only load if no data passed
   const [viewMode, setViewMode] = useState<'summary' | 'full'>('full');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [hasPaid, setHasPaid] = useState(false); // Track payment status
   const [checkingSubscription, setCheckingSubscription] = useState(true);
   const [roadmapAvailable, setRoadmapAvailable] = useState(false);
+
+  useEffect(() => {
+    if (cachedTransition?.artifact && !businessPlan) {
+      setBusinessPlan(cachedTransition.artifact);
+      setLoading(false);
+    }
+    if (cachedTransition?.summary && !businessPlanSummary) {
+      setBusinessPlanSummary(cachedTransition.summary);
+    }
+  }, [businessPlan, businessPlanSummary, cachedTransition]);
+
+  useEffect(() => {
+    if (businessPlan || businessPlanSummary) {
+      dispatch(upsertTransitionSession({
+        sessionId: normalizedSessionId,
+        artifact: businessPlan || undefined,
+        summary: businessPlanSummary || undefined,
+      }));
+    }
+  }, [businessPlan, businessPlanSummary, dispatch, normalizedSessionId]);
 
   // Check subscription status from backend on mount
   useEffect(() => {
@@ -143,11 +174,19 @@ const BusinessPlanView: React.FC = () => {
         // Update state if we have data
         if (session.business_plan_artifact) {
           setBusinessPlan(session.business_plan_artifact);
+          dispatch(upsertTransitionSession({
+            sessionId: normalizedSessionId,
+            artifact: session.business_plan_artifact,
+          }));
           setLoading(false);
           console.log('✅ Business plan artifact loaded!');
         }
         if (session.business_plan_summary) {
           setBusinessPlanSummary(session.business_plan_summary);
+          dispatch(upsertTransitionSession({
+            sessionId: normalizedSessionId,
+            summary: session.business_plan_summary,
+          }));
           console.log('✅ Business plan summary loaded!');
         }
         
@@ -256,6 +295,17 @@ const BusinessPlanView: React.FC = () => {
     window.print();
   };
 
+  // Always navigate to a known location instead of relying on browser history,
+  // which can be unpredictable (e.g. arriving here via a direct link or after
+  // a page reload during plan generation).
+  const handleBackToChat = () => {
+    if (sessionId) {
+      navigate(`/ventures/${sessionId}`);
+    } else {
+      navigate('/ventures');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 flex items-center justify-center">
@@ -282,15 +332,16 @@ const BusinessPlanView: React.FC = () => {
         <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
           {/* Document Header with Back Button and Actions */}
           <div className="bg-gradient-to-r from-teal-500 to-blue-500 p-8 text-white print:bg-white print:text-gray-900 print:border-b print:border-gray-300">
-            {/* Back Button - Top Left */}
+            {/* Back Button - Top Left (high-contrast, prominent) */}
             <button
-              onClick={() => navigate(-1)}
-              className="mb-4 flex items-center gap-2 text-white/90 hover:text-white transition-colors print:hidden"
+              onClick={handleBackToChat}
+              className="mb-6 inline-flex items-center gap-2 px-5 py-3 bg-white hover:bg-gray-100 text-teal-600 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 print:hidden"
+              aria-label="Back to chat"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
-              <span className="text-sm font-medium">Back to Chat</span>
+              <span>Back to Chat</span>
             </button>
 
             <div className="flex items-start justify-between gap-6">
@@ -458,7 +509,7 @@ const BusinessPlanView: React.FC = () => {
                   Complete the business planning phase to generate your business plan.
                 </p>
                 <button
-                  onClick={() => navigate(`/venture/${sessionId}`)}
+                  onClick={handleBackToChat}
                   className="px-6 py-3 bg-teal-500 hover:bg-teal-600 text-white rounded-lg font-medium transition-colors"
                 >
                   Return to Chat
@@ -467,6 +518,22 @@ const BusinessPlanView: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* End-of-document navigation - No Print */}
+        {content && (
+          <div className="mt-8 flex justify-center print:hidden">
+            <button
+              onClick={handleBackToChat}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-white hover:bg-gray-50 text-teal-600 rounded-lg font-semibold border-2 border-teal-500 shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-105"
+              aria-label="Back to chat"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              <span>Back to Chat</span>
+            </button>
+          </div>
+        )}
 
         {/* Footer - No Print */}
         <div className="mt-6 text-center text-sm text-gray-500 print:hidden">
@@ -513,6 +580,21 @@ const BusinessPlanView: React.FC = () => {
         documentContent={contentRef.current?.innerHTML || content}
         documentType="business-plan"
       />
+
+      {/* Floating Back-to-Chat Button - Bottom Left, always visible while scrolling */}
+      <div className="fixed left-6 bottom-6 z-40 print:hidden">
+        <button
+          onClick={handleBackToChat}
+          className="group inline-flex items-center gap-2 px-5 py-3 bg-white hover:bg-gray-50 text-teal-600 rounded-full font-semibold border-2 border-teal-500 shadow-2xl hover:shadow-teal-500/30 transition-all duration-300 transform hover:scale-105"
+          title="Back to Chat"
+          aria-label="Back to chat"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          <span className="text-sm">Back to Chat</span>
+        </button>
+      </div>
 
       {/* Floating Continue to Roadmap Button - Right Side */}
       {roadmapAvailable && (

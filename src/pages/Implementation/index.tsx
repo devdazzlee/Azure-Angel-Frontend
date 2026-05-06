@@ -11,6 +11,7 @@ import RoadmapDisplay from '../../components/RoadmapDisplay';
 import ImplementationCompletionModal from '../../components/ImplementationCompletionModal';
 import httpClient from '../../api/httpClient';
 import { fetchRoadmapPlan } from '../../services/authService';
+import { IMPLEMENTATION_RETURN_KEY } from '../ErrorBoundaryPage';
 import { BudgetDashboard } from '../../components/Budget';
 import { budgetService } from '../../services/budgetService';
 import type { Budget, BudgetItem } from '../../types/apiTypes';
@@ -141,6 +142,34 @@ const Implementation: React.FC<ImplementationProps> = ({
   const [serviceProviders, setServiceProviders] = useState<any[]>([]);
   const [helpContent, setHelpContent] = useState<string>('');
 
+  // Real Implementation completions, in the normalized form used to overlay
+  // a "done" checkmark on roadmap rows. Refreshed whenever a task completes.
+  const [completedRoadmapStepKeys, setCompletedRoadmapStepKeys] = useState<string[]>([]);
+
+  const refreshCompletedRoadmapStepKeys = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      const token = localStorage.getItem('sb_access_token');
+      if (!token) return;
+      const response = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      const keys = data?.result?.business_context?.completed_roadmap_step_keys;
+      if (Array.isArray(keys)) {
+        setCompletedRoadmapStepKeys(keys);
+      }
+    } catch {
+      // Non-fatal: roadmap simply renders without checkmarks.
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    refreshCompletedRoadmapStepKeys();
+  }, [refreshCompletedRoadmapStepKeys]);
+
   useEffect(() => {
     loadImplementationData();
     setMountedTabs({ task: true });
@@ -153,6 +182,28 @@ const Implementation: React.FC<ImplementationProps> = ({
     setProvidersCache(null);
     setExtractionAttempted(false);
     setLocalBusinessContext(null);
+
+    // Drop a breadcrumb so the global error boundary can offer a
+    // "Return to Implementation" CTA if a downstream component throws while
+    // the user is on this page (e.g. a service-provider modal failing). The
+    // breadcrumb is cleared when this component unmounts on a clean
+    // navigation away.
+    if (sessionId && typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(IMPLEMENTATION_RETURN_KEY, sessionId);
+      } catch {
+        // localStorage can throw in private mode; the CTA simply won't show.
+      }
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        try {
+          window.localStorage.removeItem(IMPLEMENTATION_RETURN_KEY);
+        } catch {
+          // ignore
+        }
+      }
+    };
   }, [sessionId]);
   
   // Separate effect for business context extraction (runs once)
@@ -514,9 +565,12 @@ const Implementation: React.FC<ImplementationProps> = ({
           milestone: data.progress?.milestone || progress.milestone,
           phases_completed: data.progress?.phases_completed || progress.phases_completed
         });
-        
+
         // CRITICAL: Reload implementation data to get next task or completion status
         await loadImplementationData();
+        // Refresh the roadmap-step-keys overlay so the Roadmap tab reflects
+        // this completion immediately.
+        await refreshCompletedRoadmapStepKeys();
         setShowCompletionModal(false);
       } else {
         toast.error(data.message || 'Failed to complete task');
@@ -531,6 +585,9 @@ const Implementation: React.FC<ImplementationProps> = ({
   const handleSubstepCompletion = async () => {
     // Reload implementation data to get updated task with next substep
     await loadImplementationData();
+    // Substep completions can also flip a main task complete on the backend
+    // (auto-rollup), so refresh the roadmap overlay too.
+    await refreshCompletedRoadmapStepKeys();
   };
 
   const handleGetServiceProviders = async () => {
@@ -851,9 +908,9 @@ const Implementation: React.FC<ImplementationProps> = ({
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.2 }}
-                        className="group/item flex items-center gap-4 p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-teal-200 hover:shadow-md transition-all duration-300 cursor-pointer"
+                        className="flex items-center gap-4 p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100"
                       >
-                        <div className="p-2.5 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg shadow-sm group-hover/item:scale-105 transition-transform">
+                        <div className="p-2.5 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg shadow-sm">
                         <Building2 className="h-5 w-5 text-white" />
                       </div>
                         <div className="flex-1 min-w-0">
@@ -866,9 +923,9 @@ const Implementation: React.FC<ImplementationProps> = ({
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.3 }}
-                        className="group/item flex items-center gap-4 p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all duration-300 cursor-pointer"
+                        className="flex items-center gap-4 p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100"
                       >
-                        <div className="p-2.5 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-sm group-hover/item:scale-105 transition-transform">
+                        <div className="p-2.5 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-sm">
                         <Target className="h-5 w-5 text-white" />
                       </div>
                         <div className="flex-1 min-w-0">
@@ -881,9 +938,9 @@ const Implementation: React.FC<ImplementationProps> = ({
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.4 }}
-                        className="group/item flex items-center gap-4 p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-indigo-200 hover:shadow-md transition-all duration-300 cursor-pointer"
+                        className="flex items-center gap-4 p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100"
                       >
-                        <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg shadow-sm group-hover/item:scale-105 transition-transform">
+                        <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg shadow-sm">
                         <MapPin className="h-5 w-5 text-white" />
                       </div>
                         <div className="flex-1 min-w-0">
@@ -1149,6 +1206,7 @@ const Implementation: React.FC<ImplementationProps> = ({
                 loading={false}
                 sessionId={sessionId}
                 hideStartButton={true}
+                completedRoadmapStepKeys={completedRoadmapStepKeys}
               />
             ) : (
                   <div className="text-center py-12">

@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { FaTwitter, FaLinkedin, FaGithub, FaInstagram } from 'react-icons/fa';
 import LOGO from '../../assets/images/home/Founderport_Logo_Horizontal_Mariner_Main.svg';
 
@@ -18,9 +18,6 @@ const footerLinks = {
 };
 
 const Footer: React.FC = () => {
-  const location = useLocation();
-  const isContactPage = location.pathname === '/contact' || location.pathname === '/support';
-
   return (
     <footer className="relative bg-gradient-to-tr from-teal-50 to-blue-50 pt-12 pb-8 px-4 sm:px-6 lg:px-8">
       {/* Decorative Blobs */}
@@ -85,19 +82,6 @@ const Footer: React.FC = () => {
             <p className="text-sm font-medium text-slate-700">
               © {new Date().getFullYear()} Founderport. All rights reserved.
             </p>
-            {isContactPage && (
-              <p className="text-sm text-slate-600">
-                Website developed using services of{' '}
-                <a
-                  href="https://buildnext.org"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center rounded-full bg-teal-50 px-3 py-1 font-semibold text-teal-700 transition-colors hover:bg-teal-100 hover:text-teal-800"
-                >
-                  BuildNext LLC
-                </a>
-              </p>
-            )}
           </div>
         </div>
       </div>

@@ -8,12 +8,16 @@ import DocumentExportModal from './DocumentExportModal';
 import PaymentForm from './PaymentForm';
 import { PRICING } from '../config/pricing';
 import { checkIsFreeIntroPeriod } from '../utils/freeIntroPeriod';
+import { useAppDispatch, useAppSelector } from '../store';
+import { upsertTransitionSession, type MotivationalQuote } from '../store/businessPlanTransitionSlice';
 
 interface PlanToRoadmapTransitionProps {
   businessPlanSummary: string;
   businessPlanArtifact?: string | null;
   onApprove: () => void;
   onRevisit: (modificationAreas?: string[]) => void;
+  /** Clears transition overlay state when already on `/ventures/:id` (same-URL navigate is a no-op). */
+  onExitToChat?: () => void;
   loading?: boolean;
   sessionId?: string;
   initialQuote?: MotivationalQuote | null;
@@ -25,12 +29,6 @@ interface ModificationArea {
   title: string;
   description: string;
   questions: string[];
-}
-
-interface MotivationalQuote {
-  quote: string;
-  author: string;
-  category?: string;
 }
 
 const FALLBACK_QUOTES: MotivationalQuote[] = [
@@ -325,12 +323,18 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
   businessPlanArtifact: initialArtifact,
   onApprove,
   onRevisit,
+  onExitToChat,
   loading = false,
   sessionId,
   initialQuote = null,
   nextStep = 'roadmap' // Default to roadmap for backward compatibility
 }) => {
   const navigate = useNavigate(); // Initialize navigate hook
+  const dispatch = useAppDispatch();
+  const normalizedSessionId = sessionId ?? 'anonymous';
+  const cachedTransition = useAppSelector(
+    (state) => state.businessPlanTransition.bySessionId[normalizedSessionId]
+  );
   const contentRef = useRef<HTMLDivElement>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -338,10 +342,12 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
   const [selectedModifications, setSelectedModifications] = useState<string[]>([]);
   const [showPaywall, setShowPaywall] = useState(false);
   const [hasPaid, setHasPaid] = useState(false); // Track payment status
-  const [businessPlanArtifact, setBusinessPlanArtifact] = useState<string | null>(initialArtifact || null);
+  const [businessPlanArtifact, setBusinessPlanArtifact] = useState<string | null>(
+    cachedTransition?.artifact ?? initialArtifact ?? null
+  );
   const [isGeneratingArtifact, setIsGeneratingArtifact] = useState(false);
   const [quoteState, setQuoteState] = useState<MotivationalQuote>(() =>
-    initialQuote ?? pickFallbackQuote()
+    cachedTransition?.quote ?? initialQuote ?? pickFallbackQuote()
   );
   const [quoteLoading, setQuoteLoading] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -354,24 +360,46 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
     () => `${TRANSITION_QUOTE_STORAGE_PREFIX}${sessionId ?? 'anonymous'}`,
     [sessionId]
   );
-
-  const [actualSummary, setActualSummary] = useState<string>(businessPlanSummary);
+  const [actualSummary, setActualSummary] = useState<string>(
+    cachedTransition?.summary ?? businessPlanSummary
+  );
   const [isLoadingSummary, setIsLoadingSummary] = useState(false);
   const hasFetchedSummary = useRef(false); // Track if we've already attempted to fetch
 
-  // Fetch actual summary if we only have the fallback message (only once)
   useEffect(() => {
-    const fallbackMessage = "Your business plan has been completed successfully!";
+    if (cachedTransition?.summary && cachedTransition.summary.trim()) {
+      setActualSummary(cachedTransition.summary);
+      hasFetchedSummary.current = true;
+    }
+    if (cachedTransition?.artifact !== undefined) {
+      setBusinessPlanArtifact(cachedTransition.artifact ?? null);
+    }
+    if (cachedTransition?.quote) {
+      setQuoteState(cachedTransition.quote);
+    }
+  }, [cachedTransition]);
+
+  // Fetch actual summary when we don't have one yet (only once)
+  useEffect(() => {
+    if (cachedTransition?.summary && cachedTransition.summary.trim()) {
+      setActualSummary(cachedTransition.summary);
+      hasFetchedSummary.current = true;
+      return;
+    }
     
     // If we have a valid summary, use it immediately
-    if (businessPlanSummary && businessPlanSummary.trim() !== fallbackMessage && businessPlanSummary.trim() !== "") {
+    if (businessPlanSummary && businessPlanSummary.trim() !== "") {
       setActualSummary(businessPlanSummary);
+      dispatch(upsertTransitionSession({
+        sessionId: normalizedSessionId,
+        summary: businessPlanSummary,
+      }));
       hasFetchedSummary.current = true; // Mark as handled
       return;
     }
     
-    // If summary is empty or is the fallback message, try to fetch the actual summary (only once)
-    if ((!businessPlanSummary || businessPlanSummary.trim() === fallbackMessage) && sessionId && !hasFetchedSummary.current) {
+    // If summary is empty, fetch from API (only once)
+    if ((!businessPlanSummary || businessPlanSummary.trim() === "") && sessionId && !hasFetchedSummary.current) {
       hasFetchedSummary.current = true; // Mark as fetching to prevent multiple calls
       setIsLoadingSummary(true);
       
@@ -394,11 +422,15 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
                 ? data.result 
                 : data.result.summary || data.result.full_summary || '';
               
-              if (summary && summary.trim() && summary.trim() !== fallbackMessage) {
+              if (summary && summary.trim()) {
                 console.log('✅ Fetched actual business plan summary from backend');
                 setActualSummary(summary);
+                dispatch(upsertTransitionSession({
+                  sessionId: normalizedSessionId,
+                  summary,
+                }));
               } else {
-                // If fetched summary is still fallback or empty, use the original
+                // If fetched summary is empty, preserve current value
                 setActualSummary(businessPlanSummary || "");
               }
             } else {
@@ -420,7 +452,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
 
       fetchSummary();
     }
-  }, [businessPlanSummary, sessionId]); // Removed isLoadingSummary from dependencies
+  }, [businessPlanSummary, sessionId, cachedTransition?.summary, dispatch, normalizedSessionId]); // Removed isLoadingSummary from dependencies
 
   const normalizedSummary = useMemo(
     () => normalizeBusinessPlanSummary(actualSummary),
@@ -429,10 +461,14 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
 
   const persistQuote = useCallback((quote: MotivationalQuote) => {
     setQuoteState(quote);
+    dispatch(upsertTransitionSession({
+      sessionId: normalizedSessionId,
+      quote,
+    }));
     if (typeof window !== 'undefined') {
       localStorage.setItem(storageKey, quote.quote);
     }
-  }, [storageKey]);
+  }, [dispatch, normalizedSessionId, storageKey]);
 
   // Check subscription status from backend on mount and show payment modal if needed
   useEffect(() => {
@@ -527,6 +563,11 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
         console.log('✅ Business plan artifact generated successfully!');
         console.log(`📄 Artifact length: ${data.result.business_plan_artifact.length} characters`);
         setBusinessPlanArtifact(data.result.business_plan_artifact);
+        dispatch(upsertTransitionSession({
+          sessionId: normalizedSessionId,
+          artifact: data.result.business_plan_artifact,
+          summary: actualSummary || businessPlanSummary,
+        }));
 
         toast.success('✅ Full Business Plan generated successfully!', {
           position: 'top-center',
@@ -537,7 +578,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
         navigate(`/ventures/${sessionId}/business-plan`, {
           state: {
             businessPlan: data.result.business_plan_artifact,
-            businessPlanSummary: businessPlanSummary,
+            businessPlanSummary: actualSummary || businessPlanSummary,
             sessionId: sessionId,
           },
         });
@@ -559,6 +600,13 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
     let isMounted = true;
     const lastQuote =
       typeof window !== 'undefined' ? localStorage.getItem(storageKey) ?? undefined : undefined;
+
+    if (cachedTransition?.quote) {
+      persistQuote(cachedTransition.quote);
+      return () => {
+        isMounted = false;
+      };
+    }
 
     if (initialQuote) {
       const quoteToUse =
@@ -619,7 +667,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [initialQuote, persistQuote, sessionId, storageKey]);
+  }, [cachedTransition?.quote, initialQuote, persistQuote, sessionId, storageKey]);
 
   // Define modification areas based on business plan sections
   const modificationAreas: ModificationArea[] = [
@@ -823,6 +871,24 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
       
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 flex items-center justify-center px-4">
         <div className="w-full max-w-4xl bg-white/90 backdrop-blur-xl border border-white/30 shadow-2xl rounded-3xl p-8">
+        <button
+          type="button"
+          onClick={() => {
+            onExitToChat?.();
+            if (sessionId) {
+              navigate(`/ventures/${sessionId}`, { replace: true });
+              return;
+            }
+            navigate('/ventures', { replace: true });
+          }}
+          className="mb-6 bg-white border border-gray-300 hover:border-blue-400 hover:bg-blue-50 text-gray-700 hover:text-blue-700 px-5 py-3 rounded-lg font-semibold transition-all duration-200 inline-flex items-center gap-2 shadow-sm hover:shadow-md"
+          title="Go back to chat"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M21 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L3 18l1.395-3.72C3.512 13.042 3 11.574 3 10c0-3.866 3.582-7 8-7s8 3.134 8 7z" />
+          </svg>
+          <span>Back to Chat</span>
+        </button>
         {/* Header */}
         <div className="text-center mb-8">
           <div className="w-20 h-20 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full flex items-center justify-center text-white text-4xl mx-auto mb-4">
@@ -876,7 +942,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
                     navigate(`/ventures/${sessionId}/business-plan`, {
                       state: {
                         businessPlan: businessPlanArtifact,
-                        businessPlanSummary: businessPlanSummary,
+                        businessPlanSummary: actualSummary || businessPlanSummary,
                         sessionId: sessionId
                       }
                     });

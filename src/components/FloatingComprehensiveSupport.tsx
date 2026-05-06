@@ -29,6 +29,9 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  // The chat mode that produced this assistant reply. Tracked so the UI
+  // can offer a download button only on drafts (the *Draft* mode).
+  mode?: 'help' | 'draft' | 'brainstorm';
 }
 
 interface FloatingComprehensiveSupportProps {
@@ -75,9 +78,95 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [chatMode, setChatMode] = useState<'help' | 'draft' | 'brainstorm'>('help');
-  
+  // True for the period between loading a saved conversation for the
+  // current task and the user either resuming it or starting fresh. While
+  // true the chat tab shows a banner letting them choose; we don't make
+  // them pick before they can chat — they can also just start typing and
+  // the banner dismisses itself.
+  const [hasRestoredHistory, setHasRestoredHistory] = useState(false);
+
   const chatBoxRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Persist Angel chat messages per (session, implementation task). When
+  // the user moves to a new task the old conversation is preserved under
+  // its task id; if they later return (e.g. by clicking "Click to Edit"
+  // on a completed step that becomes the current task again) the saved
+  // history is offered with a "Continue / Start fresh" banner.
+  const chatStorageKey = (taskId: string | undefined): string | null => {
+    if (!taskId || !sessionId) return null;
+    return `angel:implementation:chat:${sessionId}:${taskId}`;
+  };
+
+  const persistMessages = (taskId: string | undefined, msgs: Message[]) => {
+    const key = chatStorageKey(taskId);
+    if (!key || typeof window === 'undefined') return;
+    try {
+      if (msgs.length === 0) {
+        window.localStorage.removeItem(key);
+        return;
+      }
+      const serializable = msgs.map(m => ({
+        ...m,
+        timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : m.timestamp,
+      }));
+      window.localStorage.setItem(key, JSON.stringify(serializable));
+    } catch {
+      // Non-fatal: localStorage may be unavailable in private mode.
+    }
+  };
+
+  const restoreMessages = (taskId: string | undefined): Message[] => {
+    const key = chatStorageKey(taskId);
+    if (!key || typeof window === 'undefined') return [];
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as Array<Omit<Message, 'timestamp'> & { timestamp: string }>;
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map(m => ({
+        ...m,
+        timestamp: new Date(m.timestamp),
+      }));
+    } catch {
+      return [];
+    }
+  };
+
+  // When the active implementation task changes, swap the chat history
+  // out for that task's persisted conversation (if any).
+  const previousTaskIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const newTaskId = currentTask?.id;
+
+    // Save the conversation we're about to navigate away from.
+    const previousTaskId = previousTaskIdRef.current;
+    if (previousTaskId && previousTaskId !== newTaskId) {
+      persistMessages(previousTaskId, messages);
+    }
+
+    // Load whatever we have for the new task.
+    if (newTaskId !== previousTaskId) {
+      const restored = restoreMessages(newTaskId);
+      setMessages(restored);
+      setHasRestoredHistory(restored.length > 0);
+    }
+
+    previousTaskIdRef.current = newTaskId;
+    // We intentionally only run this on currentTask.id change; the
+    // `messages` snapshot read above is exactly what we want — the latest
+    // state at the moment of the swap. ESLint's exhaustive-deps would
+    // demand `messages` here and trigger an infinite save/load loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTask?.id, sessionId]);
+
+  // Mirror new messages to localStorage so refreshes / minimisations don't
+  // lose context.
+  useEffect(() => {
+    if (!currentTask?.id) return;
+    persistMessages(currentTask.id, messages);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, currentTask?.id]);
 
   // Initialize research topics from angelCanHelp
   useEffect(() => {
@@ -187,29 +276,82 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const handleSendMessage = async () => {
-    if (!chatInput.trim()) return;
+  // Build a richer task-context blob so the chat backend has enough
+  // ground truth to answer step-specific questions (e.g. "checklist for
+  // EIN" instead of producing a marketing-plan checklist). The previous
+  // implementation passed only the parent task *title*, which is why
+  // Angel was hallucinating off-topic responses.
+  const buildTaskContext = (): string => {
+    const parts: string[] = [];
+    if (currentTask?.title) parts.push(`Current Task: ${currentTask.title}`);
+    if (currentTask?.description) parts.push(`Task Description: ${currentTask.description}`);
+    if (currentTask?.purpose) parts.push(`Task Purpose: ${currentTask.purpose}`);
+
+    const substeps: any[] = Array.isArray(currentTask?.substeps) ? currentTask.substeps : [];
+    if (substeps.length > 0) {
+      const activeIdx = (() => {
+        const byCurrentNumber = substeps.findIndex(
+          (s: any) => s?.step_number === currentTask?.current_substep
+        );
+        if (byCurrentNumber >= 0) return byCurrentNumber;
+        const firstIncomplete = substeps.findIndex((s: any) => !s?.completed);
+        return firstIncomplete >= 0 ? firstIncomplete : 0;
+      })();
+      const active = substeps[activeIdx];
+      if (active?.title) {
+        parts.push(`Active Step ${active.step_number ?? activeIdx + 1}: ${active.title}`);
+      }
+      if (active?.description) {
+        parts.push(`Active Step Description: ${active.description}`);
+      }
+      const stepsList = substeps
+        .map((s: any, i: number) =>
+          `  ${s?.step_number ?? i + 1}. ${s?.title ?? ''}${s?.completed ? ' (completed)' : ''}`
+        )
+        .join('\n');
+      if (stepsList) parts.push(`All Steps for this task:\n${stepsList}`);
+    }
+
+    // Fall back to the legacy `taskContext` prop (a free-text string) if
+    // no structured task object is available.
+    if (parts.length === 0 && taskContext) parts.push(taskContext);
+    return parts.join('\n\n');
+  };
+
+  const handleSendMessage = async (overrideContent?: string, modeOverride?: 'help' | 'draft' | 'brainstorm') => {
+    const content = (overrideContent ?? chatInput).trim();
+    if (!content) return;
+    const mode = modeOverride ?? chatMode;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: chatInput,
+      content,
       timestamp: new Date()
     };
 
+    // The conversation_history payload below needs to include the *current*
+    // user message *and* any prior turns, so capture the snapshot before
+    // appending instead of re-reading state (which is async and would
+    // miss this turn for the very first prompt).
+    const priorMessages = messages;
     setMessages(prev => [...prev, userMessage]);
     setChatInput('');
     setChatLoading(true);
+    // Once the user starts typing into a restored conversation, the
+    // "Continue / Start fresh" banner is no longer relevant — they've
+    // already chosen to continue.
+    setHasRestoredHistory(false);
 
     try {
       const token = localStorage.getItem('sb_access_token');
       const response = await httpClient.post('/implementation/chat-with-angel', {
         session_id: sessionId,
-        message: chatInput,
-        mode: chatMode,
+        message: content,
+        mode,
         business_context: businessContext,
-        task_context: taskContext || currentTask?.title,
-        conversation_history: messages.slice(-10) // Last 10 messages for context
+        task_context: buildTaskContext(),
+        conversation_history: priorMessages.slice(-10) // Last 10 messages for context
       }, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -219,7 +361,8 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
           id: (Date.now() + 1).toString(),
           role: 'assistant',
           content: (response.data as any).result?.response || 'No response received',
-          timestamp: new Date()
+          timestamp: new Date(),
+          mode,
         };
         setMessages(prev => [...prev, assistantMessage]);
       }
@@ -230,7 +373,8 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: 'Sorry, I encountered an error. Please try again.',
-        timestamp: new Date()
+        timestamp: new Date(),
+        mode,
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
@@ -238,17 +382,43 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
     }
   };
 
-  const handleAngelHelpClick = (suggestion: string) => {
-    // Add as user message and get response
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: suggestion,
-      timestamp: new Date()
-    };
-    setMessages(prev => [...prev, userMessage]);
-    setChatInput(suggestion);
-    handleSendMessage();
+  // Save a Draft-mode assistant reply to disk. We emit a Markdown file
+  // since the reply is rendered as Markdown — opening the .md in any
+  // editor (or pasting into Word / Google Docs) preserves headings,
+  // lists and bold spans the user just saw on screen. The filename ties
+  // the file to the active task so multiple drafts don't collide.
+  const handleDownloadDraft = (message: Message) => {
+    const titleSlug = (currentTask?.title || 'angel-draft')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60) || 'angel-draft';
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    const filename = `${titleSlug}-draft-${stamp}.md`;
+    try {
+      const blob = new Blob([message.content], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download failed', err);
+      toast.error('Could not download the draft');
+    }
+  };
+
+  // A pre-populated suggestion should *send* on click — don't just drop
+  // the text into the input box and force the user to press enter (which
+  // produced duplicate entries). Pass the suggestion through to
+  // `handleSendMessage` directly so it bypasses the stale-state read on
+  // `chatInput`.
+  const handleAngelHelpClick = (suggestion: string, modeOverride?: 'help' | 'draft' | 'brainstorm') => {
+    if (modeOverride) setChatMode(modeOverride);
+    handleSendMessage(suggestion, modeOverride);
   };
 
   const handleProviderClick = (provider: any) => {
@@ -583,20 +753,68 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
               </button>
             </div>
 
-            {/* Angel Can Help Suggestions (Clickable) */}
-            {angelCanHelp.length > 0 && (
-              <div className="mb-3">
-                <h4 className="text-xs font-semibold text-gray-700 mb-2">Angel Can Help You With:</h4>
-                <div className="space-y-1.5">
-                  {angelCanHelp.slice(0, 5).map((suggestion, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleAngelHelpClick(suggestion)}
-                      className="w-full text-left p-2 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg text-xs transition-colors border border-teal-200"
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
+            {/* Mode-specific quick prompts. Each one ties Angel into the
+                current Implementation step (the chat call sends rich
+                step context — see buildTaskContext()) and switches the
+                chat mode to match the requested action, so the system
+                prompt server-side actually differs per choice. */}
+            <div className="mb-3">
+              <h4 className="text-xs font-semibold text-gray-700 mb-2">Angel Can Help You With:</h4>
+              <div className="space-y-1.5">
+                <button
+                  onClick={() => handleAngelHelpClick('Help me better understand this step', 'help')}
+                  className="w-full text-left p-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs transition-colors border border-blue-200"
+                  disabled={chatLoading}
+                >
+                  💬 Help me better understand this step
+                </button>
+                <button
+                  onClick={() => handleAngelHelpClick('Draft the required document for this step', 'draft')}
+                  className="w-full text-left p-2 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg text-xs transition-colors border border-green-200"
+                  disabled={chatLoading}
+                >
+                  ✍️ Draft the required document for this step
+                </button>
+                <button
+                  onClick={() => handleAngelHelpClick('Brainstorm ideas for me to consider', 'brainstorm')}
+                  className="w-full text-left p-2 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-lg text-xs transition-colors border border-orange-200"
+                  disabled={chatLoading}
+                >
+                  💭 Brainstorm ideas for me to consider
+                </button>
+              </div>
+            </div>
+
+            {/* Saved-conversation banner — surfaced when we restore
+                history for the active task on first arrival / when the
+                user returns to a previously completed step. The user can
+                pick up where they left off, or wipe and start fresh.
+                Either way the banner clears. */}
+            {hasRestoredHistory && messages.length > 0 && (
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2">
+                <span className="text-xs text-teal-900">
+                  Picking up where you left off — {messages.length} previous
+                  message{messages.length === 1 ? '' : 's'} loaded for this step.
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setHasRestoredHistory(false)}
+                    className="text-xs font-medium text-teal-700 hover:text-teal-900 underline underline-offset-2"
+                  >
+                    Continue
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMessages([]);
+                      setHasRestoredHistory(false);
+                      persistMessages(currentTask?.id, []);
+                    }}
+                    className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded px-2.5 py-1 transition-colors"
+                  >
+                    Start fresh
+                  </button>
                 </div>
               </div>
             )}
@@ -631,11 +849,50 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
                             p: ({ children }) => <p className="text-xs mb-1 last:mb-0">{children}</p>,
                             ul: ({ children }) => <ul className="text-xs ml-4 mb-1">{children}</ul>,
                             ol: ({ children }) => <ol className="text-xs ml-4 mb-1">{children}</ol>,
+                            // URLs in chat responses must look obviously
+                            // clickable. Force a blue, underlined style and
+                            // open in a new tab so the user doesn't lose
+                            // their place. Inverted on user (teal-bg) bubbles
+                            // for legibility.
+                            a: ({ children, href }) => (
+                              <a
+                                href={href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={
+                                  message.role === 'user'
+                                    ? 'underline decoration-2 underline-offset-2 text-white hover:text-blue-100 break-words'
+                                    : 'underline decoration-2 underline-offset-2 text-blue-600 hover:text-blue-800 break-words'
+                                }
+                              >
+                                {children}
+                              </a>
+                            ),
                           }}
                         >
                           {message.content}
                         </ReactMarkdown>
                       </div>
+                      {/* When Angel produced this reply in *Draft* mode,
+                          surface a Download button so the user can save
+                          the document straight to their machine. We
+                          require some real content (≥ 80 chars) to avoid
+                          showing the button on terse refusals or
+                          clarifying questions. */}
+                      {message.role === 'assistant' &&
+                        message.mode === 'draft' &&
+                        message.content.trim().length >= 80 && (
+                          <div className="mt-2 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadDraft(message)}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] font-semibold text-green-700 hover:bg-green-100 transition-colors"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              Download draft
+                            </button>
+                          </div>
+                        )}
                     </div>
                   </div>
                 ))
@@ -673,7 +930,7 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
                 disabled={chatLoading}
               />
               <button
-                onClick={handleSendMessage}
+                onClick={() => handleSendMessage()}
                 disabled={chatLoading || !chatInput.trim()}
                 className="px-2 sm:px-3 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
               >
@@ -748,6 +1005,7 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
         <ServiceProviderDetailModal
           provider={selectedProvider}
           isOpen={showProviderModal}
+          businessLocation={businessContext.location}
           onClose={() => {
             setShowProviderModal(false);
             setSelectedProvider(null);

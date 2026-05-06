@@ -362,6 +362,7 @@ const ServiceProviderTable: React.FC<ServiceProviderTableProps> = ({
           setSelectedProvider(null);
         }}
         provider={selectedProvider}
+        businessLocation={businessContext.location}
         onContactProvider={(provider) => {
           console.log('Contacting provider:', provider);
           // Parent component can handle this via onProviderSelect

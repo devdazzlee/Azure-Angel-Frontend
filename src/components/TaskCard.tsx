@@ -32,6 +32,11 @@ interface ImplementationSubstep {
   estimated_time: string;
   required: boolean;
   completed?: boolean;
+  // The user's most recent note on this substep, returned by the backend
+  // GET tasks endpoint. Used to pre-fill the completion modal when editing
+  // an already-completed step and rendered inline on the substep tile so
+  // the dashboard shows what the user wrote.
+  note?: string;
 }
 
 interface ImplementationTask {
@@ -85,6 +90,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const [showSubstepModal, setShowSubstepModal] = useState(false);
   const [substepToComplete, setSubstepToComplete] = useState<ImplementationSubstep | null>(null);
   const [substepNote, setSubstepNote] = useState<string>('');
+  // Set of substep `step_number`s that are currently mid-flight to the
+  // backend. We close the completion modal synchronously for snappy UX
+  // (Task 7), but the substep tile underneath still needs to show "Saving…"
+  // until the parent's `loadImplementationData()` refetch returns and the
+  // tile flips to "Completed". Without this the user could click Complete,
+  // see the modal vanish, and stare at an unchanged tile for 5–10 s.
+  const [pendingSubsteps, setPendingSubsteps] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     loadTaskInsights();
@@ -141,64 +153,95 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   };
 
   const handleSubstepClick = (substep: ImplementationSubstep) => {
-    // Open modal to confirm completion and optionally add notes
+    // Open modal to confirm completion / edit notes. When the user is
+    // editing a previously-completed step, pre-fill with the note they
+    // saved last time so they can read and amend it instead of starting
+    // from a blank box. Also reposition the visual "current step" pointer
+    // to this substep so the rest of the page (Angel-can-help banner,
+    // chat / providers focus) reflects the step being edited.
     setSubstepToComplete(substep);
-    setSubstepNote('');
+    setSubstepNote(substep.note ?? '');
     setShowSubstepModal(true);
+    if (task.substeps) {
+      const idx = task.substeps.findIndex(s => s.step_number === substep.step_number);
+      if (idx >= 0) setCurrentSubstepIndex(idx);
+    }
   };
 
   const handleCompleteSubstep = async () => {
     if (!substepToComplete) return;
 
-    setLoading(true);
+    const currentSessionId = sessionId || (window.location.pathname.match(/\/venture\/([^\/]+)/) || [])[1] || '';
+    if (!currentSessionId) {
+      setError('Session ID not found');
+      return;
+    }
+    const token = localStorage.getItem('sb_access_token');
+    if (!token) {
+      setError('Authentication required');
+      return;
+    }
+
+    // Snapshot the values we need before clearing local modal state.
+    const stepNumber = substepToComplete.step_number;
+    const stepTitle = substepToComplete.title;
+    const note = substepNote.trim();
+    const completionData = {
+      substep_number: stepNumber,
+      completion_notes: note || `Completed step: ${stepTitle}`,
+      notes: note,
+      completed_at: new Date().toISOString(),
+    };
+
+    // Optimistic UX: close the modal *synchronously* so the user gets an
+    // instant acknowledgement of their click. The backend round-trip is
+    // 5–10s (it generates the next task's substeps and runs RAG research)
+    // and there is no reason to block the modal on it — the parent
+    // component's `onComplete()` call will refetch fresh state when the
+    // network round-trip completes, at which point the substep tile flips
+    // to "Completed" and the next step becomes active.
+    setShowSubstepModal(false);
+    setSubstepToComplete(null);
+    setSubstepNote('');
     setError(null);
+    // Mark the step as mid-flight so the tile renders "Saving…" instead of
+    // its idle "Mark Complete" / "Click to Edit" affordance — closes the
+    // gap between modal-close and the refetch landing.
+    setPendingSubsteps(prev => {
+      const next = new Set(prev);
+      next.add(stepNumber);
+      return next;
+    });
+    toast.success(`Step ${stepNumber} marked complete — saving…`);
 
     try {
-      const token = localStorage.getItem('sb_access_token');
-      if (!token) {
-        setError('Authentication required');
-        return;
-      }
-
-      const completionData = {
-        substep_number: substepToComplete.step_number,
-        completion_notes: substepNote.trim() || `Completed step: ${substepToComplete.title}`,
-        completed_at: new Date().toISOString()
-      };
-
-      // Use sessionId from props or extract from URL
-      const currentSessionId = sessionId || (window.location.pathname.match(/\/venture\/([^\/]+)/) || [])[1] || '';
-      if (!currentSessionId) {
-        setError('Session ID not found');
-        return;
-      }
-      
       const response = await httpClient.post(
-        `/implementation/sessions/${currentSessionId}/tasks/${task.id}/complete`, 
-        completionData, 
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
+        `/implementation/sessions/${currentSessionId}/tasks/${task.id}/complete`,
+        completionData,
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
       if ((response.data as any).success) {
-        toast.success(`Step ${substepToComplete.step_number} completed!`);
-        setShowSubstepModal(false);
-        setSubstepToComplete(null);
-        setSubstepNote('');
-        // CRITICAL: Reload task data from backend to get updated progress and next step
-        // This ensures database state is reflected in UI
+        // Refresh the parent's task data so the substep tile and progress
+        // bar reflect the persisted state.
         onComplete();
       } else {
-        setError((response.data as any).message || 'Failed to complete substep');
+        const message = (response.data as any).message || 'Failed to complete step';
+        toast.error(`Step ${stepNumber}: ${message}`);
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to complete substep');
+      const message = err?.response?.data?.message || err?.message || 'Failed to complete step';
+      toast.error(`Step ${stepNumber}: ${message}`);
     } finally {
-      setLoading(false);
+      // Clear the in-flight marker either way — on success the refetch will
+      // already be re-rendering the tile as "Completed", on failure we want
+      // the user to be able to try again.
+      setPendingSubsteps(prev => {
+        if (!prev.has(stepNumber)) return prev;
+        const next = new Set(prev);
+        next.delete(stepNumber);
+        return next;
+      });
     }
   };
 
@@ -261,28 +304,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     }
   };
 
-  const getPriorityIcon = (priority: string) => {
-    switch (priority.toLowerCase()) {
-      case 'high':
-        return <AlertTriangle className="h-4 w-4 text-red-500" />;
-      case 'medium':
-        return <Clock className="h-4 w-4 text-yellow-500" />;
-      default:
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority.toLowerCase()) {
-      case 'high':
-        return 'bg-red-100 text-red-800';
-      case 'medium':
-        return 'bg-yellow-100 text-yellow-800';
-      default:
-        return 'bg-green-100 text-green-800';
-    }
-  };
-
   const getPhaseIcon = (phase: string) => {
     switch (phase.toLowerCase()) {
       case 'legal_formation':
@@ -310,10 +331,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             <div>
               <h2 className="text-xl font-semibold text-gray-900">{task.title}</h2>
               <div className="flex items-center gap-2 mt-1">
-                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
-                  {getPriorityIcon(task.priority)}
-                  {task.priority} Priority
-                </span>
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                   <Clock className="h-3 w-3" />
                   {task.estimated_time}
@@ -413,7 +430,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                         }`}>
                           {substep.title}
                         </h4>
-                        {substep.completed ? (
+                        {pendingSubsteps.has(substep.step_number) ? (
+                          <span className="text-[11px] font-semibold text-blue-700 bg-blue-100 px-2 py-1 rounded inline-flex items-center gap-1">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Saving…
+                          </span>
+                        ) : substep.completed ? (
                           <button
                             onClick={() => handleSubstepClick(substep)}
                             className="text-xs font-medium text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1 rounded transition-colors flex items-center gap-1"
@@ -465,7 +487,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                           <Clock className="h-3 w-3" />
                           {substep.estimated_time}
                         </span>
-                        {!substep.completed && index === currentSubstepIndex && (
+                        {pendingSubsteps.has(substep.step_number) ? (
+                          <span className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded font-semibold inline-flex items-center gap-1.5 cursor-default">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Saving…
+                          </span>
+                        ) : !substep.completed && index === currentSubstepIndex ? (
                           <button
                             onClick={() => handleSubstepClick(substep)}
                             disabled={loading}
@@ -474,14 +501,27 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                             <CheckCircle className="h-3 w-3" />
                             Mark Complete
                           </button>
-                        )}
-                        {substep.completed && (
+                        ) : substep.completed ? (
                           <span className="text-xs text-green-600 font-medium flex items-center gap-1">
                             <CheckCircle className="h-3 w-3" />
                             Completed
                           </span>
-                        )}
+                        ) : null}
                       </div>
+                      {/* Surface the user's saved note inline on the
+                          substep tile so the dashboard reflects what the
+                          user wrote when they marked the step complete.
+                          Pre-line preserves any newlines they typed. */}
+                      {substep.note && substep.note.trim() && (
+                        <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 mb-1">
+                            Your note
+                          </p>
+                          <p className="text-xs text-amber-900 leading-relaxed whitespace-pre-line">
+                            {substep.note}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
