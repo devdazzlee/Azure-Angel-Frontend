@@ -323,7 +323,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
   businessPlanArtifact: initialArtifact,
   onApprove,
   onRevisit,
-  onExitToChat,
+  onExitToChat: _onExitToChat,
   loading = false,
   sessionId,
   initialQuote = null,
@@ -871,24 +871,6 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
       
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 flex items-center justify-center px-4">
         <div className="w-full max-w-4xl bg-white/90 backdrop-blur-xl border border-white/30 shadow-2xl rounded-3xl p-8">
-        <button
-          type="button"
-          onClick={() => {
-            onExitToChat?.();
-            if (sessionId) {
-              navigate(`/ventures/${sessionId}`, { replace: true });
-              return;
-            }
-            navigate('/ventures', { replace: true });
-          }}
-          className="mb-6 bg-white border border-gray-300 hover:border-blue-400 hover:bg-blue-50 text-gray-700 hover:text-blue-700 px-5 py-3 rounded-lg font-semibold transition-all duration-200 inline-flex items-center gap-2 shadow-sm hover:shadow-md"
-          title="Go back to chat"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M21 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L3 18l1.395-3.72C3.512 13.042 3 11.574 3 10c0-3.866 3.582-7 8-7s8 3.134 8 7z" />
-          </svg>
-          <span>Back to Chat</span>
-        </button>
         {/* Header */}
         <div className="text-center mb-8">
           <div className="w-20 h-20 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full flex items-center justify-center text-white text-4xl mx-auto mb-4">

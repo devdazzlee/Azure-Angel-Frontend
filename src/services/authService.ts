@@ -47,6 +47,19 @@ interface SyncProgressResult {
     asked_q?: string | null;
 }
 
+/** Structured Modify: sent with POST /chat so Angel reworks the snapshot from user guidance. */
+export interface ModifyChatPayload {
+    assistant_snapshot: string;
+    user_guidance: string;
+}
+
+export type FetchQuestionOptions =
+    | string
+    | {
+          context?: string;
+          modify?: ModifyChatPayload;
+      };
+
 export async function signUp({
     fullName,
     email,
@@ -246,14 +259,26 @@ export async function syncSessionProgress(
 export async function fetchQuestion(
     content: string,
     sessionId: string,
-    context?: string
+    options?: FetchQuestionOptions
 ): Promise<AngelResponse> {
     const token = localStorage.getItem('sb_access_token');
     if (!token) throw new Error('Not authenticated');
 
+    let context: string | undefined;
+    let modify: ModifyChatPayload | undefined;
+    if (typeof options === 'string') {
+        context = options;
+    } else if (options && typeof options === 'object') {
+        context = options.context;
+        modify = options.modify;
+    }
+
     try {
-        const body: { content: string; context?: string } = { content };
+        const body: { content: string; context?: string; modify?: ModifyChatPayload } = {
+            content,
+        };
         if (context) body.context = context;
+        if (modify) body.modify = modify;
 
         const { data } = await httpClient.post<AngelResponse>(
             `${BASE}/angel/sessions/${sessionId}/chat`,
@@ -333,34 +358,6 @@ export async function fetchRoadmapPlan(
         return data;
     } catch (err) {
         const message = (err as ErrorResponse).response?.data.error || 'Chat request failed';
-        throw new Error(message);
-    }
-}
-
-export async function uploadBusinessPlan(
-    sessionId: string,
-    file: File
-): Promise<{ success: boolean; message?: string; error?: string; chat_message?: string }> {
-    const token = localStorage.getItem('sb_access_token');
-    if (!token) throw new Error('Not authenticated');
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-        const { data } = await httpClient.post<{ success: boolean; message?: string; error?: string; chat_message?: string }>(
-            `${BASE}/angel/sessions/${sessionId}/upload-business-plan`,
-            formData,
-            { 
-                headers: { 
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'multipart/form-data'
-                } 
-            }
-        );
-        return data;
-    } catch (err) {
-        const message = (err as ErrorResponse).response?.data.error || 'Upload failed';
         throw new Error(message);
     }
 }

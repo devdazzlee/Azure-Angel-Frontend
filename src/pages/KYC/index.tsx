@@ -25,8 +25,8 @@ export default function GkyForm() {
   const [stepIndex, setStepIndex] = useState(0);
   const [businessTypeHint, setBusinessTypeHint] = useState('');
   const MIN_CONFIDENCE_THRESHOLD = 0.62;
-  const AFFIRMATION_INTENSITY = clampScale(Number(import.meta.env.VITE_KYC_AFFIRMATION_INTENSITY ?? 5), 5);
-  const CONSTRUCTIVE_FEEDBACK_INTENSITY = clampScale(Number(import.meta.env.VITE_KYC_CONSTRUCTIVE_FEEDBACK_INTENSITY ?? 7), 7);
+  const AFFIRMATION_INTENSITY = clampScale(Number(import.meta.env.VITE_KYC_AFFIRMATION_INTENSITY ?? 4), 4);
+  const CONSTRUCTIVE_FEEDBACK_INTENSITY = clampScale(Number(import.meta.env.VITE_KYC_CONSTRUCTIVE_FEEDBACK_INTENSITY ?? 6), 6);
 
   // 🧹 Helper to clean incoming AI responses
   const cleanQuestionText = (text: string): string => {

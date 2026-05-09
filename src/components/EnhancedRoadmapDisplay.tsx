@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
+import { parseRoadmapMarkdown } from '../utils/roadmapParse';
+import {
+  downloadRoadmapExcel,
+  downloadRoadmapWord,
+} from '../utils/roadmapExport';
 
 interface EnhancedRoadmapDisplayProps {
   roadmapContent: string;
@@ -31,7 +36,7 @@ const EnhancedRoadmapDisplay: React.FC<EnhancedRoadmapDisplayProps> = ({
     success_statistics: true
   }
 }) => {
-  const [isExporting, setIsExporting] = useState(false);
+  const [exporting, setExporting] = useState<'excel' | 'word' | null>(null);
   const [researchStats, setResearchStats] = useState({
     governmentSources: 0,
     academicSources: 0,
@@ -56,23 +61,27 @@ const EnhancedRoadmapDisplay: React.FC<EnhancedRoadmapDisplayProps> = ({
     }
   }, [enhancedFeatures.research_foundation]);
 
-  const handleExport = async () => {
-    setIsExporting(true);
+  const handleExportExcel = () => {
+    setExporting('excel');
     try {
-      // Create a downloadable text file with the roadmap content
-      const element = document.createElement('a');
-      const file = new Blob([roadmapContent], { type: 'text/plain' });
-      element.href = URL.createObjectURL(file);
-      element.download = 'enhanced-launch-roadmap.txt';
-      document.body.appendChild(element);
-      element.click();
-      document.body.removeChild(element);
-      
-      toast.success('Enhanced roadmap exported successfully!');
-    } catch (error) {
-      toast.error('Failed to export roadmap');
+      downloadRoadmapExcel(parseRoadmapMarkdown(roadmapContent), roadmapContent);
+      toast.success('Roadmap saved as Excel (.xlsx).');
+    } catch {
+      toast.error('Failed to export roadmap to Excel.');
     } finally {
-      setIsExporting(false);
+      setExporting(null);
+    }
+  };
+
+  const handleExportWord = async () => {
+    setExporting('word');
+    try {
+      await downloadRoadmapWord(parseRoadmapMarkdown(roadmapContent), roadmapContent);
+      toast.success('Roadmap saved as Word (.docx).');
+    } catch {
+      toast.error('Failed to export roadmap to Word.');
+    } finally {
+      setExporting(null);
     }
   };
 
@@ -106,24 +115,48 @@ const EnhancedRoadmapDisplay: React.FC<EnhancedRoadmapDisplayProps> = ({
                 Edit Roadmap
               </button>
               <button
-                onClick={handleExport}
-                disabled={isExporting || loading}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 disabled:cursor-not-allowed text-gray-700 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2"
+                type="button"
+                onClick={handleExportExcel}
+                disabled={exporting !== null || loading}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors duration-200 flex items-center gap-2"
               >
-                {isExporting ? (
+                {exporting === 'excel' ? (
                   <>
                     <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Exporting...
+                    …
                   </>
                 ) : (
                   <>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    Export
+                    Excel
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleExportWord()}
+                disabled={exporting !== null || loading}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors duration-200 flex items-center gap-2"
+              >
+                {exporting === 'word' ? (
+                  <>
+                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    …
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Word
                   </>
                 )}
               </button>

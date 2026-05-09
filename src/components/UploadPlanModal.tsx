@@ -6,10 +6,10 @@ import PlanAnalysisModal from './PlanAnalysisModal';
 interface UploadPlanModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onUploadSuccess: (businessInfo: any, analysis?: PlanAnalysis | null) => void;
+  onUploadSuccess: (businessInfo: any, analysis?: PlanAnalysis | null, perQuestionAnswers?: Record<string, string | null> | null) => void;
   sessionId?: string;
   initialMode?: 'upload' | 'paste';
-  onStartAnswering?: (analysis?: PlanAnalysis, businessInfo?: any) => void;
+  onStartAnswering?: (analysis?: PlanAnalysis, businessInfo?: any, perQuestionAnswers?: Record<string, string | null> | null) => void;
 }
 
 interface PlanAnalysis {
@@ -39,6 +39,7 @@ interface UploadResponse {
   success: boolean;
   business_info?: any;
   analysis?: PlanAnalysis | null;
+  per_question_answers?: Record<string, string | null> | null;
 }
 
 const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
@@ -57,6 +58,7 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [analysisData, setAnalysisData] = useState<PlanAnalysis | null>(null);
   const [uploadedBusinessInfo, setUploadedBusinessInfo] = useState<any>(null);
+  const [uploadedPerQuestionAnswers, setUploadedPerQuestionAnswers] = useState<Record<string, string | null> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modalContentRef = useRef<HTMLDivElement>(null);
 
@@ -164,20 +166,19 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
   };
 
   const handleFileUpload = async (file: File) => {
-    // Validate file type
+    // Validate file type. Backend supports PDF/DOCX/TXT only — legacy .doc is
+    // intentionally excluded because the parser cannot read it.
     const allowedTypes = [
       'application/pdf',
-      'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'text/plain'
     ];
 
-    // Also check file extension as a fallback
     const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
-    const allowedExtensions = ['.pdf', '.doc', '.docx', '.txt'];
+    const allowedExtensions = ['.pdf', '.docx', '.txt'];
 
     if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
-      toast.error('Please upload a PDF, DOC, DOCX, or TXT file.');
+      toast.error('Please upload a PDF, DOCX, or TXT file. Older .doc format is not supported — convert to .docx first.');
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -210,26 +211,24 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
 
       if (response.data.success) {
         toast.success('Business plan analyzed successfully!');
-        
-        // Store business info and analysis
+
         const businessInfo = response.data.business_info || {};
         const analysis = response.data.analysis || null;
-        
+        const perQuestionAnswers = response.data.per_question_answers || null;
+
         setUploadedBusinessInfo(businessInfo);
-        
-        // Reset file input on success
+        setUploadedPerQuestionAnswers(perQuestionAnswers);
+
         if (fileInputRef.current) {
           fileInputRef.current.value = '';
         }
-        
-        // If analysis is available, show analysis modal
+
         if (analysis) {
           setAnalysisData(analysis);
           setShowAnalysis(true);
         } else {
-          // If no analysis, just close and call success callback
           if (businessInfo) {
-            onUploadSuccess(businessInfo, null);
+            onUploadSuccess(businessInfo, null, perQuestionAnswers);
           }
           onClose();
         }
@@ -270,23 +269,20 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
 
   const handleAnalysisClose = () => {
     setShowAnalysis(false);
-    // Apply business info to session even if user closes analysis
     if (uploadedBusinessInfo) {
-      onUploadSuccess(uploadedBusinessInfo, analysisData);
+      onUploadSuccess(uploadedBusinessInfo, analysisData, uploadedPerQuestionAnswers);
     }
     onClose();
   };
 
   const handleStartAnswering = () => {
     setShowAnalysis(false);
-    // Apply business info and analysis to session
     if (uploadedBusinessInfo) {
-      onUploadSuccess(uploadedBusinessInfo, analysisData);
+      onUploadSuccess(uploadedBusinessInfo, analysisData, uploadedPerQuestionAnswers);
     }
     onClose();
-    // Call the callback to start answering questions - pass analysis data directly
     if (onStartAnswering) {
-      onStartAnswering(analysisData || null, uploadedBusinessInfo || null);
+      onStartAnswering(analysisData || undefined, uploadedBusinessInfo || null, uploadedPerQuestionAnswers);
     }
   };
 

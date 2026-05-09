@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import BusinessPlanProgressWidget from './BusinessPlanProgressWidget';
 
 interface Question {
@@ -45,60 +45,20 @@ interface QuestionNavigatorProps {
   showStepPercent?: boolean;
 }
 
-const phaseColors = {
-  GKY: 'text-blue-600 bg-blue-50 border-blue-200',
-  BUSINESS_PLAN: 'text-purple-600 bg-purple-50 border-purple-200',
-  ROADMAP: 'text-teal-600 bg-teal-50 border-teal-200',
-  IMPLEMENTATION: 'text-green-600 bg-green-50 border-green-200'
-};
-
-const phaseNames = {
-  GKY: 'Getting to Know You',
-  BUSINESS_PLAN: 'Business Plan',
-  ROADMAP: 'Roadmap',
-  IMPLEMENTATION: 'Implementation'
-};
-
 const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
-  questions,
+  questions: _questions,
   currentPhase,
-  onQuestionSelect,
+  onQuestionSelect: _onQuestionSelect,
   currentProgress,
   currentQuestionNumber,
-  onEditPlan,
+  onEditPlan: _onEditPlan,
   onUploadPlan,
-  showStepPercent = true,
+  showStepPercent: _showStepPercent = true,
 }) => {
-  // Debug logging to see what progress data we receive
-  console.log("🔍 QuestionNavigator Progress Data:", {
-    phase: currentProgress.phase,
-    answered: currentProgress.answered,
-    total: currentProgress.total,
-    percent: currentProgress.percent,
-    overall_progress: currentProgress.overall_progress
-  });
-  
-  // Group questions by phase
-  const questionsByPhase = questions.reduce((acc, question) => {
-    if (!acc[question.phase]) {
-      acc[question.phase] = [];
-    }
-    acc[question.phase].push(question);
-    return acc;
-  }, {} as Record<string, Question[]>);
-
-  const bpBreakdown =
-    currentProgress.overall_progress?.phase_breakdown ?? currentProgress.phase_breakdown;
-  
-  // Use a consistent BP total of 45 (matching backend TOTALS_BY_PHASE)
   const bpTotal = 45;
   
-  // Current question user is VIEWING (for section highlight, "Question X of Y" display)
+  // Current question user is VIEWING (for section flow / "Question X of Y" display)
   const bpCurrentQuestionNumber = Math.min(Math.max(currentQuestionNumber ?? 1, 1), bpTotal);
-  // Number of BP questions ANSWERED (for progress bars)
-  const bpAnsweredCount = currentPhase === 'BUSINESS_PLAN'
-    ? (currentProgress.answered ?? bpBreakdown?.bp_completed ?? 0)
-    : 0;
 
   return (
     <div className="w-80 space-y-4">
@@ -148,44 +108,6 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
                   Complete
                 </div>
               </div>
-
-              {/* Compact Progress Milestones - Show only current phase */}
-              <div className="mt-3 flex justify-center">
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 bg-blue-50 px-2 py-1 rounded-lg border border-blue-200">
-                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-                    <span className="text-xs font-medium text-blue-700 uppercase tracking-wide">
-                      GKY
-                    </span>
-                    <span className="text-xs font-semibold text-blue-700 ml-1">
-                      {bpBreakdown && bpBreakdown.gky_total > 0
-                        ? Math.round(
-                            (bpBreakdown.gky_completed /
-                              bpBreakdown.gky_total) *
-                              100
-                          )
-                        : (currentPhase === 'GKY' ? Math.round(currentProgress.percent) : 0)}
-                      %
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5 bg-purple-50 px-2 py-1 rounded-lg border border-purple-200">
-                    <div className="w-1.5 h-1.5 bg-purple-500 rounded-full"></div>
-                    <span className="text-xs font-medium text-purple-700 uppercase tracking-wide">
-                      BP
-                    </span>
-                    <span className="text-xs font-semibold text-purple-700 ml-1">
-                      {bpBreakdown && bpBreakdown.bp_total > 0
-                        ? Math.round(
-                            (bpBreakdown.bp_completed /
-                              bpBreakdown.bp_total) *
-                              100
-                          )
-                        : (currentPhase === 'BUSINESS_PLAN' ? Math.round(currentProgress.percent) : 0)}
-                      %
-                    </span>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -198,10 +120,24 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
       {currentPhase === 'BUSINESS_PLAN' && (
         <BusinessPlanProgressWidget
           currentQuestionNumber={bpCurrentQuestionNumber}
-          totalQuestions={bpTotal}
-          bpAnsweredCount={bpAnsweredCount}
           className="shadow-xl"
         />
+      )}
+
+      {currentPhase === 'BUSINESS_PLAN' && onUploadPlan && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 shadow-sm">
+          <p className="text-sm font-medium text-emerald-900 mb-2">Already have a business plan?</p>
+          <p className="text-xs text-emerald-800/90 mb-3">
+            Upload PDF, Word, or text—or paste your plan. Angel maps it to Founderport&rsquo;s questionnaire and focuses on gaps.
+          </p>
+          <button
+            type="button"
+            onClick={onUploadPlan}
+            className="w-full rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white shadow hover:bg-emerald-700 transition-colors"
+          >
+            Import existing plan
+          </button>
+        </div>
       )}
     </div>
   );

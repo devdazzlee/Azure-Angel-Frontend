@@ -325,7 +325,9 @@ const BudgetPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-6 w-full md:w-auto">
               <Button
                 variant="ghost"
-                onClick={() => navigate(`/ventures/${id}`)}
+                onClick={() =>
+                  navigate(`/ventures/${id}`, { state: { preferVentureChat: true } })
+                }
                 className="flex items-center gap-2 text-gray-500 hover:text-gray-900 border border-transparent hover:border-gray-200"
               >
                 <ArrowLeft className="w-4 h-4" />

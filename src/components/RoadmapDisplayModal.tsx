@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { toast } from "react-toastify";
+import { parseRoadmapMarkdown } from "../utils/roadmapParse";
+import {
+  downloadRoadmapExcel,
+  downloadRoadmapWord,
+} from "../utils/roadmapExport";
 
 interface RoadmapDisplayModalProps {
   open: boolean;
@@ -18,194 +23,11 @@ const RoadmapDisplayModal: React.FC<RoadmapDisplayModalProps> = ({
   error,
   onProceedToImplementation,
 }) => {
-  const [isDownloading, setIsDownloading] = useState(false);
+  const [exporting, setExporting] = useState<"excel" | "word" | null>(null);
 
   if (!open) return null;
 
-  // Parse roadmap content into stages and tables
-  const parseRoadmapContent = () => {
-    const stages: Array<{
-      title: string;
-      goal: string;
-      tasks: Array<{
-        task: string;
-        description: string;
-        dependencies: string;
-        angelRole: string;
-        status: string;
-      }>;
-    }> = [];
-
-    const lines = roadmapContent.split('\n');
-    let currentStage: any = null;
-    let inTable = false;
-    let tableLines: string[] = [];
-    let foundHeader = false;
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-
-      // Detect Stage headers - multiple formats:
-      // ### Stage X — Title
-      // ## Stage X — Title
-      // **Stage X — Title**
-      // Stage X — Title
-      const stageMatch = line.match(/^#*\s*\*?\*?Stage\s+(\d+)[\s—–-]+(.+?)\*?\*?$/i) || 
-                         line.match(/^###?\s*Stage\s+(\d+)[\s—–-]*(.+?)$/i);
-      
-      if (stageMatch) {
-        // If we were in a table, parse it before moving to next stage
-        if (inTable && currentStage && tableLines.length >= 2) {
-          const headerRow = tableLines[0].split('|').map(c => c.trim()).filter(c => c);
-          const taskIndex = headerRow.findIndex(h => h.toLowerCase().includes('task'));
-          const descIndex = headerRow.findIndex(h => h.toLowerCase().includes('description'));
-          const depIndex = headerRow.findIndex(h => h.toLowerCase().includes('dependencies'));
-          const roleIndex = headerRow.findIndex(h => h.toLowerCase().includes('angel'));
-          const statusIndex = headerRow.findIndex(h => h.toLowerCase().includes('status'));
-
-          // Parse data rows (skip header row at index 0)
-          for (let j = 1; j < tableLines.length; j++) {
-            const row = tableLines[j];
-            const cells = row.split('|').map(c => c.trim()).filter(c => c);
-            
-            // Only process rows with enough cells (at least 4) and not separator rows
-            if (cells.length >= 4 && cells[taskIndex] && !row.match(/^[\s\-|:]+\|$/)) {
-              currentStage.tasks.push({
-                task: (cells[taskIndex] || '').replace(/\*\*/g, ''),
-                description: (cells[descIndex] || '').replace(/\*\*/g, ''),
-                dependencies: (cells[depIndex] || '').replace(/\*\*/g, ''),
-                angelRole: (cells[roleIndex] || '').replace(/\*\*/g, ''),
-                status: (cells[statusIndex] || '⏳').trim(),
-              });
-            }
-          }
-        }
-        
-        // Save previous stage if exists
-        if (currentStage) {
-          if (currentStage.tasks.length > 0 || currentStage.goal) {
-            stages.push(currentStage);
-          }
-        }
-        // Start new stage
-        const stageTitle = stageMatch[2].trim().replace(/\*\*/g, '');
-        currentStage = {
-          title: `Stage ${stageMatch[1]} — ${stageTitle}`,
-          goal: '',
-          tasks: [],
-        };
-        inTable = false;
-        tableLines = [];
-        foundHeader = false;
-        continue;
-      }
-
-      // Detect Goal line (Goal: ... or **Goal**: ...)
-      if (currentStage) {
-        if (line.startsWith('**Goal**:') || line.startsWith('**Goal:**') || line.startsWith('Goal:')) {
-          currentStage.goal = line
-            .replace(/^\*\*Goal\*\*:\s*/, '')
-            .replace(/^\*\*Goal\*\*\s*/, '')
-            .replace(/^Goal:\s*/, '')
-            .replace(/\*\*/g, '')
-            .trim();
-          continue;
-        }
-      }
-
-      // Detect table header row (must contain "Task" and "Description")
-      if (line.startsWith('|') && line.includes('Task') && line.includes('Description')) {
-        inTable = true;
-        foundHeader = true;
-        tableLines = [line]; // Header row
-        continue;
-      }
-
-      if (inTable && line.startsWith('|')) {
-        // Check if it's a separator row (|---|---|... or |------|...)
-        if (line.match(/^\|[\s\-|:]+\|$/)) {
-          if (foundHeader) {
-            // This is the separator after header, keep it for reference but don't add to data
-            foundHeader = false;
-          }
-          continue; // Skip separator
-        }
-        tableLines.push(line);
-      } else if (inTable && !line.startsWith('|')) {
-        // End of table - parse it (handles both empty lines and non-table content)
-        if (tableLines.length >= 2 && currentStage) {
-          const headerRow = tableLines[0].split('|').map(c => c.trim()).filter(c => c);
-          const taskIndex = headerRow.findIndex(h => h.toLowerCase().includes('task'));
-          const descIndex = headerRow.findIndex(h => h.toLowerCase().includes('description'));
-          const depIndex = headerRow.findIndex(h => h.toLowerCase().includes('dependencies'));
-          const roleIndex = headerRow.findIndex(h => h.toLowerCase().includes('angel'));
-          const statusIndex = headerRow.findIndex(h => h.toLowerCase().includes('status'));
-
-          // Parse data rows (skip header row at index 0)
-          for (let j = 1; j < tableLines.length; j++) {
-            const row = tableLines[j];
-            // Skip separator rows
-            if (row.match(/^[\s\-|:]+\|$/)) continue;
-            
-            const cells = row.split('|').map(c => c.trim()).filter(c => c);
-            
-            // Only process rows with enough cells (at least 4)
-            if (cells.length >= 4 && cells[taskIndex]) {
-              currentStage.tasks.push({
-                task: (cells[taskIndex] || '').replace(/\*\*/g, ''),
-                description: (cells[descIndex] || '').replace(/\*\*/g, ''),
-                dependencies: (cells[depIndex] || '').replace(/\*\*/g, ''),
-                angelRole: (cells[roleIndex] || '').replace(/\*\*/g, ''),
-                status: (cells[statusIndex] || '⏳').trim(),
-              });
-            }
-          }
-        }
-        inTable = false;
-        tableLines = [];
-        foundHeader = false;
-      }
-    }
-
-    // If we're still in a table at the end, parse it
-    if (inTable && currentStage && tableLines.length >= 2) {
-      const headerRow = tableLines[0].split('|').map(c => c.trim()).filter(c => c);
-      const taskIndex = headerRow.findIndex(h => h.toLowerCase().includes('task'));
-      const descIndex = headerRow.findIndex(h => h.toLowerCase().includes('description'));
-      const depIndex = headerRow.findIndex(h => h.toLowerCase().includes('dependencies'));
-      const roleIndex = headerRow.findIndex(h => h.toLowerCase().includes('angel'));
-      const statusIndex = headerRow.findIndex(h => h.toLowerCase().includes('status'));
-
-      // Parse data rows (skip header row at index 0)
-      for (let j = 1; j < tableLines.length; j++) {
-        const row = tableLines[j];
-        // Skip separator rows
-        if (row.match(/^[\s\-|:]+\|$/)) continue;
-        
-        const cells = row.split('|').map(c => c.trim()).filter(c => c);
-        
-        // Only process rows with enough cells (at least 4)
-        if (cells.length >= 4 && cells[taskIndex]) {
-          currentStage.tasks.push({
-            task: (cells[taskIndex] || '').replace(/\*\*/g, ''),
-            description: (cells[descIndex] || '').replace(/\*\*/g, ''),
-            dependencies: (cells[depIndex] || '').replace(/\*\*/g, ''),
-            angelRole: (cells[roleIndex] || '').replace(/\*\*/g, ''),
-            status: (cells[statusIndex] || '⏳').trim(),
-          });
-        }
-      }
-    }
-
-    // Add last stage
-    if (currentStage && (currentStage.tasks.length > 0 || currentStage.goal)) {
-      stages.push(currentStage);
-    }
-
-    return stages;
-  };
-
-  const stages = parseRoadmapContent();
+  const stages = parseRoadmapMarkdown(roadmapContent);
   
   // Debug logging
   React.useEffect(() => {
@@ -221,21 +43,27 @@ const RoadmapDisplayModal: React.FC<RoadmapDisplayModalProps> = ({
     }
   }, [roadmapContent, stages.length]);
 
-  const handleDownload = async () => {
-    setIsDownloading(true);
+  const handleExportExcel = () => {
+    setExporting("excel");
     try {
-      const element = document.createElement('a');
-      const file = new Blob([roadmapContent], { type: 'text/plain' });
-      element.href = URL.createObjectURL(file);
-      element.download = 'founderport-launch-roadmap.txt';
-      document.body.appendChild(element);
-      element.click();
-      document.body.removeChild(element);
-      toast.success('Roadmap downloaded successfully!');
-    } catch (error) {
-      toast.error('Failed to download roadmap');
+      downloadRoadmapExcel(stages, roadmapContent);
+      toast.success("Roadmap saved as Excel (.xlsx).");
+    } catch {
+      toast.error("Failed to export roadmap to Excel.");
     } finally {
-      setIsDownloading(false);
+      setExporting(null);
+    }
+  };
+
+  const handleExportWord = async () => {
+    setExporting("word");
+    try {
+      await downloadRoadmapWord(stages, roadmapContent);
+      toast.success("Roadmap saved as Word (.docx).");
+    } catch {
+      toast.error("Failed to export roadmap to Word.");
+    } finally {
+      setExporting(null);
     }
   };
 
@@ -418,27 +246,51 @@ const RoadmapDisplayModal: React.FC<RoadmapDisplayModalProps> = ({
           )}
 
           {/* Footer Actions */}
-          {!loading && !error && stages.length > 0 && (
+          {!loading && !error && roadmapContent.trim() && (
             <div className="mt-8 flex flex-wrap gap-3 justify-center border-t border-gray-200 pt-6">
               <button
-                onClick={handleDownload}
-                disabled={isDownloading}
+                type="button"
+                onClick={handleExportExcel}
+                disabled={exporting !== null}
                 className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg shadow-sm flex items-center gap-2 transition-colors font-medium"
               >
-                {isDownloading ? (
+                {exporting === "excel" ? (
                   <>
                     <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Downloading...
+                    Exporting…
                   </>
                 ) : (
                   <>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    Download Roadmap
+                    Download Excel
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleExportWord()}
+                disabled={exporting !== null}
+                className="bg-slate-700 hover:bg-slate-800 disabled:bg-slate-400 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg shadow-sm flex items-center gap-2 transition-colors font-medium"
+              >
+                {exporting === "word" ? (
+                  <>
+                    <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Exporting…
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Download Word
                   </>
                 )}
               </button>

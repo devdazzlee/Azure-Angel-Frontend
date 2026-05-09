@@ -3,16 +3,11 @@ import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { fetchRoadmapPlan } from "../../services/authService";
 import { isRoadmapStepCompleted } from "../../utils/roadmapMatching";
-
-interface RoadmapStage {
-  title: string;
-  goal: string;
-  tasks: Array<{
-    task: string;
-    description: string;
-    angelRole: string;
-  }>;
-}
+import { parseRoadmapMarkdown } from "../../utils/roadmapParse";
+import {
+  downloadRoadmapExcel,
+  downloadRoadmapWord,
+} from "../../utils/roadmapExport";
 
 const RoadmapPage: React.FC = () => {
   const { id: sessionId } = useParams<{ id: string }>();
@@ -20,7 +15,7 @@ const RoadmapPage: React.FC = () => {
   const [roadmapContent, setRoadmapContent] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
-  const [isDownloading, setIsDownloading] = useState(false);
+  const [exporting, setExporting] = useState<"excel" | "word" | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
   /** Synchronous guard so rapid double-clicks cannot start two transitions before React re-renders. */
   const implementationTransitionLockRef = useRef(false);
@@ -114,175 +109,30 @@ const RoadmapPage: React.FC = () => {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [sessionId]);
 
-  // Parse roadmap content into stages and tables
-  const parseRoadmapContent = (): RoadmapStage[] => {
-    const stages: RoadmapStage[] = [];
-
-    if (!roadmapContent) return stages;
-
-    const lines = roadmapContent.split('\n');
-    let currentStage: RoadmapStage | null = null;
-    let inTable = false;
-    let tableLines: string[] = [];
-    let foundHeader = false;
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-
-      // Detect Stage headers
-      const stageMatch = line.match(/^#*\s*\*?\*?Stage\s+(\d+)[\s—–-]+(.+?)\*?\*?$/i) || 
-                         line.match(/^###?\s*Stage\s+(\d+)[\s—–-]*(.+?)$/i);
-      
-      if (stageMatch) {
-        // If we were in a table, parse it before moving to next stage
-        if (inTable && currentStage && tableLines.length >= 2) {
-          const headerRow = tableLines[0].split('|').map(c => c.trim()).filter(c => c);
-          const taskIndex = headerRow.findIndex(h => h.toLowerCase().includes('task'));
-          const descIndex = headerRow.findIndex(h => h.toLowerCase().includes('description'));
-          const roleIndex = headerRow.findIndex(h => h.toLowerCase().includes('angel'));
-
-          for (let j = 1; j < tableLines.length; j++) {
-            const row = tableLines[j];
-            if (row.match(/^[\s\-|:]+\|$/)) continue;
-
-            const cells = row.split('|').map(c => c.trim()).filter(c => c);
-
-            if (cells.length >= 3 && taskIndex >= 0 && cells[taskIndex]) {
-              currentStage.tasks.push({
-                task: (cells[taskIndex] || '').replace(/\*\*/g, ''),
-                description: (descIndex >= 0 ? cells[descIndex] || '' : '').replace(/\*\*/g, ''),
-                angelRole: (roleIndex >= 0 ? cells[roleIndex] || '' : '').replace(/\*\*/g, ''),
-              });
-            }
-          }
-        }
-        
-        // Save previous stage if exists
-        if (currentStage) {
-          if (currentStage.tasks.length > 0 || currentStage.goal) {
-            stages.push(currentStage);
-          }
-        }
-        // Start new stage
-        const stageTitle = stageMatch[2].trim().replace(/\*\*/g, '');
-        currentStage = {
-          title: `Stage ${stageMatch[1]} — ${stageTitle}`,
-          goal: '',
-          tasks: [],
-        };
-        inTable = false;
-        tableLines = [];
-        foundHeader = false;
-        continue;
-      }
-
-      // Detect Goal line
-      if (currentStage) {
-        if (line.startsWith('**Goal**:') || line.startsWith('**Goal:**') || line.startsWith('Goal:')) {
-          currentStage.goal = line
-            .replace(/^\*\*Goal\*\*:\s*/, '')
-            .replace(/^\*\*Goal\*\*\s*/, '')
-            .replace(/^Goal:\s*/, '')
-            .replace(/\*\*/g, '')
-            .trim();
-          continue;
-        }
-      }
-
-      // Detect table header row
-      if (line.startsWith('|') && line.includes('Task') && line.includes('Description')) {
-        inTable = true;
-        foundHeader = true;
-        tableLines = [line];
-        continue;
-      }
-
-      if (inTable && line.startsWith('|')) {
-        if (line.match(/^\|[\s\-|:]+\|$/)) {
-          if (foundHeader) {
-            foundHeader = false;
-          }
-          continue;
-        }
-        tableLines.push(line);
-      } else if (inTable && !line.startsWith('|')) {
-        // End of table - parse it
-        if (tableLines.length >= 2 && currentStage) {
-          const headerRow = tableLines[0].split('|').map(c => c.trim()).filter(c => c);
-          const taskIndex = headerRow.findIndex(h => h.toLowerCase().includes('task'));
-          const descIndex = headerRow.findIndex(h => h.toLowerCase().includes('description'));
-          const roleIndex = headerRow.findIndex(h => h.toLowerCase().includes('angel'));
-
-          for (let j = 1; j < tableLines.length; j++) {
-            const row = tableLines[j];
-            if (row.match(/^[\s\-|:]+\|$/)) continue;
-
-            const cells = row.split('|').map(c => c.trim()).filter(c => c);
-
-            if (cells.length >= 3 && taskIndex >= 0 && cells[taskIndex]) {
-              currentStage.tasks.push({
-                task: (cells[taskIndex] || '').replace(/\*\*/g, ''),
-                description: (descIndex >= 0 ? cells[descIndex] || '' : '').replace(/\*\*/g, ''),
-                angelRole: (roleIndex >= 0 ? cells[roleIndex] || '' : '').replace(/\*\*/g, ''),
-              });
-            }
-          }
-        }
-        inTable = false;
-        tableLines = [];
-        foundHeader = false;
-      }
-    }
-
-    // If we're still in a table at the end, parse it
-    if (inTable && currentStage && tableLines.length >= 2) {
-      const headerRow = tableLines[0].split('|').map(c => c.trim()).filter(c => c);
-      const taskIndex = headerRow.findIndex(h => h.toLowerCase().includes('task'));
-      const descIndex = headerRow.findIndex(h => h.toLowerCase().includes('description'));
-      const roleIndex = headerRow.findIndex(h => h.toLowerCase().includes('angel'));
-
-      for (let j = 1; j < tableLines.length; j++) {
-        const row = tableLines[j];
-        if (row.match(/^[\s\-|:]+\|$/)) continue;
-
-        const cells = row.split('|').map(c => c.trim()).filter(c => c);
-
-        if (cells.length >= 3 && taskIndex >= 0 && cells[taskIndex]) {
-          currentStage.tasks.push({
-            task: (cells[taskIndex] || '').replace(/\*\*/g, ''),
-            description: (descIndex >= 0 ? cells[descIndex] || '' : '').replace(/\*\*/g, ''),
-            angelRole: (roleIndex >= 0 ? cells[roleIndex] || '' : '').replace(/\*\*/g, ''),
-          });
-        }
-      }
-    }
-
-    // Add last stage
-    if (currentStage && (currentStage.tasks.length > 0 || currentStage.goal)) {
-      stages.push(currentStage);
-    }
-
-    return stages;
-  };
-
-  const stages = parseRoadmapContent();
+  const stages = parseRoadmapMarkdown(roadmapContent);
   const totalTasks = stages.reduce((sum, stage) => sum + stage.tasks.length, 0);
 
-  const handleDownload = async () => {
-    setIsDownloading(true);
+  const handleExportExcel = () => {
+    setExporting("excel");
     try {
-      const element = document.createElement('a');
-      const file = new Blob([roadmapContent], { type: 'text/plain' });
-      element.href = URL.createObjectURL(file);
-      element.download = 'founderport-launch-roadmap.txt';
-      document.body.appendChild(element);
-      element.click();
-      document.body.removeChild(element);
-      toast.success('Roadmap downloaded successfully!');
-    } catch (error) {
-      toast.error('Failed to download roadmap');
+      downloadRoadmapExcel(stages, roadmapContent);
+      toast.success("Roadmap saved as Excel (.xlsx).");
+    } catch {
+      toast.error("Failed to export roadmap to Excel.");
     } finally {
-      setIsDownloading(false);
+      setExporting(null);
+    }
+  };
+
+  const handleExportWord = async () => {
+    setExporting("word");
+    try {
+      await downloadRoadmapWord(stages, roadmapContent);
+      toast.success("Roadmap saved as Word (.docx).");
+    } catch {
+      toast.error("Failed to export roadmap to Word.");
+    } finally {
+      setExporting(null);
     }
   };
 
@@ -303,10 +153,12 @@ const RoadmapPage: React.FC = () => {
             </div>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => navigate(`/ventures/${sessionId}`)}
-                className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-all backdrop-blur-sm font-medium"
+                type="button"
+                disabled={!sessionId}
+                onClick={() => sessionId && navigate(`/ventures/${sessionId}/budget`)}
+                className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-all backdrop-blur-sm font-medium disabled:opacity-50 disabled:pointer-events-none"
               >
-                ← Back to Chat
+                ← Back to Budget
               </button>
             </div>
           </div>
@@ -474,26 +326,52 @@ const RoadmapPage: React.FC = () => {
             </div>
 
             {/* Footer Actions */}
-            <div className="mt-12 flex flex-wrap gap-4 justify-center">
+            <div className="mt-12 flex flex-wrap gap-4 justify-center items-center">
               <button
-                onClick={handleDownload}
-                disabled={isDownloading}
+                type="button"
+                onClick={handleExportExcel}
+                disabled={exporting !== null}
                 className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white px-8 py-3 rounded-lg shadow-lg flex items-center gap-2 transition-all font-semibold transform hover:scale-105"
+                title="Best for tables: all tasks in one spreadsheet plus a stage summary"
               >
-                {isDownloading ? (
+                {exporting === "excel" ? (
                   <>
                     <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Downloading...
+                    Exporting…
                   </>
                 ) : (
                   <>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    Download Roadmap
+                    Download Excel
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleExportWord()}
+                disabled={exporting !== null}
+                className="bg-slate-700 hover:bg-slate-800 disabled:bg-slate-400 disabled:cursor-not-allowed text-white px-8 py-3 rounded-lg shadow-lg flex items-center gap-2 transition-all font-semibold transform hover:scale-105"
+                title="Formatted document with a table per stage"
+              >
+                {exporting === "word" ? (
+                  <>
+                    <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Exporting…
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Download Word
                   </>
                 )}
               </button>

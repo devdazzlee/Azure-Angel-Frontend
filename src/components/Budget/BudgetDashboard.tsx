@@ -37,7 +37,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip as UITooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, Area, AreaChart } from 'recharts';
+import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, Area, AreaChart } from 'recharts';
 import type { BudgetItem, Budget, APIResponse } from '@/types/apiTypes'; 
 import StartupCostsTable from './StartupCostsTable';
 import { TableSelectionControls } from './TableSelectionControls';
@@ -1277,22 +1277,65 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
             <PieChartIcon className="w-5 h-5 text-teal-600" />
             <h3 className="font-bold text-gray-900">Startup Costs Breakdown</h3>
           </div>
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             {startupChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
-                <RechartsPieChart>
-                  <Tooltip
-                    formatter={(value: any) => formatCurrency(Number(value), currency)}
-                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '11px' }} iconType="circle" />
-                  <Pie data={startupChartData} cx="50%" cy="50%" labelLine={false} outerRadius={95} innerRadius={40} paddingAngle={2}>
-                    {startupChartData.map((_entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS.chart.startup[index % COLORS.chart.startup.length]} />
-                    ))}
-                  </Pie>
-                </RechartsPieChart>
-              </ResponsiveContainer>
+              <div className="space-y-4">
+                <ResponsiveContainer width="100%" height={220}>
+                  <RechartsPieChart margin={{ top: 12, right: 12, left: 12, bottom: 12 }}>
+                    <Tooltip
+                      formatter={(value: any) => formatCurrency(Number(value), currency)}
+                      contentStyle={{
+                        backgroundColor: '#fff',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '10px',
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                      }}
+                    />
+                    <Pie
+                      data={startupChartData}
+                      cx="50%"
+                      cy="48%"
+                      labelLine={false}
+                      outerRadius={72}
+                      innerRadius={34}
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {startupChartData.map((_entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS.chart.startup[index % COLORS.chart.startup.length]}
+                        />
+                      ))}
+                    </Pie>
+                  </RechartsPieChart>
+                </ResponsiveContainer>
+                <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 pt-2 border-t border-gray-100 list-none m-0 p-0">
+                  {startupChartData.map((entry, index) => (
+                    <li
+                      key={`${entry.name}-${index}`}
+                      className="flex items-start gap-2.5 rounded-xl border border-gray-100 bg-gray-50/80 px-3 py-2.5 text-left"
+                    >
+                      <span
+                        className="mt-0.5 h-3 w-3 shrink-0 rounded-sm ring-1 ring-black/5"
+                        style={{
+                          backgroundColor:
+                            COLORS.chart.startup[index % COLORS.chart.startup.length],
+                        }}
+                        aria-hidden
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-gray-900 leading-snug break-words">
+                          {entry.name}
+                        </p>
+                        <p className="mt-0.5 text-xs text-gray-600 tabular-nums">
+                          {formatCurrency(Number(entry.value), currency)}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ) : (
               <div className="flex items-center justify-center h-56 text-gray-400 text-sm">No startup cost data available</div>
             )}
@@ -1331,7 +1374,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         </div>
       </motion.div>
     </div>
-  ), [startupChartData, monthlyChartData]);
+  ), [startupChartData, monthlyChartData, currency]);
 
   return (
     <div id="budget-dashboard-content" className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-teal-50/30 pb-20">

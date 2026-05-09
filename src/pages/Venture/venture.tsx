@@ -2,7 +2,7 @@
 
 // ChatPage.tsx
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   fetchBusinessPlan,
@@ -29,6 +29,8 @@ import ModifyModal from "../../components/ModifyModal";
 import RoadmapDisplay from "../../components/RoadmapDisplay";
 import RoadmapToImplementationTransition from "../../components/RoadmapToImplementationTransition";
 import UploadPlanModal from "../../components/UploadPlanModal";
+import VentureOnboardingTips from "../../components/VentureOnboardingTips";
+import { isVentureOnboardingTipsComplete } from "@/constants/ventureOnboarding";
 import FounderportIcon from "../../assets/images/home/Founderport_Favicon_Mariner.svg?url";
 import Implementation from "../Implementation";
 import RoadmapEditModal from "../../components/RoadmapEditModal";
@@ -50,6 +52,46 @@ interface ConversationPair {
   phase?: 'GKY' | 'BUSINESS_PLAN' | 'ROADMAP' | 'ROADMAP_GENERATED' | 'IMPLEMENTATION' | 'PLAN_TO_ROADMAP_TRANSITION' | 'PLAN_TO_SUMMARY_TRANSITION' | 'PLAN_TO_BUDGET_TRANSITION' | 'ROADMAP_TO_IMPLEMENTATION_TRANSITION';
   /** Draft, Support, Scrapping etc. - display in chat but exclude from progress */
   isCommand?: boolean;
+  /** Which quick action produced this row — used for the response card title only */
+  commandKind?: "draft" | "support" | "scrapping";
+}
+
+/**
+ * Strip standalone option-word lines from Angel's message body. The option picker
+ * UI renders Yes/No/work-situation/mentor-style/rating choices as buttons, so
+ * leaving them inline in the text duplicates them visibly. A line qualifies only if
+ * it is *just* the option(s) (after trimming optional leading dash from bullet
+ * normalization and optional trailing punctuation) — partial matches like
+ * "No worries" or sentences containing numbers are safe.
+ */
+const PICKER_OPTION_LINE_REGEX =
+  /^[\s\-–—]*(?:Yes\s*\/\s*No|Yes|No|Later|Full-time employed|Part-time|Student|Unemployed|Self-employed\/freelancer|Self-employed|Freelancer|Other|Be more hands-on|Be more of a mentor|Alternate based on the task)[\s.]*$/gim;
+
+// Standalone rating-scale lines, e.g. "1 2 3 4 5", "1  2  3  4  5", "1-5",
+// "1, 2, 3, 4, 5", or empty-circle/filled-circle variants like "○ ○ ○ ○ ○".
+const PICKER_RATING_LINE_REGEX =
+  /^[\s\-–—]*(?:(?:[1-5][\s,.\-–—]+){2,4}[1-5]|[○●◯•][\s]*(?:[○●◯•][\s]*){3,4}|1\s*[-–—]\s*5)[\s.]*$/gm;
+
+function stripPickerOptionLines(text: string): string {
+  return text
+    .replace(PICKER_OPTION_LINE_REGEX, "")
+    .replace(PICKER_RATING_LINE_REGEX, "");
+}
+
+/** Map user quick-action text to command kind (case-insensitive; supports `Scrapping: notes`). */
+function inferCommandKindFromUserInput(userInput: string): ConversationPair["commandKind"] | undefined {
+  const a = userInput.toLowerCase().trim();
+  if (a.startsWith("scrapping:") || a === "scrapping" || a === "scraping") return "scrapping";
+  if (a === "support") return "support";
+  if (a === "draft" || a === "draft more" || a === "draft answer") return "draft";
+  return undefined;
+}
+
+function commandQuickActionResponseTitle(kind: ConversationPair["commandKind"]): string {
+  if (kind === "support") return "Support Response";
+  if (kind === "scrapping") return "Scrapping Response";
+  if (kind === "draft") return "Draft Response";
+  return "Angel Response";
 }
 
 type RawChatRecord = {
@@ -275,10 +317,14 @@ const deriveQuestionNumber = (
 export default function ChatPage() {
   const { id: sessionId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [needsInitialQuestion, setNeedsInitialQuestion] = useState(false);
+  const [ventureOnboardingOpen, setVentureOnboardingOpen] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const isInitialIntroShown = useRef(false);
+  /** Raw last Angel reply before a command turn — used so Draft/Support rows show full question context. */
+  const lastFullAssistantReplyRef = useRef<string>("");
   const [sessionBusinessContext, setSessionBusinessContext] = useState<BusinessContextInfo>({});
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -901,10 +947,10 @@ export default function ChatPage() {
   const [gkyTransitionCompleted, setGkyTransitionCompleted] = useState(false); // Track if user completed GKY transition
   const [modifyModal, setModifyModal] = useState<{
     isOpen: boolean;
-    currentText: string;
+    assistantSnapshot: string;
   }>({
     isOpen: false,
-    currentText: ""
+    assistantSnapshot: ""
   });
   const [roadmapData, setRoadmapData] = useState<{
     roadmapContent: string;
@@ -972,13 +1018,13 @@ export default function ChatPage() {
   }, [hasSeenUploadPrompt, sessionId]);
 
   const openUploadPlanModal = useCallback(() => {
-    markUploadPromptAsSeen();
     setUploadPlanModal({ isOpen: true });
-  }, [markUploadPromptAsSeen]);
+  }, []);
 
   const handleUploadModalClose = useCallback(() => {
     setUploadPlanModal({ isOpen: false });
-  }, []);
+    markUploadPromptAsSeen();
+  }, [markUploadPromptAsSeen]);
 
   const handleBudgetSetupComplete = useCallback(async (budgetData: {
     initialInvestment: number;
@@ -1226,24 +1272,24 @@ export default function ChatPage() {
     return null;
   };
 
+  /** Strip draft/support lead-in lines so Accept can persist the body from a command card. */
+  const extractDraftBodyFromAssistantMessage = (message: string): string | null => {
+    if (!message?.trim()) return null;
+    let cleaned = message
+      .replace(/^Here's a (research-backed )?draft for you:\s*/i, "")
+      .replace(/^Here's a draft based on what you've shared:\s*/i, "")
+      .replace(/^Here's a refined version of your thoughts:\s*/i, "")
+      .trim();
+    cleaned = cleaned.replace(/\*\*/g, "").trim();
+    return cleaned.length > 0 ? cleaned : null;
+  };
+
   // Handle Accept button click
   const handleAccept = async () => {
     setShowVerificationButtons(false);
     setLoading(true);
     
     try {
-      // Extract the guidance content from the current question
-      // This contains the Support/Draft/Scrapping response that should be saved as the user's answer
-      const guidanceContent = extractGuidanceContent(currentQuestion);
-      
-      if (guidanceContent) {
-        // Save the guidance content as the user's answer to the current question
-        setHistory((prev) => [
-          ...prev,
-          { question: currentQuestion, answer: guidanceContent, acknowledgement: currentAcknowledgement || undefined, questionNumber: currentQuestionNumber },
-        ]);
-      }
-      
       // IMPORTANT: Send only "Accept" to the backend, not the full content
       // The backend will understand "Accept" as a command to move to the next question
       const {
@@ -1260,6 +1306,41 @@ export default function ChatPage() {
       
       // Use backend detection for showing buttons (always respect backend decision)
       setShowVerificationButtons(show_accept_modify || false);
+
+      // After Draft/Support/Scrapping, the last row stays isCommand — that hides the next
+      // question card. Also, currentQuestion is only the short parsed question, so merge the
+      // accepted body from the command card and clear isCommand.
+      setHistory((prev) => {
+        if (prev.length === 0) return prev;
+        const last = prev[prev.length - 1];
+        if (!last.isCommand) return prev;
+
+        const fromQuestion = extractGuidanceContent(currentQuestion);
+        const fromAck = last.acknowledgement
+          ? extractDraftBodyFromAssistantMessage(last.acknowledgement)
+          : null;
+        const acceptedBody =
+          (fromQuestion && fromQuestion.length > 0 ? fromQuestion : null) ??
+          fromAck ??
+          ((last.acknowledgement?.trim() || "").trim() || last.answer);
+
+        const snapped = last.question || "";
+        const { acknowledgement: histAck, question: histQ } = parseAngelReply(snapped);
+
+        return [
+          ...prev.slice(0, -1),
+          {
+            ...last,
+            isCommand: false,
+            acknowledgement: histAck || undefined,
+            question: histQ || last.question,
+            answer:
+              typeof acceptedBody === "string" && acceptedBody.length > 0
+                ? acceptedBody
+                : last.answer,
+          },
+        ];
+      });
       
       // Show immediate response if available
       if (immediate_response) {
@@ -1285,13 +1366,25 @@ export default function ChatPage() {
 
   // Handle Modify button click
   const handleModify = (currentText: string) => {
-    // Extract the guidance content from the current question
-    const guidanceContent = extractGuidanceContent(currentQuestion);
-    const contentToModify = guidanceContent || currentText;
-    
+    const last = history.length > 0 ? history[history.length - 1] : null;
+    const fromDraftCard =
+      last?.isCommand && last.acknowledgement?.trim()
+        ? extractDraftBodyFromAssistantMessage(last.acknowledgement) || last.acknowledgement.trim()
+        : "";
+    const fromQuestion = extractGuidanceContent(currentQuestion);
+    const trimmedPassed = (currentText || "").trim();
+    const shortQ = (currentQuestion || "").trim();
+    let snapshot =
+      fromQuestion ||
+      (fromDraftCard && (!trimmedPassed || trimmedPassed === shortQ) ? fromDraftCard : trimmedPassed) ||
+      trimmedPassed ||
+      fromDraftCard;
+    if (fromDraftCard && snapshot === shortQ) {
+      snapshot = fromDraftCard;
+    }
     setModifyModal({
       isOpen: true,
-      currentText: contentToModify
+      assistantSnapshot: snapshot,
     });
   };
 
@@ -1399,16 +1492,24 @@ export default function ChatPage() {
     }
   };
 
-  // Handle saving modified text
-  const handleModifySave = async (modifiedText: string) => {
+  // Handle saving Modify refinement (guidance + snapshot via structured /chat payload)
+  const handleModifySave = async (payload: {
+    userGuidance: string;
+    assistantSnapshot: string;
+  }) => {
     setModifyModal(prev => ({ ...prev, isOpen: false }));
     setShowVerificationButtons(false);
-    
+
     try {
       setLoading(true);
-      await handleNext(modifiedText);
+      await handleNext(undefined, {
+        modify: {
+          user_guidance: payload.userGuidance,
+          assistant_snapshot: payload.assistantSnapshot,
+        },
+      });
     } catch (error) {
-      console.error("Error sending modified text:", error);
+      console.error("Error sending modify refinement:", error);
       toast.error("Failed to send modifications. Please try again.");
     } finally {
       setLoading(false);
@@ -1493,7 +1594,7 @@ export default function ChatPage() {
         const progressWithPhaseAnswered = progress as ProgressState & { phase_answered?: number };
         const answeredCount = progressWithPhaseAnswered.phase_answered ?? 0;
         
-        if (!hasUploadedPlan && !hasSeenUploadPrompt && answeredCount === 0) {
+        if (!hasUploadedPlan && answeredCount === 0) {
           console.log("📄 Showing upload plan modal after GKY completion");
           openUploadPlanModal();
         }
@@ -1910,12 +2011,21 @@ export default function ChatPage() {
       formatted = formatted.replace(/\n\s*\n\s*Are you ready to begin your journey\?\s*\n\s*\n\s*\n/g, "\n\nAre you ready to begin your journey?\n\n");
     }
 
-    // Preserve markdown bold (**text**) but remove other asterisks
+    // Preserve markdown bold (**text**) but remove other asterisks. If the model
+    // emitted a bold span that crosses a blank line, split it into one bold span
+    // per paragraph — CommonMark closes inline runs at paragraph breaks, so a
+    // multi-paragraph **...** would otherwise render as literal asterisks.
     const boldPlaceholder = "___MARKDOWN_BOLD___";
     const boldMatches: string[] = [];
     formatted = formatted.replace(/\*\*([\s\S]+?)\*\*/g, (_match, content) => {
-      boldMatches.push(content);
-      return `${boldPlaceholder}${boldMatches.length - 1}${boldPlaceholder}`;
+      const paragraphs = content.split(/\n{2,}/);
+      return paragraphs
+        .map((p: string) => {
+          if (!p.trim()) return p;
+          boldMatches.push(p);
+          return `${boldPlaceholder}${boldMatches.length - 1}${boldPlaceholder}`;
+        })
+        .join("\n\n");
     });
 
     // Preserve markdown italic (*text*)
@@ -1954,6 +2064,11 @@ export default function ChatPage() {
 
     // Remove any remaining standalone formatting symbols
     formatted = formatted.replace(/^[*#\-–—•]+\s*$/gm, "");
+
+    // Strip option-only lines that the option picker UI already renders as buttons.
+    // Without this, choices like "Yes" / "No" appear both inline in the message body
+    // AND as buttons below — a visible duplicate.
+    formatted = stripPickerOptionLines(formatted);
 
     // Clean up excessive whitespace
     formatted = formatted.replace(/\n{3,}/g, "\n\n");
@@ -2049,13 +2164,21 @@ export default function ChatPage() {
       formatted = formatted.replace(/\n\s*\n\s*Are you ready to begin your journey\?\s*\n\s*\n\s*\n/g, "\n\nAre you ready to begin your journey?\n\n");
     }
 
-    // Preserve markdown bold (**text**) but remove other asterisks
-    // First, temporarily replace markdown bold with a placeholder
+    // Preserve markdown bold (**text**) but remove other asterisks. Split bold
+    // spans that cross a blank line into one bold span per paragraph (CommonMark
+    // closes inline runs at paragraph breaks, so multi-paragraph **...** would
+    // otherwise render as literal asterisks).
     const boldPlaceholder = "___MARKDOWN_BOLD___";
     const boldMatches: string[] = [];
     formatted = formatted.replace(/\*\*([\s\S]+?)\*\*/g, (_match, content) => {
-      boldMatches.push(content);
-      return `${boldPlaceholder}${boldMatches.length - 1}${boldPlaceholder}`;
+      const paragraphs = content.split(/\n{2,}/);
+      return paragraphs
+        .map((p: string) => {
+          if (!p.trim()) return p;
+          boldMatches.push(p);
+          return `${boldPlaceholder}${boldMatches.length - 1}${boldPlaceholder}`;
+        })
+        .join("\n\n");
     });
 
     // Preserve markdown italic (*text*) — single asterisks for quotes/emphasis
@@ -2094,6 +2217,10 @@ export default function ChatPage() {
 
     // Remove any remaining standalone formatting symbols
     formatted = formatted.replace(/^[*#\-–—•]+\s*$/gm, "");
+
+    // Strip option-only lines (Yes / No / work-situation / mentor-style) — the
+    // option picker UI renders these as buttons; leaving them inline duplicates them.
+    formatted = stripPickerOptionLines(formatted);
 
     // Clean up excessive whitespace - be more aggressive with line breaks
     formatted = formatted.replace(/\n{3,}/g, "\n\n");
@@ -2522,6 +2649,25 @@ export default function ChatPage() {
     }
   }, [loading]);
 
+  useEffect(() => {
+    setVentureOnboardingOpen(false);
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!sessionId || loading || needsInitialQuestion) return;
+    if (progress.phase !== "GKY" || history.length !== 0) return;
+    if (!currentQuestion.trim()) return;
+    if (isVentureOnboardingTipsComplete(sessionId)) return;
+    setVentureOnboardingOpen(true);
+  }, [
+    sessionId,
+    loading,
+    needsInitialQuestion,
+    progress.phase,
+    history.length,
+    currentQuestion,
+  ]);
+
   // Enhanced scroll behavior with smooth animations
   useEffect(() => {
     if (!chatContainerRef.current || !currentQuestion) return;
@@ -2758,6 +2904,7 @@ export default function ChatPage() {
         });
         const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
         const questionNumber = deriveQuestionNumber(question_number, reply, progress);
+        lastFullAssistantReplyRef.current = reply;
         setCurrentQuestion(parsedQ);
         setCurrentAcknowledgement(ack);
         setCurrentQuestionNumber(questionNumber);
@@ -2979,6 +3126,16 @@ export default function ChatPage() {
         }
         
         setHistory(filteredPairs);
+
+        if (historyResponse && Array.isArray(historyResponse)) {
+          for (let i = historyResponse.length - 1; i >= 0; i--) {
+            const rec = historyResponse[i];
+            if (rec.role === "assistant" && rec.content) {
+              lastFullAssistantReplyRef.current = rec.content;
+              break;
+            }
+          }
+        }
 
         const phaseQuestionSets: Record<string, Set<number>> = {};
         filteredPairs.forEach((pair) => {
@@ -3276,47 +3433,58 @@ export default function ChatPage() {
         }
 
         // CRITICAL: Check if we're in ROADMAP phase - automatically load and display roadmap
+        const preferVentureChat =
+          (location.state as { preferVentureChat?: boolean } | null)?.preferVentureChat === true;
         if (phase === "ROADMAP" || phase === "ROADMAP_GENERATED") {
-          console.log("🗺️ Detected ROADMAP phase - loading roadmap and opening modal");
-          try {
-            // Always fetch roadmap from API to ensure we get the new 8-stage format
-            // The API will regenerate if it's in old format
+          if (preferVentureChat) {
+            console.log(
+              "🗺️ ROADMAP phase but preferVentureChat set — staying on Angel chat (e.g. back from budget)"
+            );
+          } else {
+            console.log("🗺️ Detected ROADMAP phase - loading roadmap and opening modal");
             try {
-              const roadmapResponse = await fetchRoadmapPlan(sessionId);
-              const roadmapContent = roadmapResponse?.result?.plan || '';
-              
-              if (roadmapContent) {
-                // Check if it's in the new format (has Stage and tables)
-                const hasStageFormat = roadmapContent.includes("Stage") && 
-                                      roadmapContent.includes("| Task | Description | Dependencies | Angel's Role | Status |");
-                
-                if (hasStageFormat) {
-                  setRoadmapData({
-                    roadmapContent: roadmapContent,
-                    isGenerated: true
-                  });
-                  
-                  // Navigate to roadmap page
-                  console.log("✅ Roadmap loaded (8-stage format) - navigating to roadmap page");
-                  navigate(`/ventures/${sessionId}/roadmap`);
+              // Always fetch roadmap from API to ensure we get the new 8-stage format
+              // The API will regenerate if it's in old format
+              try {
+                const roadmapResponse = await fetchRoadmapPlan(sessionId);
+                const roadmapContent = roadmapResponse?.result?.plan || '';
+
+                if (roadmapContent) {
+                  // Check if it's in the new format (has Stage and tables)
+                  const hasStageFormat =
+                    roadmapContent.includes("Stage") &&
+                    roadmapContent.includes(
+                      "| Task | Description | Dependencies | Angel's Role | Status |"
+                    );
+
+                  if (hasStageFormat) {
+                    setRoadmapData({
+                      roadmapContent: roadmapContent,
+                      isGenerated: true,
+                    });
+
+                    // Navigate to roadmap page
+                    console.log("✅ Roadmap loaded (8-stage format) - navigating to roadmap page");
+                    navigate(`/ventures/${sessionId}/roadmap`);
+                  } else {
+                    // Old format detected - navigate anyway, the page will handle it
+                    console.warn("⚠️ Roadmap is not in expected 8-stage format - navigating anyway");
+                    navigate(`/ventures/${sessionId}/roadmap`);
+                  }
                 } else {
-                  // Old format detected - navigate anyway, the page will handle it
-                  console.warn("⚠️ Roadmap is not in expected 8-stage format - navigating anyway");
+                  console.warn("⚠️ No roadmap content returned from API - navigating anyway");
                   navigate(`/ventures/${sessionId}/roadmap`);
                 }
-              } else {
-                console.warn("⚠️ No roadmap content returned from API - navigating anyway");
+              } catch (fetchError) {
+                console.error("Could not fetch roadmap:", fetchError);
+                // Navigate anyway, the page will show error state
                 navigate(`/ventures/${sessionId}/roadmap`);
               }
-            } catch (fetchError) {
-              console.error("Could not fetch roadmap:", fetchError);
+            } catch (roadmapError) {
+              console.error("Failed to load roadmap:", roadmapError);
               // Navigate anyway, the page will show error state
               navigate(`/ventures/${sessionId}/roadmap`);
             }
-          } catch (roadmapError) {
-            console.error("Failed to load roadmap:", roadmapError);
-            // Navigate anyway, the page will show error state
-            navigate(`/ventures/${sessionId}/roadmap`);
           }
         }
 
@@ -3384,8 +3552,18 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, navigate]);
 
-  const handleNext = async (inputOverride?: string) => {
-    const input = (inputOverride ?? currentInput).trim();
+  const handleNext = async (
+    inputOverride?: string,
+    options?: {
+      modify?: {
+        assistant_snapshot: string;
+        user_guidance: string;
+      };
+    }
+  ) => {
+    const input = options?.modify
+      ? options.modify.user_guidance.trim()
+      : (inputOverride ?? currentInput).trim();
     if (!input) {
       toast.warning("Please enter your response.");
       return;
@@ -3400,7 +3578,9 @@ export default function ChatPage() {
     setPendingUserReply(input);
 
     try {
-      const response = await fetchQuestion(input, sessionId!);
+      const response = options?.modify
+        ? await fetchQuestion(input, sessionId!, { modify: options.modify })
+        : await fetchQuestion(input, sessionId!);
       const {
         result: { reply, progress, web_search_status, immediate_response, transition_phase, business_plan_summary, show_accept_modify, question_number },
       } = response;
@@ -3500,27 +3680,114 @@ export default function ChatPage() {
         ? previousQuestionNumber
         : deriveQuestionNumber(question_number, reply, progress);
 
+      if (options?.modify) {
+        const reviseDisplay = (
+          (ack && ack.trim().length > 0 ? ack : parsedQ) ||
+          reply ||
+          ""
+        ).trim();
+
+        setHistory((prev) => {
+          if (prev.length === 0) {
+            return [
+              {
+                question: previousQuestion,
+                answer: input,
+                acknowledgement: reviseDisplay || undefined,
+                questionNumber: previousQuestionNumber,
+                phase: progress.phase,
+                isCommand: true,
+              },
+            ];
+          }
+          const last = prev[prev.length - 1];
+          if (last.isCommand) {
+            return [
+              ...prev.slice(0, -1),
+              {
+                ...last,
+                answer: input,
+                acknowledgement: reviseDisplay || last.acknowledgement,
+              },
+            ];
+          }
+          return [
+            ...prev,
+            {
+              question: previousQuestion,
+              answer: input,
+              acknowledgement: reviseDisplay || undefined,
+              questionNumber: previousQuestionNumber,
+              phase: progress.phase,
+              isCommand: true,
+            },
+          ];
+        });
+
+        setCurrentQuestion(previousQuestion);
+        setCurrentAcknowledgement("");
+        setCurrentQuestionNumber(previousQuestionNumber);
+        if (typeof previousQuestionNumber === "number") {
+          updateQuestionTracker(progress.phase, previousQuestionNumber);
+        }
+        setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
+        if (show_accept_modify !== undefined) {
+          setShowVerificationButtons(show_accept_modify);
+        } else {
+          setShowVerificationButtons(true);
+        }
+        setLoading(false);
+        return;
+      }
+
       const COMMAND_INPUTS = ["draft", "support", "scrapping", "scraping", "draft more", "draft answer"];
-      const wasCommand = COMMAND_INPUTS.includes(input.toLowerCase().trim());
+      const cmdKindFromInput = inferCommandKindFromUserInput(input);
+      const wasCommand =
+        COMMAND_INPUTS.includes(input.toLowerCase().trim()) || cmdKindFromInput !== undefined;
+      const commandDisplay = wasCommand
+        ? ((ack && ack.trim().length > 0 ? ack : parsedQ) || "").trim()
+        : ack;
+
+      const questionSnapshotForHistory =
+        wasCommand &&
+        lastFullAssistantReplyRef.current &&
+        lastFullAssistantReplyRef.current.trim().length > 0
+          ? lastFullAssistantReplyRef.current
+          : previousQuestion;
 
       // Add to history only when Angel reply arrives (progress increments here, not on submit)
       // Commands (Draft, Support, etc.) add for display but isCommand excludes from progress
       setHistory((prev) => [
         ...prev,
         {
-          question: previousQuestion,
+          question: questionSnapshotForHistory,
           answer: input,
-          acknowledgement: ack || undefined,
+          acknowledgement: commandDisplay || undefined,
           questionNumber: previousQuestionNumber,
           phase: progress.phase,
           ...(wasCommand && { isCommand: true }),
+          ...(wasCommand && cmdKindFromInput ? { commandKind: cmdKindFromInput } : {}),
         },
       ]);
 
-      setCurrentQuestion(parsedQ);
-      setCurrentAcknowledgement(ack);
-      setCurrentQuestionNumber(nextQuestionNumber);
-      updateQuestionTracker(progress.phase, nextQuestionNumber);
+      if (wasCommand && !options?.modify) {
+        // Command turns (Draft/Support/Scrapping) should not replace the active question UI.
+        // Keep the same question visible while showing command output in chat history.
+        setCurrentQuestion(previousQuestion);
+        // Hide previous long acknowledgment block during command turns to avoid
+        // duplicate "Next Question" confusion around Draft responses.
+        setCurrentAcknowledgement("");
+        setCurrentQuestionNumber(previousQuestionNumber);
+        if (typeof previousQuestionNumber === "number") {
+          updateQuestionTracker(progress.phase, previousQuestionNumber);
+        }
+      } else {
+        setCurrentQuestion(parsedQ);
+        setCurrentAcknowledgement(ack);
+        setCurrentQuestionNumber(nextQuestionNumber);
+        updateQuestionTracker(progress.phase, nextQuestionNumber);
+        lastFullAssistantReplyRef.current = reply;
+      }
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
 
       if (show_accept_modify !== undefined) {
@@ -3997,7 +4264,7 @@ export default function ChatPage() {
     }
   };
 
-  const handleUploadPlanSuccess = (businessInfo: any, analysis?: any) => {
+  const handleUploadPlanSuccess = (businessInfo: any, analysis?: any, _perQuestionAnswers?: Record<string, string | null> | null) => {
     toast.success("Business plan uploaded and processed successfully!");
     markUploadPlanAsUploaded();
     
@@ -4050,8 +4317,17 @@ export default function ChatPage() {
   const rawOverallAnswered = Math.max(backendOverall, historyOverall);
   const overallPercent = overallTotal > 0 ? Math.round((rawOverallAnswered / overallTotal) * 100) : percent;
 
-  // For header "X of Y": show answered count (not inflated by current question)
-  const currentStep = answeredCount;
+  // Header step should reflect the active question when available.
+  // Using answeredCount in GKY made Q4 display as "3 of 5".
+  const headerStep = Math.max(
+    0,
+    Math.min(
+      typeof currentQuestionNumber === "number" && !Number.isNaN(currentQuestionNumber)
+        ? currentQuestionNumber
+        : answeredCount,
+      total
+    )
+  );
 
   // Short-form phase labels for the header (user requested abbreviations)
   const phaseDisplayLabel: Record<string, string> = {
@@ -4069,7 +4345,7 @@ export default function ChatPage() {
 
   // Console logging for calculated display values
   console.log("📊 Display Values Calculated:", {
-    currentStep: currentStep,
+    headerStep: headerStep,
     total: total,
     percent: percent,
     progressPhase: progress.phase,
@@ -4186,6 +4462,13 @@ export default function ChatPage() {
     completed: true,
   }));
 
+  // For command turns (Draft/Support/Scrapping), show the question snapshot inside that
+  // history card and hide the duplicate standalone current-question card below.
+  const latestHistoryPair = history.length > 0 ? history[history.length - 1] : null;
+  const hideStandaloneCurrentQuestionCard = Boolean(
+    latestHistoryPair?.isCommand && !loading
+  );
+
   // Add current question
   if (currentQuestion) {
     questions.push({
@@ -4280,6 +4563,25 @@ export default function ChatPage() {
                 <div className="text-[10px] text-orange-600 group-hover:text-orange-700">Polish text</div>
               </div>
               <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-amber-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            </button>
+          )}
+
+          {progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) && (
+            <button
+              type="button"
+              onClick={() => openUploadPlanModal()}
+              disabled={loading}
+              className="group relative bg-gradient-to-br from-teal-50 to-cyan-50 hover:from-teal-100 hover:to-cyan-100 border border-teal-200 hover:border-teal-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex flex-col items-center space-y-2"
+              title="Import a business plan you created outside Founderport"
+            >
+              <div className="w-12 h-12 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-full flex items-center justify-center text-white text-xl group-hover:scale-110 transition-transform duration-300">
+                📤
+              </div>
+              <div className="text-center">
+                <div className="text-xs font-semibold text-teal-800 group-hover:text-teal-900">Import plan</div>
+                <div className="text-[10px] text-teal-600 group-hover:text-teal-700">External file</div>
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-teal-500/10 to-cyan-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             </button>
           )}
 
@@ -4396,7 +4698,9 @@ export default function ChatPage() {
                     </span>
                     <div className="h-4 w-px bg-gradient-to-b from-emerald-300 to-teal-300"></div>
                     <span className="text-sm font-medium text-gray-700">
-                      {currentStep} of {total}
+                      {progress.phase === 'BUSINESS_PLAN'
+                        ? `${rawOverallAnswered} of ${overallTotal}`
+                        : `${headerStep} of ${total}`}
                     </span>
                   </div>
                 </div>
@@ -4410,7 +4714,9 @@ export default function ChatPage() {
                       {headerPhaseLabel}
                     </span>
                     <span className="text-xs font-medium text-gray-700">
-                      {currentStep}/{total}
+                      {progress.phase === 'BUSINESS_PLAN'
+                        ? `${rawOverallAnswered}/${overallTotal}`
+                        : `${headerStep}/${total}`}
                     </span>
                   </div>
                 </div>
@@ -4461,7 +4767,8 @@ export default function ChatPage() {
               </button>
             </div>
 
-            {progress.phase !== 'GKY' && (
+            {/* Single source of truth for BP progress: sidebar “Overall” bar. Hide floating circle on BP. */}
+            {progress.phase !== 'GKY' && progress.phase !== 'BUSINESS_PLAN' && (
               <ProgressCircle
                 progress={percent}
                 phase={progress.phase}
@@ -4708,33 +5015,91 @@ export default function ChatPage() {
                           </span>
                         </div>
                       )}
-                      <div className="space-y-3">
-                        {pair.acknowledgement && (
-                          <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/60 px-4 py-3">
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 mb-1.5">Angel Response</p>
-                            <div className="text-gray-700 text-sm leading-relaxed prose prose-sm max-w-none prose-p:my-1 prose-strong:font-semibold prose-strong:text-gray-900">
-                              <ReactMarkdown
-                                components={{
-                                  p: ({ children }) => <p className="whitespace-pre-wrap mb-2 last:mb-0">{children}</p>,
-                                  strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
-                                }}
-                              >
-                                {pair.acknowledgement}
-                              </ReactMarkdown>
-                            </div>
-                          </div>
-                        )}
-                        <div className={pair.acknowledgement ? "space-y-2" : ""}>
+                      {pair.isCommand ? (
+                        pair.question?.trim() ? (
+                          (() => {
+                            const { acknowledgement: snapAck, question: snapQ } = parseAngelReply(
+                              pair.question
+                            );
+                            const hasRichSplit =
+                              snapAck.trim().length > 0 &&
+                              snapQ.trim().length > 0 &&
+                              snapQ.trim() !== snapAck.trim();
+                            if (hasRichSplit) {
+                              return (
+                                <div className="space-y-3">
+                                  <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/60 px-4 py-3">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 mb-1.5">
+                                      Angel Response
+                                    </p>
+                                    <div className="text-gray-700 text-sm leading-relaxed prose prose-sm max-w-none prose-p:my-1 prose-strong:font-semibold prose-strong:text-gray-900">
+                                      <ReactMarkdown
+                                        components={{
+                                          p: ({ children }) => (
+                                            <p className="whitespace-pre-wrap mb-2 last:mb-0">{children}</p>
+                                          ),
+                                          strong: ({ children }) => (
+                                            <strong className="font-semibold text-gray-900">{children}</strong>
+                                          ),
+                                        }}
+                                      >
+                                        {snapAck}
+                                      </ReactMarkdown>
+                                    </div>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-600">
+                                      Next Question
+                                    </p>
+                                    <div className="rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3">
+                                      <div className="text-gray-800 whitespace-pre-wrap text-sm">
+                                        <QuestionFormatter text={snapQ} phase={progress.phase} />
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return (
+                              <div>
+                                <div className="rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3">
+                                  <div className="text-gray-800 whitespace-pre-wrap text-sm">
+                                    <QuestionFormatter text={pair.question} phase={progress.phase} />
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()
+                        ) : null
+                      ) : (
+                        <div className="space-y-3">
                           {pair.acknowledgement && (
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-600">Next Question</p>
+                            <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/60 px-4 py-3">
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 mb-1.5">Angel Response</p>
+                              <div className="text-gray-700 text-sm leading-relaxed prose prose-sm max-w-none prose-p:my-1 prose-strong:font-semibold prose-strong:text-gray-900">
+                                <ReactMarkdown
+                                  components={{
+                                    p: ({ children }) => <p className="whitespace-pre-wrap mb-2 last:mb-0">{children}</p>,
+                                    strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+                                  }}
+                                >
+                                  {pair.acknowledgement}
+                                </ReactMarkdown>
+                              </div>
+                            </div>
                           )}
-                          <div className={pair.acknowledgement ? "rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3" : ""}>
-                            <div className="text-gray-800 whitespace-pre-wrap text-sm">
-                              <QuestionFormatter text={pair.question} phase={progress.phase} />
+                          <div className={pair.acknowledgement ? "space-y-2" : ""}>
+                            {pair.acknowledgement && (
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-600">Next Question</p>
+                            )}
+                            <div className={pair.acknowledgement ? "rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3" : ""}>
+                              <div className="text-gray-800 whitespace-pre-wrap text-sm">
+                                <QuestionFormatter text={pair.question} phase={progress.phase} />
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -4753,10 +5118,42 @@ export default function ChatPage() {
                     </div>
                   </div>
                 </div>
+                {pair.isCommand && pair.acknowledgement && (
+                  <div className="p-3 sm:p-4 border-t border-gray-100 bg-emerald-50/40">
+                    <div className="flex items-start gap-2 sm:gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-r from-teal-500 to-blue-500 rounded-lg flex items-center justify-center text-white flex-shrink-0 shadow-md">
+                        <img
+                          src={FounderportIcon}
+                          alt="Angel"
+                          className="!w-14 !h-14 object-cover"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-gray-800 mb-1 text-sm">Angel</div>
+                        <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/60 px-4 py-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 mb-1.5">
+                            {commandQuickActionResponseTitle(pair.commandKind)}
+                          </p>
+                          <div className="text-gray-700 text-sm leading-relaxed prose prose-sm max-w-none prose-p:my-1 prose-strong:font-semibold prose-strong:text-gray-900">
+                            <ReactMarkdown
+                              components={{
+                                p: ({ children }) => <p className="whitespace-pre-wrap mb-2 last:mb-0">{children}</p>,
+                                strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+                              }}
+                            >
+                              {pair.acknowledgement}
+                            </ReactMarkdown>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
 
             {/* Current Question - Angel asks (must appear BEFORE user's answer) */}
+            {!hideStandaloneCurrentQuestionCard && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-100">
               <div className="p-3 sm:p-4 border-b border-gray-100 bg-gradient-to-r from-teal-50 to-blue-50">
                 <div className="flex items-start gap-2 sm:gap-3">
@@ -4840,6 +5237,7 @@ export default function ChatPage() {
                 </div>
               </div>
             </div>
+            )}
 
             {/* User's answer + Angel thinking - shown AFTER the question while waiting for response */}
             {pendingUserReply && (
@@ -4886,8 +5284,16 @@ export default function ChatPage() {
                   onModify={handleModify}
                   onDraftMore={handleDraftMore}
                   disabled={loading}
-                  currentText={currentQuestion}
-                  showDraftMore={currentQuestion?.toLowerCase().includes('draft') || false}
+                  currentText={
+                    history.length > 0 && history[history.length - 1]?.isCommand &&
+                    history[history.length - 1]?.acknowledgement?.trim()
+                      ? history[history.length - 1].acknowledgement!.trim()
+                      : currentQuestion || ""
+                  }
+                  showDraftMore={
+                    (history.length > 0 && history[history.length - 1]?.isCommand) ||
+                    (currentQuestion?.toLowerCase().includes("draft") ?? false)
+                  }
                 />
               </div>
             )}
@@ -4944,6 +5350,18 @@ export default function ChatPage() {
             {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
               progress.phase === ("BUSINESS_PLAN" as ProgressState['phase'])) && (
               <div className="mt-4 lg:hidden">
+                {progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) && (
+                  <div className="mb-3">
+                    <button
+                      type="button"
+                      onClick={() => openUploadPlanModal()}
+                      disabled={loading}
+                      className="w-full rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-900 shadow-sm hover:bg-teal-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      📤 Import existing business plan
+                    </button>
+                  </div>
+                )}
                 <div className="text-center mb-3">
                   <p className="text-gray-500 text-sm font-medium">🚀 Quick Actions</p>
                   <p className="text-gray-400 text-xs">Choose a tool to help with your response</p>
@@ -5070,6 +5488,7 @@ export default function ChatPage() {
           currentQuestionNumber={currentQuestionNumber}
           showStepPercent={false}
           onEditPlan={progress.phase === "BUSINESS_PLAN" ? handleEditPlan : undefined}
+          onUploadPlan={progress.phase === "BUSINESS_PLAN" ? openUploadPlanModal : undefined}
         />
       </div>
 
@@ -5117,16 +5536,24 @@ export default function ChatPage() {
             </div>
             
             <div className="h-full flex flex-col">
-              {/* Progress Summary */}
+              {/* Progress Summary — during Business Plan, align bar with full-journey overall (matches desktop sidebar). */}
               <div className="p-4 border-b border-gray-100 bg-white">
                 <div className="text-center">
                   <div className="text-sm font-medium text-gray-600 mb-1">Current Progress</div>
                   <div className="text-lg font-bold text-gray-900">{headerPhaseLabel}</div>
-                  <div className="text-sm text-gray-500">Step {currentStep} of {total}</div>
+                  <div className="text-sm text-gray-500">
+                    {progress.phase === 'BUSINESS_PLAN'
+                      ? `${rawOverallAnswered} of ${overallTotal} overall`
+                      : `Step ${headerStep} of ${total}`}
+                  </div>
                   <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
                     <div 
                       className="bg-gradient-to-r from-teal-500 to-blue-500 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${percent}%` }}
+                      style={{
+                        width: `${
+                          progress.phase === 'BUSINESS_PLAN' ? overallPercent : percent
+                        }%`,
+                      }}
                     ></div>
                   </div>
                 </div>
@@ -5206,11 +5633,17 @@ export default function ChatPage() {
         </div>
       )}
 
+      <VentureOnboardingTips
+        open={ventureOnboardingOpen}
+        sessionId={sessionId}
+        onOpenChange={setVentureOnboardingOpen}
+      />
+
       {/* Modify Modal */}
       <ModifyModal
         isOpen={modifyModal.isOpen}
         onClose={() => setModifyModal(prev => ({ ...prev, isOpen: false }))}
-        currentText={modifyModal.currentText}
+        assistantSnapshot={modifyModal.assistantSnapshot}
         onSave={handleModifySave}
         loading={loading}
       />
@@ -5231,7 +5664,7 @@ export default function ChatPage() {
         onClose={handleUploadModalClose}
         onUploadSuccess={handleUploadPlanSuccess}
         sessionId={sessionId}
-        onStartAnswering={async (analysis?: any, businessInfo?: any) => {
+        onStartAnswering={async (analysis?: any, businessInfo?: any, perQuestionAnswers?: Record<string, string | null> | null) => {
           // Close upload modal
           handleUploadModalClose();
           
@@ -5299,8 +5732,11 @@ export default function ChatPage() {
                   body: JSON.stringify({
                     session_id: sessionId,
                     business_info: businessInfoToUse || {},
-                    found_questions: [],  // Backend will determine actual found questions by extracting answers
-                    missing_questions: missingNumbers  // Original missing questions from analysis
+                    per_question_answers: perQuestionAnswers || {},
+                    // Sent for backend logging only — save-found-info derives the
+                    // authoritative found/missing split from per_question_answers.
+                    found_questions: [],
+                    missing_questions: missingNumbers
                   })
                 });
                 

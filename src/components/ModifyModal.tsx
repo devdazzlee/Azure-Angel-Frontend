@@ -1,52 +1,49 @@
 import React, { useState, useEffect, useRef } from 'react';
 
+export interface ModifyModalSavePayload {
+  userGuidance: string;
+  assistantSnapshot: string;
+}
+
 interface ModifyModalProps {
   isOpen: boolean;
   onClose: () => void;
-  currentText: string;
-  onSave: (modifiedText: string) => void;
+  assistantSnapshot: string;
+  onSave: (payload: ModifyModalSavePayload) => void;
   loading?: boolean;
 }
 
 const ModifyModal: React.FC<ModifyModalProps> = ({
   isOpen,
   onClose,
-  currentText,
+  assistantSnapshot,
   onSave,
-  loading = false
+  loading = false,
 }) => {
-  const [modifiedText, setModifiedText] = useState('');
-  const [originalText, setOriginalText] = useState('');
-  const [showDiff, setShowDiff] = useState(false);
-  const [wordCount, setWordCount] = useState(0);
-  const [charCount, setCharCount] = useState(0);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [guidance, setGuidance] = useState('');
+  const guidanceRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (isOpen) {
-      setModifiedText(currentText);
-      setOriginalText(currentText);
-      setShowDiff(false);
-      // Focus textarea after modal opens
+      setGuidance('');
       setTimeout(() => {
-        if (textareaRef.current) {
-          textareaRef.current.focus();
-          // Select all text for easy editing
-          textareaRef.current.select();
-        }
+        guidanceRef.current?.focus();
       }, 100);
     }
-  }, [isOpen, currentText]);
+  }, [isOpen, assistantSnapshot]);
 
-  useEffect(() => {
-    setWordCount(modifiedText.trim().split(/\s+/).filter(word => word.length > 0).length);
-    setCharCount(modifiedText.length);
-  }, [modifiedText]);
+  const guidanceTrimmed = guidance.trim();
+  const snapshotTrimmed = assistantSnapshot.trim();
+  const wordCount = guidanceTrimmed
+    ? guidanceTrimmed.split(/\s+/).filter((w) => w.length > 0).length
+    : 0;
 
   const handleSave = () => {
-    if (modifiedText.trim()) {
-      onSave(modifiedText.trim());
-    }
+    if (!guidanceTrimmed || !snapshotTrimmed || loading) return;
+    onSave({
+      userGuidance: guidanceTrimmed,
+      assistantSnapshot: snapshotTrimmed,
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -60,21 +57,11 @@ const ModifyModal: React.FC<ModifyModalProps> = ({
     }
   };
 
-  const handleReset = () => {
-    setModifiedText(originalText);
-    if (textareaRef.current) {
-      textareaRef.current.focus();
-    }
-  };
-
-  const hasChanges = modifiedText !== originalText;
-
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[95vh] flex flex-col border border-gray-200">
-        {/* Enhanced Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-orange-50 to-red-50">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-orange-100 rounded-lg">
@@ -83,14 +70,18 @@ const ModifyModal: React.FC<ModifyModalProps> = ({
               </svg>
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">Modify Response</h2>
-              <p className="text-sm text-gray-600">Edit and refine your response below</p>
+              <h2 className="text-xl font-semibold text-gray-900">Refine this response</h2>
+              <p className="text-sm text-gray-600">
+                Tell Angel what to change, ask a follow-up, or suggest a direction — the full message is kept as context below.
+              </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             disabled={loading}
             className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+            aria-label="Close"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -98,138 +89,67 @@ const ModifyModal: React.FC<ModifyModalProps> = ({
           </button>
         </div>
 
-        {/* Enhanced Content */}
-        <div className="flex-1 p-6 overflow-hidden">
-          <div className="h-full flex flex-col gap-4">
-            {/* Stats and Controls */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4 text-sm text-gray-600">
-                <div className="flex items-center gap-1">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 6l3-3 3 3M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2z" />
-                  </svg>
-                  <span>{wordCount} words</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <span>{charCount} characters</span>
-                </div>
-                {hasChanges && (
-                  <div className="flex items-center gap-1 text-orange-600">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                    </svg>
-                    <span>Unsaved changes</span>
-                  </div>
-                )}
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowDiff(!showDiff)}
-                  className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
-                >
-                  {showDiff ? 'Hide' : 'Show'} Original
-                </button>
-                <button
-                  onClick={handleReset}
-                  disabled={!hasChanges || loading}
-                  className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Reset
-                </button>
-              </div>
+        <div className="flex-1 p-6 overflow-y-auto flex flex-col gap-5 min-h-0">
+          <div>
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Angel&apos;s message (reference)</h3>
+            <div className="text-sm text-gray-800 whitespace-pre-wrap bg-gray-50 border border-gray-200 rounded-lg p-4 max-h-48 overflow-y-auto">
+              {snapshotTrimmed || '—'}
             </div>
+          </div>
 
-            {/* Original Text (when toggled) */}
-            {showDiff && (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <h4 className="text-sm font-medium text-gray-700 mb-2">Original Text:</h4>
-                <div className="text-sm text-gray-600 whitespace-pre-wrap max-h-32 overflow-y-auto">
-                  {originalText}
-                </div>
-              </div>
-            )}
-
-            {/* Main Textarea */}
-            <div className="flex-1 flex flex-col">
-              <label htmlFor="modify-text" className="block text-sm font-medium text-gray-700 mb-2">
-                Your Response:
-              </label>
-              <textarea
-                ref={textareaRef}
-                id="modify-text"
-                value={modifiedText}
-                onChange={(e) => setModifiedText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                disabled={loading}
-                className="flex-1 w-full p-4 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 placeholder-gray-500 leading-relaxed"
-                placeholder="Enter your modifications here..."
-                style={{ minHeight: '200px' }}
-              />
-              
-              {/* Enhanced Tips */}
-              <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
-                <div className="flex items-center gap-4">
-                  <span>💡 Ctrl+Enter to save</span>
-                  <span>⌨️ Esc to cancel</span>
-                  <span>🔄 Click Reset to restore original</span>
-                </div>
-                <div className="text-right">
-                  {hasChanges ? (
-                    <span className="text-orange-600 font-medium">• Modified</span>
-                  ) : (
-                    <span className="text-gray-400">No changes</span>
-                  )}
-                </div>
-              </div>
+          <div className="flex flex-col flex-1 min-h-0">
+            <label htmlFor="modify-guidance" className="block text-sm font-medium text-gray-700 mb-2">
+              What should Angel do differently?
+            </label>
+            <textarea
+              ref={guidanceRef}
+              id="modify-guidance"
+              value={guidance}
+              onChange={(e) => setGuidance(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={loading}
+              className="w-full flex-1 min-h-[160px] p-4 border border-gray-300 rounded-lg resize-y focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 placeholder-gray-500 leading-relaxed"
+              placeholder="Examples: “Shorter bullets”, “More formal tone”, “Add a risk section”, “Why did you assume X?”"
+            />
+            <div className="mt-2 flex justify-between text-xs text-gray-500">
+              <span>{wordCount} words in your request</span>
+              <span>Ctrl+Enter to send · Esc to close</span>
             </div>
           </div>
         </div>
 
-        {/* Enhanced Footer */}
-        <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
-          <div className="text-sm text-gray-600">
-            {hasChanges ? (
-              <span className="text-orange-600">⚠️ You have unsaved changes</span>
+        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+            className="px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={loading || !guidanceTrimmed || !snapshotTrimmed}
+            className="px-6 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors duration-200 flex items-center gap-2 shadow-sm"
+          >
+            {loading ? (
+              <>
+                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden>
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Applying…
+              </>
             ) : (
-              <span>✅ No changes to save</span>
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Apply refinement
+              </>
             )}
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onClose}
-              disabled={loading}
-              className="px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={loading || !modifiedText.trim() || !hasChanges}
-              className="px-6 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors duration-200 flex items-center gap-2 shadow-sm"
-            >
-              {loading ? (
-                <>
-                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Save Changes
-                </>
-              )}
-            </button>
-          </div>
+          </button>
         </div>
       </div>
     </div>
