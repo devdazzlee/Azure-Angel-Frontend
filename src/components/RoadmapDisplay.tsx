@@ -5,6 +5,7 @@ import PaymentForm from './PaymentForm';
 import { PRICING } from '../config/pricing';
 import { checkIsFreeIntroPeriod } from '../utils/freeIntroPeriod';
 import { isRoadmapStepCompleted } from '../utils/roadmapMatching';
+import httpClient from '../api/httpClient';
 
 // Feature flag: the "Why This Roadmap Works" stats are hidden until we have
 // real, sourced metrics to put behind them. The block below stays in the tree
@@ -62,16 +63,7 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
       }
 
       try {
-        const response = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
-            },
-          }
-        );
-
-        const data = await response.json();
+        const { data } = await httpClient.get<any>('/stripe/check-subscription-status');
         if (data.success && data.has_active_subscription && !data.payment_failed) {
           setHasPaid(true);
           console.log('✅ User has active subscription - download access granted');
@@ -800,20 +792,16 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
         setShowEditModal(false);
       } else if (sessionId) {
         // If no onEditRoadmap callback, save directly to backend
-        const response = await fetch(`/api/sessions/${sessionId}/modify-roadmap`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`
-          },
-          body: JSON.stringify({ modified_content: modifiedContent })
-        });
+        const { data } = await httpClient.post<any>(
+          `/angel/sessions/${sessionId}/modify-roadmap`,
+          { modified_content: modifiedContent }
+        );
 
-        if (response.ok) {
+        if (data.success) {
           toast.success('Roadmap updated successfully!');
           setShowEditModal(false);
         } else {
-          throw new Error('Failed to save roadmap');
+          throw new Error(data.message || 'Failed to save roadmap');
         }
       }
     } catch {
@@ -855,21 +843,7 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
     
     const checkSubscription = async (): Promise<boolean> => {
       try {
-        const response = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
-            },
-          }
-        );
-
-        if (!response.ok) {
-          console.error('Subscription check failed:', response.status, response.statusText);
-          return false;
-        }
-
-        const data = await response.json();
+        const { data } = await httpClient.get<any>('/stripe/check-subscription-status');
         console.log('Subscription check response:', data);
         
         if (data.success && data.has_active_subscription && !data.payment_failed) {

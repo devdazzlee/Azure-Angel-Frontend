@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -9,7 +9,8 @@ import PaymentForm from './PaymentForm';
 import { PRICING } from '../config/pricing';
 import { checkIsFreeIntroPeriod } from '../utils/freeIntroPeriod';
 import { useAppDispatch, useAppSelector } from '../store';
-import { upsertTransitionSession, type MotivationalQuote } from '../store/businessPlanTransitionSlice';
+import { upsertTransitionSession } from '../store/businessPlanTransitionSlice';
+import httpClient from '../api/httpClient';
 
 interface PlanToRoadmapTransitionProps {
   businessPlanSummary: string;
@@ -20,7 +21,6 @@ interface PlanToRoadmapTransitionProps {
   onExitToChat?: () => void;
   loading?: boolean;
   sessionId?: string;
-  initialQuote?: MotivationalQuote | null;
   nextStep?: 'budget' | 'roadmap'; // Indicates what the next step is
 }
 
@@ -30,93 +30,6 @@ interface ModificationArea {
   description: string;
   questions: string[];
 }
-
-const FALLBACK_QUOTES: MotivationalQuote[] = [
-  {
-    quote: "Success is not final; failure is not fatal: it is the courage to continue that counts.",
-    author: "Winston Churchill",
-    category: "Persistence"
-  },
-  {
-    quote: "The way to get started is to quit talking and begin doing.",
-    author: "Walt Disney",
-    category: "Action"
-  },
-  {
-    quote: "Innovation distinguishes between a leader and a follower.",
-    author: "Steve Jobs",
-    category: "Innovation"
-  },
-  {
-    quote: "The future belongs to those who believe in the beauty of their dreams.",
-    author: "Eleanor Roosevelt",
-    category: "Dreams"
-  },
-  {
-    quote: "Don't be afraid to give up the good to go for the great.",
-    author: "John D. Rockefeller",
-    category: "Excellence"
-  },
-  {
-    quote: "Opportunities don't happen, you create them.",
-    author: "Chris Grosser",
-    category: "Opportunity"
-  },
-  {
-    quote: "If you really look closely, most overnight successes took a long time.",
-    author: "Steve Jobs",
-    category: "Discipline"
-  },
-  {
-    quote: "Dream big. Start small. Act now.",
-    author: "Robin Sharma",
-    category: "Momentum"
-  }
-];
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const markdownComponents = {
-  h1: ({ children }: { children?: React.ReactNode }) => (
-    <h1 className="text-3xl font-semibold text-gray-900 mb-4">{children}</h1>
-  ),
-  h2: ({ children }: { children?: React.ReactNode }) => (
-    <h2 className="text-2xl font-semibold text-gray-900 mt-6 mb-3">{children}</h2>
-  ),
-  h3: ({ children }: { children?: React.ReactNode }) => (
-    <h3 className="text-xl font-semibold text-gray-800 mt-5 mb-2">{children}</h3>
-  ),
-  h4: ({ children }: { children?: React.ReactNode }) => (
-    <h4 className="text-lg font-semibold text-gray-800 mt-4 mb-2">{children}</h4>
-  ),
-  p: ({ children }: { children?: React.ReactNode }) => (
-    <p className="text-gray-700 leading-relaxed mb-3">{children}</p>
-  ),
-  ul: ({ children }: { children?: React.ReactNode }) => (
-    <ul className="list-disc ml-6 space-y-2 text-gray-700 mb-3">{children}</ul>
-  ),
-  ol: ({ children }: { children?: React.ReactNode }) => (
-    <ol className="list-decimal ml-6 space-y-2 text-gray-700 mb-3">{children}</ol>
-  ),
-  li: ({ children }: { children?: React.ReactNode }) => (
-    <li className="leading-relaxed">{children}</li>
-  ),
-  strong: ({ children }: { children?: React.ReactNode }) => (
-    <strong className="text-gray-900 font-semibold">{children}</strong>
-  ),
-  blockquote: ({ children }: { children?: React.ReactNode }) => (
-    <blockquote className="border-l-4 border-blue-400 bg-blue-50 p-4 italic rounded-md my-4 text-gray-700">
-      {children}
-    </blockquote>
-  )
-};
-
-const pickFallbackQuote = (exclude?: string): MotivationalQuote => {
-  const available = FALLBACK_QUOTES.filter((q) => q.quote !== exclude);
-  const pool = available.length > 0 ? available : FALLBACK_QUOTES;
-  // Use timestamp + random for better randomization
-  const seed = Date.now() + Math.random();
-  return pool[Math.floor(seed % pool.length)];
-};
 
 const normalizeBusinessPlanSummary = (summary: string): string => {
   if (!summary) return "";
@@ -152,8 +65,6 @@ const normalizeBusinessPlanSummary = (summary: string): string => {
 
   return normalized.join("\n");
 };
-
-const TRANSITION_QUOTE_STORAGE_PREFIX = "angel_transition_quote_";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const convertSummaryToDocHtml = (markdown: string) => {
@@ -326,7 +237,6 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
   onExitToChat: _onExitToChat,
   loading = false,
   sessionId,
-  initialQuote = null,
   nextStep = 'roadmap' // Default to roadmap for backward compatibility
 }) => {
   const navigate = useNavigate(); // Initialize navigate hook
@@ -346,20 +256,12 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
     cachedTransition?.artifact ?? initialArtifact ?? null
   );
   const [isGeneratingArtifact, setIsGeneratingArtifact] = useState(false);
-  const [quoteState, setQuoteState] = useState<MotivationalQuote>(() =>
-    cachedTransition?.quote ?? initialQuote ?? pickFallbackQuote()
-  );
-  const [quoteLoading, setQuoteLoading] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const exportFileName = useMemo(() => {
     const timestamp = new Date().toISOString().split('T')[0];
     return `business-plan-summary-${timestamp}.doc`;
   }, []);
 
-  const storageKey = useMemo(
-    () => `${TRANSITION_QUOTE_STORAGE_PREFIX}${sessionId ?? 'anonymous'}`,
-    [sessionId]
-  );
   const [actualSummary, setActualSummary] = useState<string>(
     cachedTransition?.summary ?? businessPlanSummary
   );
@@ -373,9 +275,6 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
     }
     if (cachedTransition?.artifact !== undefined) {
       setBusinessPlanArtifact(cachedTransition.artifact ?? null);
-    }
-    if (cachedTransition?.quote) {
-      setQuoteState(cachedTransition.quote);
     }
   }, [cachedTransition]);
 
@@ -405,41 +304,29 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
       
       const fetchSummary = async () => {
         try {
-          const response = await fetch(
-            `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/business-plan-summary`,
-            {
-              headers: {
-                Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
-              },
-            }
+          const { data } = await httpClient.get<any>(
+            `/angel/sessions/${sessionId}/business-plan-summary`
           );
-
-          if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.result) {
-              // Handle both old format (string) and new format (object with summary field)
-              const summary = typeof data.result === 'string' 
-                ? data.result 
+          if (data.success && data.result) {
+            const summary =
+              typeof data.result === 'string'
+                ? data.result
                 : data.result.summary || data.result.full_summary || '';
-              
-              if (summary && summary.trim()) {
-                console.log('✅ Fetched actual business plan summary from backend');
-                setActualSummary(summary);
-                dispatch(upsertTransitionSession({
+
+            if (summary && summary.trim()) {
+              console.log('✅ Fetched actual business plan summary from backend');
+              setActualSummary(summary);
+              dispatch(
+                upsertTransitionSession({
                   sessionId: normalizedSessionId,
                   summary,
-                }));
-              } else {
-                // If fetched summary is empty, preserve current value
-                setActualSummary(businessPlanSummary || "");
-              }
+                })
+              );
             } else {
-              // No valid result, use original
-              setActualSummary(businessPlanSummary || "");
+              setActualSummary(businessPlanSummary || '');
             }
           } else {
-            // Fetch failed, use original
-            setActualSummary(businessPlanSummary || "");
+            setActualSummary(businessPlanSummary || '');
           }
         } catch (error) {
           console.error('Failed to fetch business plan summary:', error);
@@ -459,17 +346,6 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
     [actualSummary]
   );
 
-  const persistQuote = useCallback((quote: MotivationalQuote) => {
-    setQuoteState(quote);
-    dispatch(upsertTransitionSession({
-      sessionId: normalizedSessionId,
-      quote,
-    }));
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(storageKey, quote.quote);
-    }
-  }, [dispatch, normalizedSessionId, storageKey]);
-
   // Check subscription status from backend on mount and show payment modal if needed
   useEffect(() => {
     const checkSubscriptionStatus = async () => {
@@ -482,16 +358,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
       }
 
       try {
-        const response = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
-            },
-          }
-        );
-
-        const data = await response.json();
+        const { data } = await httpClient.get<any>('/stripe/check-subscription-status');
         if (data.success && data.has_active_subscription && !data.payment_failed) {
           setHasPaid(true);
           console.log('✅ User has active subscription - download access granted');
@@ -546,18 +413,9 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
     console.log('📄 Generating business plan artifact on-demand...');
 
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/generate-business-plan-artifact`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
-            'Content-Type': 'application/json',
-          },
-        }
+      const { data } = await httpClient.post<any>(
+        `/angel/sessions/${sessionId}/generate-business-plan-artifact`
       );
-
-      const data = await response.json();
 
       if (data.success && data.result?.business_plan_artifact) {
         console.log('✅ Business plan artifact generated successfully!');
@@ -595,79 +453,6 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
       setIsGeneratingArtifact(false);
     }
   };
-
-  useEffect(() => {
-    let isMounted = true;
-    const lastQuote =
-      typeof window !== 'undefined' ? localStorage.getItem(storageKey) ?? undefined : undefined;
-
-    if (cachedTransition?.quote) {
-      persistQuote(cachedTransition.quote);
-      return () => {
-        isMounted = false;
-      };
-    }
-
-    if (initialQuote) {
-      const quoteToUse =
-        initialQuote.quote === lastQuote ? pickFallbackQuote(lastQuote) : initialQuote;
-      persistQuote(quoteToUse);
-      return () => {
-        isMounted = false;
-      };
-    }
-
-    const fetchQuote = async () => {
-      if (!sessionId) {
-        persistQuote(pickFallbackQuote(lastQuote));
-        return;
-      }
-
-      const token = localStorage.getItem('sb_access_token');
-      if (!token) {
-        persistQuote(pickFallbackQuote(lastQuote));
-        return;
-      }
-
-      try {
-        setQuoteLoading(true);
-        const response = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/motivational-quote`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          }
-        );
-        const data = await response.json();
-        if (isMounted && data?.success && data.quote) {
-          const incoming = data.quote as MotivationalQuote;
-          if (incoming.quote === lastQuote) {
-            persistQuote(pickFallbackQuote(lastQuote));
-          } else {
-            persistQuote(incoming);
-          }
-        } else if (isMounted) {
-          persistQuote(pickFallbackQuote(lastQuote));
-        }
-      } catch (error) {
-        console.error('Failed to fetch motivational quote:', error);
-        if (isMounted) {
-          persistQuote(pickFallbackQuote(lastQuote));
-        }
-      } finally {
-        if (isMounted) {
-          setQuoteLoading(false);
-        }
-      }
-    };
-
-    fetchQuote();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [cachedTransition?.quote, initialQuote, persistQuote, sessionId, storageKey]);
 
   // Define modification areas based on business plan sections
   const modificationAreas: ModificationArea[] = [
@@ -756,21 +541,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
     
     const checkSubscription = async (): Promise<boolean> => {
       try {
-        const response = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
-            },
-          }
-        );
-
-        if (!response.ok) {
-          console.error('Subscription check failed:', response.status, response.statusText);
-          return false;
-        }
-
-        const data = await response.json();
+        const { data } = await httpClient.get<any>('/stripe/check-subscription-status');
         console.log('Subscription check response:', data);
         
         if (data.success && data.has_active_subscription && !data.payment_failed) {
@@ -871,26 +642,12 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
       
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 flex items-center justify-center px-4">
         <div className="w-full max-w-4xl bg-white/90 backdrop-blur-xl border border-white/30 shadow-2xl rounded-3xl p-8">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full flex items-center justify-center text-white text-4xl mx-auto mb-4">
-            🏆
-          </div>
-          <h1 className="text-2xl md:text-4xl font-bold text-gray-900 mb-2">
-            🎉 CONGRATULATIONS! Planning Champion Award 🎉
-          </h1>
-          <p className="text-lg text-gray-600 mb-4">
-            You've successfully completed your comprehensive business plan! This is a significant milestone in your entrepreneurial journey.
+        <header className="text-center mb-8">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Business plan summary</h1>
+          <p className="text-gray-600 mt-2 text-sm md:text-base">
+            Review your summary below, then continue or generate your full plan.
           </p>
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 mb-6">
-            <blockquote className="text-lg font-medium text-blue-800 italic">
-              {quoteLoading ? 'Loading inspiration…' : `“${quoteState.quote}”`}
-            </blockquote>
-            {!quoteLoading && (
-              <cite className="text-sm text-blue-600 mt-2 block">– {quoteState.author}</cite>
-            )}
-          </div>
-        </div>
+        </header>
 
         {/* Info Banner - How to Generate Full Plan */}
         {!businessPlanArtifact && !isGeneratingArtifact && (

@@ -326,12 +326,17 @@ const BudgetPage: React.FC = () => {
               <Button
                 variant="ghost"
                 onClick={() =>
-                  navigate(`/ventures/${id}`, { state: { preferVentureChat: true } })
+                  navigate(`/ventures/${id}`, {
+                    state: {
+                      restorePlanSummaryOverview: true,
+                      preferVentureChat: true,
+                    },
+                  })
                 }
                 className="flex items-center gap-2 text-gray-500 hover:text-gray-900 border border-transparent hover:border-gray-200"
               >
                 <ArrowLeft className="w-4 h-4" />
-                <span>Back to Chat</span>
+                <span>Back to Summary Overview</span>
               </Button>
               <div className="hidden sm:block h-10 border-l border-gray-200"></div>
               <div>

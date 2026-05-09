@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { fetchSessions } from '../../services/authService';
+import httpClient from '../../api/httpClient';
 
 const ProfilePage = () => {
   const navigate = useNavigate();
@@ -28,19 +29,9 @@ const ProfilePage = () => {
         return;
       }
 
-      // Fetch subscription status
+      // Fetch subscription status (use httpClient when re-enabling after free intro)
       // TODO: ON AUGUST UNCOMMENT THIS - Free intro period until August
-      /* 
-      const subscriptionResponse = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      const subscriptionData = await subscriptionResponse.json();
-      */
+      // const { data: subscriptionData } = await httpClient.get('/stripe/check-subscription-status');
       const subscriptionData: any = {
         success: true,
         has_active_subscription: true,
@@ -138,18 +129,7 @@ const ProfilePage = () => {
     setShowCancelModal(false);
     setCancellingSubscription(true);
     try {
-      const token = localStorage.getItem('sb_access_token');
-      const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/stripe/cancel-subscription`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const data = await response.json();
+      const { data } = await httpClient.post<any>('/stripe/cancel-subscription');
       if (data.success) {
         toast.success('Subscription will be canceled at the end of your billing period');
         await loadProfileData();
@@ -168,18 +148,9 @@ const ProfilePage = () => {
   const handleToggleAutoRenewal = async (enable: boolean) => {
     setTogglingAutoRenewal(true);
     try {
-      const token = localStorage.getItem('sb_access_token');
-      const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/stripe/toggle-auto-renewal`);
-      url.searchParams.append('enable', enable.toString());
-      
-      const response = await fetch(url.toString(), {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      const { data } = await httpClient.post<any>('/stripe/toggle-auto-renewal', undefined, {
+        params: { enable },
       });
-
-      const data = await response.json();
       if (data.success) {
         toast.success(data.message || `Auto-renewal ${enable ? 'enabled' : 'disabled'}`);
         await loadProfileData();
@@ -199,17 +170,7 @@ const ProfilePage = () => {
     setLoadingHistory(true);
     try {
       // Always fetch fresh data when opening modal
-      const token = localStorage.getItem('sb_access_token');
-      const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/stripe/subscription-history`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const data = await response.json();
+      const { data } = await httpClient.get<any>('/stripe/subscription-history');
       if (data.success) {
         setSubscriptionHistory(data.history || []);
         setShowHistoryModal(true);
@@ -394,17 +355,9 @@ const ProfilePage = () => {
                         <button
                           onClick={async () => {
                             try {
-                              const token = localStorage.getItem('sb_access_token');
-                              const response = await fetch(
-                                `${import.meta.env.VITE_API_BASE_URL}/stripe/create-portal-session`,
-                                {
-                                  method: 'POST',
-                                  headers: {
-                                    Authorization: `Bearer ${token}`,
-                                  },
-                                }
+                              const { data } = await httpClient.post<any>(
+                                '/stripe/create-portal-session'
                               );
-                              const data = await response.json();
                               if (data.success && data.url) {
                                 window.location.href = data.url;
                               } else {
@@ -633,17 +586,9 @@ const ProfilePage = () => {
                   onClick={async () => {
                     setLoadingPortal(true);
                     try {
-                      const token = localStorage.getItem('sb_access_token');
-                      const response = await fetch(
-                        `${import.meta.env.VITE_API_BASE_URL}/stripe/create-portal-session`,
-                        {
-                          method: 'POST',
-                          headers: {
-                            Authorization: `Bearer ${token}`,
-                          },
-                        }
+                      const { data } = await httpClient.post<any>(
+                        '/stripe/create-portal-session'
                       );
-                      const data = await response.json();
                       if (data.success && data.url) {
                         window.location.href = data.url;
                       } else {

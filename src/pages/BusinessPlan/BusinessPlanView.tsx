@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -9,34 +9,105 @@ import { PRICING, checkPaymentStatus, markAsPaid } from '../../config/pricing';
 import { checkIsFreeIntroPeriod } from '../../utils/freeIntroPeriod';
 import { useAppDispatch, useAppSelector } from '../../store';
 import { upsertTransitionSession } from '../../store/businessPlanTransitionSlice';
+import httpClient from '../../api/httpClient';
 
 interface LocationState {
   businessPlan?: string;
   businessPlanSummary?: string;
   sessionId?: string;
+  /** When set (e.g. from budget), open the summary tab first. */
+  initialView?: 'summary' | 'full';
+  /** When `budget`, back navigation returns to budget instead of venture chat. */
+  backTarget?: 'budget' | 'chat';
+}
+
+const BP_SESSION_CACHE_PREFIX = 'angel_bp_transition_';
+
+function readBpSessionCache(sessionId: string | undefined): {
+  artifact?: string;
+  summary?: string;
+} {
+  if (!sessionId || typeof window === 'undefined') return {};
+  try {
+    const raw = sessionStorage.getItem(`${BP_SESSION_CACHE_PREFIX}${sessionId}`);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as { artifact?: string | null; summary?: string | null };
+    return {
+      artifact: parsed.artifact ?? undefined,
+      summary: parsed.summary ?? undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+function writeBpSessionCache(
+  sessionId: string | undefined,
+  artifact: string,
+  summary: string
+) {
+  if (!sessionId || typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(
+      `${BP_SESSION_CACHE_PREFIX}${sessionId}`,
+      JSON.stringify({
+        artifact: artifact || null,
+        summary: summary || null,
+      })
+    );
+  } catch {
+    /* quota or private mode */
+  }
 }
 
 const BusinessPlanView: React.FC = () => {
   const { id: sessionId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const locationState = location.state as LocationState;
+  const locationState = (location.state as LocationState) || {};
+  const backTarget = locationState.backTarget === 'budget' ? 'budget' : 'chat';
+  const backLabel = backTarget === 'budget' ? 'Back to Budget' : 'Back to Chat';
   const dispatch = useAppDispatch();
   const normalizedSessionId = sessionId ?? 'anonymous';
   const cachedTransition = useAppSelector(
     (state) => state.businessPlanTransition.bySessionId[normalizedSessionId]
   );
   const contentRef = useRef<HTMLDivElement>(null);
-  
-  // Initialize with data from navigation state if available
+  const sessionCache = useMemo(() => readBpSessionCache(sessionId), [sessionId]);
+
+  // Initialize from navigation state, Redux (in-memory), then sessionStorage (survives refresh)
   const [businessPlan, setBusinessPlan] = useState<string>(
-    locationState?.businessPlan || cachedTransition?.artifact || ''
+    () =>
+      locationState?.businessPlan ||
+      cachedTransition?.artifact ||
+      sessionCache.artifact ||
+      ''
   );
   const [businessPlanSummary, setBusinessPlanSummary] = useState<string>(
-    locationState?.businessPlanSummary || cachedTransition?.summary || ''
+    () =>
+      locationState?.businessPlanSummary ||
+      cachedTransition?.summary ||
+      sessionCache.summary ||
+      ''
   );
-  const [loading, setLoading] = useState(!locationState?.businessPlan && !cachedTransition?.artifact); // Only load if no data passed
-  const [viewMode, setViewMode] = useState<'summary' | 'full'>('full');
+  const [loading, setLoading] = useState(() => {
+    const hasPlan = !!(
+      locationState?.businessPlan ||
+      cachedTransition?.artifact ||
+      sessionCache.artifact
+    );
+    const hasSummary = !!(
+      locationState?.businessPlanSummary ||
+      cachedTransition?.summary ||
+      sessionCache.summary
+    );
+    return !(hasPlan || hasSummary);
+  });
+  const [viewMode, setViewMode] = useState<'summary' | 'full'>(() => {
+    const iv = locationState.initialView;
+    if (iv === 'summary' || iv === 'full') return iv;
+    return 'full';
+  });
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [hasPaid, setHasPaid] = useState(false); // Track payment status
@@ -46,10 +117,12 @@ const BusinessPlanView: React.FC = () => {
   useEffect(() => {
     if (cachedTransition?.artifact && !businessPlan) {
       setBusinessPlan(cachedTransition.artifact);
-      setLoading(false);
     }
     if (cachedTransition?.summary && !businessPlanSummary) {
       setBusinessPlanSummary(cachedTransition.summary);
+    }
+    if (cachedTransition?.artifact || cachedTransition?.summary) {
+      setLoading(false);
     }
   }, [businessPlan, businessPlanSummary, cachedTransition]);
 
@@ -60,8 +133,9 @@ const BusinessPlanView: React.FC = () => {
         artifact: businessPlan || undefined,
         summary: businessPlanSummary || undefined,
       }));
+      writeBpSessionCache(sessionId, businessPlan, businessPlanSummary);
     }
-  }, [businessPlan, businessPlanSummary, dispatch, normalizedSessionId]);
+  }, [businessPlan, businessPlanSummary, dispatch, normalizedSessionId, sessionId]);
 
   // Check subscription status from backend on mount
   useEffect(() => {
@@ -75,16 +149,7 @@ const BusinessPlanView: React.FC = () => {
       }
 
       try {
-        const response = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
-            },
-          }
-        );
-
-        const data = await response.json();
+        const { data } = await httpClient.get<any>('/stripe/check-subscription-status');
         if (data.success && data.has_active_subscription && !data.payment_failed) {
           setHasPaid(true);
           console.log('✅ User has active subscription - download access granted');
@@ -109,17 +174,21 @@ const BusinessPlanView: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // Only fetch if data wasn't passed via navigation state
-    if (!locationState?.businessPlan && !locationState?.businessPlanSummary) {
-      fetchBusinessPlan();
+    const hasPassed =
+      !!(locationState?.businessPlan || locationState?.businessPlanSummary);
+    const hasRedux = !!(cachedTransition?.artifact || cachedTransition?.summary);
+    const hasCache = !!(sessionCache.artifact || sessionCache.summary);
+    if (hasPassed || hasRedux || hasCache) {
+      return;
     }
+    fetchBusinessPlan();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
-  // ROOT CAUSE FIX: Poll for artifact if it's being generated
+  // Poll only while we still have no summary and no artifact (not "full plan only" forever)
   useEffect(() => {
-    if (!businessPlan && loading && sessionId) {
-      console.log('📊 Polling for business plan artifact...');
+    if (!businessPlan && !businessPlanSummary && loading && sessionId) {
+      console.log('📊 Polling for business plan content...');
       
       const pollInterval = setInterval(() => {
         fetchBusinessPlan();
@@ -137,7 +206,7 @@ const BusinessPlanView: React.FC = () => {
         clearTimeout(timeout);
       };
     }
-  }, [businessPlan, loading, sessionId]);
+  }, [businessPlan, businessPlanSummary, loading, sessionId]);
 
   const fetchBusinessPlan = async () => {
     if (!sessionId) {
@@ -149,17 +218,8 @@ const BusinessPlanView: React.FC = () => {
 
     try {
       console.log('Fetching business plan for session:', sessionId);
-      
-      const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
-          },
-        }
-      );
 
-      const data = await response.json();
+      const { data } = await httpClient.get<any>(`/angel/sessions/${sessionId}`);
       
       if (data.success && data.result) {
         const session = data.result;
@@ -171,14 +231,13 @@ const BusinessPlanView: React.FC = () => {
           hasRoadmap: !!session.roadmap_data
         });
         
-        // Update state if we have data
+        // Update state if we have data (summary alone is valid — paid "full" artifact is optional)
         if (session.business_plan_artifact) {
           setBusinessPlan(session.business_plan_artifact);
           dispatch(upsertTransitionSession({
             sessionId: normalizedSessionId,
             artifact: session.business_plan_artifact,
           }));
-          setLoading(false);
           console.log('✅ Business plan artifact loaded!');
         }
         if (session.business_plan_summary) {
@@ -189,6 +248,10 @@ const BusinessPlanView: React.FC = () => {
           }));
           console.log('✅ Business plan summary loaded!');
         }
+
+        if (session.business_plan_artifact || session.business_plan_summary) {
+          setLoading(false);
+        }
         
         // Check if roadmap is available
         if (session.roadmap_data) {
@@ -196,11 +259,8 @@ const BusinessPlanView: React.FC = () => {
           console.log('✅ Roadmap is available!');
         }
         
-        // ROOT CAUSE FIX: If artifact is not ready, keep loading and poll
-        if (!session.business_plan_artifact) {
-          console.log('⏳ Business plan artifact not ready yet, will check again...');
-          // Don't set loading to false - keep showing loading screen
-          // Polling will continue in useEffect below
+        if (!session.business_plan_artifact && !session.business_plan_summary) {
+          console.log('⏳ No plan content on session yet, will retry if polling...');
         }
       } else {
         toast.error(data.message || 'Failed to load business plan');
@@ -231,21 +291,7 @@ const BusinessPlanView: React.FC = () => {
     
     const checkSubscription = async (): Promise<boolean> => {
       try {
-        const response = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
-            },
-          }
-        );
-
-        if (!response.ok) {
-          console.error('Subscription check failed:', response.status, response.statusText);
-          return false;
-        }
-
-        const data = await response.json();
+        const { data } = await httpClient.get<any>('/stripe/check-subscription-status');
         console.log('Subscription check response:', data);
         
         if (data.success && data.has_active_subscription && !data.payment_failed) {
@@ -299,11 +345,15 @@ const BusinessPlanView: React.FC = () => {
   // which can be unpredictable (e.g. arriving here via a direct link or after
   // a page reload during plan generation).
   const handleBackToChat = () => {
-    if (sessionId) {
-      navigate(`/ventures/${sessionId}`);
-    } else {
+    if (!sessionId) {
       navigate('/ventures');
+      return;
     }
+    if (backTarget === 'budget') {
+      navigate(`/ventures/${sessionId}/budget`);
+      return;
+    }
+    navigate(`/ventures/${sessionId}`, { state: { preferVentureChat: true } });
   };
 
   if (loading) {
@@ -316,14 +366,16 @@ const BusinessPlanView: React.FC = () => {
           </svg>
           <p className="text-lg font-semibold text-gray-900 mb-2">Loading your business plan...</p>
           <p className="text-sm text-gray-600">
-            Your comprehensive business plan is being generated. This typically takes 30-60 seconds.
+            Loading your plan from the server. If you just requested a full document, generation can take 30–60 seconds.
           </p>
         </div>
       </div>
     );
   }
 
-  const content = viewMode === 'full' ? businessPlan : businessPlanSummary;
+  // Summary-only sessions: never show an empty "full" pane
+  const content =
+    viewMode === 'full' && businessPlan ? businessPlan : businessPlanSummary;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 pt-4 sm:pt-6">
@@ -336,12 +388,12 @@ const BusinessPlanView: React.FC = () => {
             <button
               onClick={handleBackToChat}
               className="mb-6 inline-flex items-center gap-2 px-5 py-3 bg-white hover:bg-gray-100 text-teal-600 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 print:hidden"
-              aria-label="Back to chat"
+              aria-label={backLabel}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
-              <span>Back to Chat</span>
+              <span>{backLabel}</span>
             </button>
 
             <div className="flex items-start justify-between gap-6">
@@ -512,7 +564,7 @@ const BusinessPlanView: React.FC = () => {
                   onClick={handleBackToChat}
                   className="px-6 py-3 bg-teal-500 hover:bg-teal-600 text-white rounded-lg font-medium transition-colors"
                 >
-                  Return to Chat
+                  {backTarget === 'budget' ? 'Return to Budget' : 'Return to Chat'}
                 </button>
               </div>
             )}
@@ -525,12 +577,12 @@ const BusinessPlanView: React.FC = () => {
             <button
               onClick={handleBackToChat}
               className="inline-flex items-center gap-2 px-6 py-3 bg-white hover:bg-gray-50 text-teal-600 rounded-lg font-semibold border-2 border-teal-500 shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-105"
-              aria-label="Back to chat"
+              aria-label={backLabel}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
-              <span>Back to Chat</span>
+              <span>{backLabel}</span>
             </button>
           </div>
         )}
@@ -586,13 +638,13 @@ const BusinessPlanView: React.FC = () => {
         <button
           onClick={handleBackToChat}
           className="group inline-flex items-center gap-2 px-5 py-3 bg-white hover:bg-gray-50 text-teal-600 rounded-full font-semibold border-2 border-teal-500 shadow-2xl hover:shadow-teal-500/30 transition-all duration-300 transform hover:scale-105"
-          title="Back to Chat"
-          aria-label="Back to chat"
+          title={backLabel}
+          aria-label={backLabel}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
-          <span className="text-sm">Back to Chat</span>
+          <span className="text-sm">{backLabel}</span>
         </button>
       </div>
 
@@ -610,17 +662,9 @@ const BusinessPlanView: React.FC = () => {
               }
 
               try {
-                // Check subscription before allowing roadmap access
-                const subscriptionCheck = await fetch(
-                  `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
-                  {
-                    headers: {
-                      Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
-                    },
-                  }
+                const { data: subscriptionData } = await httpClient.get<any>(
+                  '/stripe/check-subscription-status'
                 );
-
-                const subscriptionData = await subscriptionCheck.json();
                 
                 if (!subscriptionData.success || !subscriptionData.has_active_subscription || subscriptionData.payment_failed) {
                   toast.error('Subscription required to access Roadmap phase. Please subscribe to continue.');

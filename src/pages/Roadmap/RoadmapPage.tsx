@@ -8,6 +8,7 @@ import {
   downloadRoadmapExcel,
   downloadRoadmapWord,
 } from "../../utils/roadmapExport";
+import httpClient from "../../api/httpClient";
 
 const RoadmapPage: React.FC = () => {
   const { id: sessionId } = useParams<{ id: string }>();
@@ -56,14 +57,7 @@ const RoadmapPage: React.FC = () => {
     let cancelled = false;
     (async () => {
       try {
-        const token = localStorage.getItem("sb_access_token");
-        if (!token) return;
-        const response = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (!response.ok) return;
-        const data = await response.json();
+        const { data } = await httpClient.get<any>(`/angel/sessions/${sessionId}`);
         if (cancelled) return;
         const keys = data?.result?.business_context?.completed_roadmap_step_keys;
         if (Array.isArray(keys)) {
@@ -84,14 +78,7 @@ const RoadmapPage: React.FC = () => {
     if (!sessionId) return;
     const refreshCompletions = async () => {
       try {
-        const token = localStorage.getItem("sb_access_token");
-        if (!token) return;
-        const response = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (!response.ok) return;
-        const data = await response.json();
+        const { data } = await httpClient.get<any>(`/angel/sessions/${sessionId}`);
         const keys = data?.result?.business_context?.completed_roadmap_step_keys;
         if (Array.isArray(keys)) {
           setCompletedRoadmapStepKeys(keys);
@@ -387,16 +374,9 @@ const RoadmapPage: React.FC = () => {
                   setIsTransitioning(true);
 
                   try {
-                    const subscriptionCheck = await fetch(
-                      `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
-                      {
-                        headers: {
-                          Authorization: `Bearer ${localStorage.getItem('sb_access_token')}`,
-                        },
-                      }
+                    const { data: subscriptionData } = await httpClient.get<any>(
+                      '/stripe/check-subscription-status'
                     );
-
-                    const subscriptionData = await subscriptionCheck.json();
 
                     if (!subscriptionData.success || !subscriptionData.has_active_subscription || subscriptionData.payment_failed) {
                       toast.error('Subscription required to proceed to Implementation phase. Please subscribe to continue.');
@@ -405,15 +385,9 @@ const RoadmapPage: React.FC = () => {
                       return;
                     }
 
-                    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/roadmap-to-implementation-transition`, {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`
-                      }
-                    });
-
-                    const data = await response.json();
+                    const { data } = await httpClient.post<any>(
+                      `/angel/sessions/${sessionId}/roadmap-to-implementation-transition`
+                    );
 
                     if (data.success) {
                       toast.success("Implementation transition prepared!");

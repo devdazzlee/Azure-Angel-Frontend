@@ -149,14 +149,7 @@ const Implementation: React.FC<ImplementationProps> = ({
   const refreshCompletedRoadmapStepKeys = useCallback(async () => {
     if (!sessionId) return;
     try {
-      const token = localStorage.getItem('sb_access_token');
-      if (!token) return;
-      const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (!response.ok) return;
-      const data = await response.json();
+      const { data } = await httpClient.get<any>(`/angel/sessions/${sessionId}`);
       const keys = data?.result?.business_context?.completed_roadmap_step_keys;
       if (Array.isArray(keys)) {
         setCompletedRoadmapStepKeys(keys);
@@ -232,31 +225,22 @@ const Implementation: React.FC<ImplementationProps> = ({
       
       setBusinessContextLoading(true);
       
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/business-context/sessions/${sessionId}/extract-business-context`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const { data } = await httpClient.post<any>(
+        `/business-context/sessions/${sessionId}/extract-business-context`
+      );
 
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.result.extracted) {
-            const extractedContext = data.result.business_context;
-            console.log('✅ Business context extracted/generated:', extractedContext);
-            console.log('   Previous:', data.result.previous_context?.business_name);
-            console.log('   New:', extractedContext.business_name);
-            
-            // Store in local state to override parent's sessionData
-            setLocalBusinessContext(extractedContext);
-            
-            // CRITICAL: Wait a moment for database and cache to update, then reload
-            await new Promise(resolve => setTimeout(resolve, 500));
-            await loadImplementationData();
-          }
-        }
-      } catch (error) {
+      if (data.success && data.result.extracted) {
+        const extractedContext = data.result.business_context;
+        console.log('✅ Business context extracted/generated:', extractedContext);
+        console.log('   Previous:', data.result.previous_context?.business_name);
+        console.log('   New:', extractedContext.business_name);
+
+        setLocalBusinessContext(extractedContext);
+
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        await loadImplementationData();
+      }
+    } catch (error) {
         console.error('Error extracting business context:', error);
       } finally {
         setBusinessContextLoading(false);
@@ -494,18 +478,9 @@ const Implementation: React.FC<ImplementationProps> = ({
   const loadImplementationData = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/implementation/sessions/${sessionId}/tasks`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to load implementation data');
-      }
-
-      const data = await response.json();
+      const { data } = await httpClient.get<any>(
+        `/implementation/sessions/${sessionId}/tasks`
+      );
       
       if (data.success) {
         // Check if all tasks are completed
@@ -541,20 +516,10 @@ const Implementation: React.FC<ImplementationProps> = ({
     if (!currentTask) return;
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/implementation/sessions/${sessionId}/tasks/${currentTask.id}/complete`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(completionData)
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to complete task');
-      }
-
-      const data = await response.json();
+      const { data } = await httpClient.post<any>(
+        `/implementation/sessions/${sessionId}/tasks/${currentTask.id}/complete`,
+        completionData
+      );
       
       if (data.success) {
         toast.success('Task completed successfully!');
@@ -595,20 +560,10 @@ const Implementation: React.FC<ImplementationProps> = ({
 
     try {
       setServiceProvidersLoading(true);
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/implementation/sessions/${sessionId}/contact`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ task_id: currentTask.id })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to get service providers');
-      }
-
-      const data = await response.json();
+      const { data } = await httpClient.post<any>(
+        `/implementation/sessions/${sessionId}/contact`,
+        { task_id: currentTask.id }
+      );
       
       if (data.success) {
         setServiceProviders(data.service_providers);
@@ -631,20 +586,10 @@ const Implementation: React.FC<ImplementationProps> = ({
 
     try {
       setHelpLoading(true);
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/implementation/sessions/${sessionId}/help`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ task_id: currentTask.id, help_type: 'detailed' })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to get help');
-      }
-
-      const data = await response.json();
+      const { data } = await httpClient.post<any>(
+        `/implementation/sessions/${sessionId}/help`,
+        { task_id: currentTask.id, help_type: 'detailed' }
+      );
       
       if (data.success) {
         setHelpContent(data.help_content);
@@ -689,19 +634,10 @@ const Implementation: React.FC<ImplementationProps> = ({
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/implementation/sessions/${sessionId}/tasks/${currentTask.id}/upload-document`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to upload document');
-      }
-
-      const data = await response.json();
+      const { data } = await httpClient.post<any>(
+        `/implementation/sessions/${sessionId}/tasks/${currentTask.id}/upload-document`,
+        formData
+      );
       
       if (data.success) {
         toast.success('Document uploaded successfully!');
@@ -817,7 +753,7 @@ const Implementation: React.FC<ImplementationProps> = ({
               <span className="hidden sm:inline text-sm">Home</span>
             </motion.button>
             <motion.button
-              onClick={() => navigate(`/ventures/${sessionId}`)}
+              onClick={() => navigate(`/ventures/${sessionId}/roadmap`)}
               className="group flex items-center gap-2.5 px-5 py-2.5 bg-white/90 hover:bg-white border border-gray-200/80 rounded-xl text-gray-700 font-semibold transition-all duration-300 hover:shadow-lg hover:border-teal-300/50 hover:-translate-y-0.5"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}

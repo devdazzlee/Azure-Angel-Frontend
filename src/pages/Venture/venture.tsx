@@ -129,12 +129,6 @@ interface ProgressState {
   };
 }
 
-type MotivationalQuote = {
-  quote: string;
-  author: string;
-  category?: string;
-};
-
 interface BusinessContextInfo {
   business_name?: string;
   industry?: string;
@@ -179,33 +173,6 @@ const deriveContextFromSession = (session?: Record<string, any>): BusinessContex
   };
 };
 
-const TRANSITION_FALLBACK_QUOTES: MotivationalQuote[] = [
-  {
-    quote: "Success is not final; failure is not fatal: it is the courage to continue that counts.",
-    author: "Winston Churchill",
-    category: "Persistence"
-  },
-  {
-    quote: "The way to get started is to quit talking and begin doing.",
-    author: "Walt Disney",
-    category: "Action"
-  },
-  {
-    quote: "Dream big. Start small. Act now.",
-    author: "Robin Sharma",
-    category: "Momentum"
-  },
-  {
-    quote: "Innovation distinguishes between a leader and a follower.",
-    author: "Steve Jobs",
-    category: "Innovation"
-  },
-  {
-    quote: "The future depends on what you do today.",
-    author: "Mahatma Gandhi",
-    category: "Action"
-  }
-];
 const parseQuestionNumberFromTag = (tag?: string | null): number | null => {
   if (!tag) return null;
   const match = tag.match(/\.(\d+)/);
@@ -342,16 +309,7 @@ export default function ChatPage() {
         return;
       }
 
-      // Fetch subscription status
-      const subscriptionResponse = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/stripe/check-subscription-status`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      const subscriptionData = await subscriptionResponse.json();
+      const { data: subscriptionData } = await httpClient.get<any>('/stripe/check-subscription-status');
       setSubscriptionDetails(subscriptionData);
 
       // Get user info from token or localStorage
@@ -404,18 +362,7 @@ export default function ChatPage() {
 
     setCancellingSubscription(true);
     try {
-      const token = localStorage.getItem('sb_access_token');
-      const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/stripe/cancel-subscription`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const data = await response.json();
+      const { data } = await httpClient.post<any>('/stripe/cancel-subscription');
       if (data.success) {
         toast.success('Subscription will be canceled at the end of your billing period');
         await loadProfileData(); // Refresh subscription details
@@ -753,46 +700,6 @@ export default function ChatPage() {
     overallAnswered: 0,
     overallTotal: 50, // 5 GKY + 45 Business Plan
   });
-  const [transitionQuote, setTransitionQuote] = useState<MotivationalQuote | null>(null);
-  const pickFallbackTransitionQuote = useCallback((exclude?: string) => {
-    const available = TRANSITION_FALLBACK_QUOTES.filter((q) => q.quote !== exclude);
-    const pool = available.length > 0 ? available : TRANSITION_FALLBACK_QUOTES;
-    return pool[Math.floor(Math.random() * pool.length)];
-  }, []);
-
-  const fetchTransitionQuote = useCallback(async () => {
-    if (!sessionId) {
-      setTransitionQuote((prev) => prev ?? pickFallbackTransitionQuote());
-      return;
-    }
-
-    const token = localStorage.getItem('sb_access_token');
-    if (!token) {
-      setTransitionQuote((prev) => prev ?? pickFallbackTransitionQuote());
-      return;
-    }
-
-    try {
-      const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/motivational-quote`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
-      const data = await response.json();
-      if (data?.success && data.quote) {
-        setTransitionQuote(data.quote as MotivationalQuote);
-      } else {
-        setTransitionQuote((prev) => prev ?? pickFallbackTransitionQuote());
-      }
-    } catch (error) {
-      console.error("Failed to fetch motivational quote:", error);
-      setTransitionQuote((prev) => prev ?? pickFallbackTransitionQuote());
-    }
-  }, [pickFallbackTransitionQuote, sessionId]);
-
   const applyProgressUpdate = (progressData: ProgressState) => {
     // DEBUG: Log raw API response to see if phase_breakdown is present
     console.log("🔍 DEBUG - Raw API Response progressData:", progressData);
@@ -1066,16 +973,6 @@ export default function ChatPage() {
     
     setBudgetSetupModal({ isOpen: false, businessPlanCompleted: false });
   }, [sessionId]);
-
-  useEffect(() => {
-    fetchTransitionQuote();
-  }, [fetchTransitionQuote]);
-
-  useEffect(() => {
-    if (transitionData?.transitionPhase === "PLAN_TO_ROADMAP") {
-      fetchTransitionQuote();
-    }
-  }, [fetchTransitionQuote, transitionData]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1522,16 +1419,9 @@ export default function ChatPage() {
       setLoading(true);
       toast.info("Preparing implementation transition...");
       
-      // Call the roadmap to implementation transition endpoint
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/roadmap-to-implementation-transition`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`
-        }
-      });
-
-      const data = await response.json();
+      const { data } = await httpClient.post<any>(
+        `/angel/sessions/${sessionId}/roadmap-to-implementation-transition`
+      );
       
       if (data.success) {
         toast.success("Implementation transition prepared!");
@@ -2964,6 +2854,9 @@ export default function ChatPage() {
   useEffect(() => {
     if (!sessionId) return;
 
+    const restorePlanSummaryOverview =
+      (location.state as { restorePlanSummaryOverview?: boolean })?.restorePlanSummaryOverview === true;
+
     let cancelled = false;
 
     const restoreSessionFromHistory = async () => {
@@ -3310,15 +3203,25 @@ export default function ChatPage() {
               hasEstimatedExpenses: !!estimatedExpenses,
               hasBusinessContext: !!businessContext
             });
-            
+
+            // Back from budget: show Business Plan Summary Overview (same screen user left from), not auto-redirect to budget
+            const summaryOverviewPhase = restorePlanSummaryOverview ? "PLAN_TO_SUMMARY" : "PLAN_TO_BUDGET";
+
             setTransitionData({
               businessPlanSummary: summary,
               businessPlanArtifact: artifact,
-              transitionPhase: "PLAN_TO_BUDGET",
+              transitionPhase: summaryOverviewPhase,
               estimatedExpenses: estimatedExpenses,
               businessContext: businessContext
             });
-            
+
+            if (restorePlanSummaryOverview) {
+              navigate(`/ventures/${sessionId}`, {
+                replace: true,
+                state: { preferVentureChat: true },
+              });
+            }
+
             setBackendTotals({ answered: effectiveAnsweredPhase, total: totalPhase, overallAnswered, overallTotal });
             setLoading(false);
             return;
@@ -3327,10 +3230,16 @@ export default function ChatPage() {
             setTransitionData({
               businessPlanSummary: "",
               businessPlanArtifact: null,
-              transitionPhase: "PLAN_TO_BUDGET",
+              transitionPhase: restorePlanSummaryOverview ? "PLAN_TO_SUMMARY" : "PLAN_TO_BUDGET",
               estimatedExpenses: "",
               businessContext: {}
             });
+            if (restorePlanSummaryOverview) {
+              navigate(`/ventures/${sessionId}`, {
+                replace: true,
+                state: { preferVentureChat: true },
+              });
+            }
             setBackendTotals({ answered: effectiveAnsweredPhase, total: totalPhase, overallAnswered, overallTotal });
             setLoading(false);
             return;
@@ -3398,16 +3307,9 @@ export default function ChatPage() {
           setLoading(true);
           
           try {
-            // Fetch the transition content from the endpoint
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/roadmap-to-implementation-transition`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`
-              }
-            });
-
-            const data = await response.json();
+            const { data } = await httpClient.post<any>(
+              `/angel/sessions/${sessionId}/roadmap-to-implementation-transition`
+            );
             
             if (data.success && data.result?.reply) {
               console.log("✅ Roadmap to Implementation transition content received");
@@ -3920,27 +3822,9 @@ export default function ChatPage() {
       console.log("Saving roadmap with content:", updatedContent);
       toast.info("Saving roadmap changes...");
       
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/roadmap/sessions/${sessionId}/update-roadmap`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          updated_content: updatedContent
-        })
+      const { data } = await httpClient.post<any>(`/roadmap/sessions/${sessionId}/update-roadmap`, {
+        updated_content: updatedContent,
       });
-
-      console.log("Response status:", response.status);
-      console.log("Response headers:", response.headers);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Error response:", errorText);
-        throw new Error(`Failed to save roadmap: ${response.status} ${errorText}`);
-      }
-
-      const data = await response.json();
       
       if (data.success) {
         console.log("Roadmap saved successfully, updating local state");
@@ -3975,16 +3859,7 @@ export default function ChatPage() {
     try {
       setBackButtonLoading(true);
       
-      // Call backend API to go to previous question
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/go-back`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`
-        }
-      });
-
-      const data = await response.json();
+      const { data } = await httpClient.post<any>(`/angel/sessions/${sessionId}/go-back`);
 
       if (data.success) {
         // PROFESSIONAL FLOW - Senior Developer Best Practices
@@ -4138,19 +4013,10 @@ export default function ChatPage() {
       const currentTransitionType = transitionType || 
         (transitionData?.transitionPhase === "PLAN_TO_SUMMARY" ? "summary_to_budget" : "plan_to_roadmap");
       
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/transition-decision`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`
-        },
-        body: JSON.stringify({ 
-          decision: 'approve',
-          transition_type: currentTransitionType
-        })
+      const { data } = await httpClient.post<any>(`/angel/sessions/${sessionId}/transition-decision`, {
+        decision: 'approve',
+        transition_type: currentTransitionType,
       });
-
-      const data = await response.json();
       
       if (data.success) {
         if (data.result?.action === "transition_to_budget") {
@@ -4227,16 +4093,9 @@ export default function ChatPage() {
   const handleRevisitPlan = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/transition-decision`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`
-        },
-        body: JSON.stringify({ decision: 'revisit' })
+      const { data } = await httpClient.post<any>(`/angel/sessions/${sessionId}/transition-decision`, {
+        decision: 'revisit',
       });
-
-      const data = await response.json();
       
       if (data.success) {
         toast.success("Plan review mode activated");
@@ -4378,7 +4237,6 @@ export default function ChatPage() {
         onExitToChat={() => setTransitionData(null)}
         loading={loading}
         sessionId={sessionId}
-        initialQuote={transitionQuote}
         nextStep="budget"
       />
     );
@@ -4400,7 +4258,6 @@ export default function ChatPage() {
         onExitToChat={() => setTransitionData(null)}
         loading={loading}
         sessionId={sessionId}
-        initialQuote={transitionQuote}
       />
     );
   }
@@ -5723,24 +5580,13 @@ export default function ChatPage() {
               // NOTE: Backend will process ALL 46 questions and determine which are truly found vs missing
               // We send the original missing_questions from analysis, but backend will update it based on actual extraction results
               try {
-                const saveResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL}/upload-plan/save-found-info`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`
-                  },
-                  body: JSON.stringify({
-                    session_id: sessionId,
-                    business_info: businessInfoToUse || {},
-                    per_question_answers: perQuestionAnswers || {},
-                    // Sent for backend logging only — save-found-info derives the
-                    // authoritative found/missing split from per_question_answers.
-                    found_questions: [],
-                    missing_questions: missingNumbers
-                  })
+                const { data: saveData } = await httpClient.post<any>('/upload-plan/save-found-info', {
+                  session_id: sessionId,
+                  business_info: businessInfoToUse || {},
+                  per_question_answers: perQuestionAnswers || {},
+                  found_questions: [],
+                  missing_questions: missingNumbers,
                 });
-                
-                const saveData = await saveResponse.json();
                 if (saveData.success) {
                   console.log(`✅ Saved ${saveData.saved_count} found information entries to chat history`);
                   console.log(`📊 Actual found questions: ${saveData.found_questions || []}`);
