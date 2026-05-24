@@ -16,8 +16,8 @@ const STEPS: { title: string; body: string }[] = [
     body: "Use the message box at the bottom of the screen to type your answers and anything you want to ask Angel. Press **Enter** to send, or **Shift+Enter** for a new line while you are in Getting to Know You.",
   },
   {
-    title: "Support, Draft, and Scrapping",
-    body: "Later, during **Business planning** and **Implementation**, **Support** gives deeper guidance on the current step, **Draft** suggests an answer you can edit, and **Scrapping** helps polish rough notes. On desktop they live in the left sidebar; on smaller screens they appear in the **Quick actions** row when that phase is active. They stay out of the way during Getting to Know You so you can focus on short, personal answers.",
+    title: "Tools appear when you need them",
+    body: "During **Getting to Know You** you'll just chat with Angel — no extra tools yet. Once **Business planning** begins, a row of quick actions will appear (left sidebar on desktop, beneath the chat on mobile). Angel will walk you through each one the moment it shows up, so you don't have to memorize anything now.",
   },
   {
     title: "Progress and questions",

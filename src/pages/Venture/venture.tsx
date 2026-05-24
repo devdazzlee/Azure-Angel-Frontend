@@ -43,6 +43,12 @@ import type { Budget, BudgetItem, APIResponse } from "../../types/apiTypes";
 import BusinessPlanningInstructions from "../../components/BusinessPlanningInstructions";
 // GkyToBusinessPlanIntro modal removed — transition happens inline in chat
 import { budgetService } from "../../services/budgetService";
+import {
+  CoachMarkProvider,
+  useCoachMarks,
+  BUSINESS_PLAN_TOUR_ID,
+  businessPlanQuickActionSteps,
+} from "../../components/coachmarks";
 
 interface ConversationPair {
   question: string;
@@ -280,6 +286,22 @@ const deriveQuestionNumber = (
 
   return null;
 };
+
+/**
+ * Tiny effect-only child that lives inside the CoachMarkProvider so it can
+ * call the hook. Kicks off the Business Plan quick-actions tour the first
+ * time the user crosses into that phase. The provider itself short-circuits
+ * if the tour has already been seen for this session.
+ */
+function BusinessPlanTourTrigger({ phase }: { phase: string }) {
+  const { startTour } = useCoachMarks();
+  useEffect(() => {
+    if (phase === "BUSINESS_PLAN") {
+      startTour(BUSINESS_PLAN_TOUR_ID, businessPlanQuickActionSteps);
+    }
+  }, [phase, startTour]);
+  return null;
+}
 
 export default function ChatPage() {
   const { id: sessionId } = useParams();
@@ -4360,7 +4382,9 @@ export default function ChatPage() {
   const chatContentMaxWidth = progress.phase === "GKY" ? "max-w-5xl" : "max-w-4xl";
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-teal-50 text-sm lg:flex-row">
+    <CoachMarkProvider sessionId={sessionId}>
+      <BusinessPlanTourTrigger phase={progress.phase} />
+      <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-teal-50 text-sm lg:flex-row">
       {/* Left Sidebar - Quick Actions (Support, Draft, Scrapping, Previous Question) */}
       {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
         progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) ||
@@ -4372,6 +4396,7 @@ export default function ChatPage() {
             <button
               onClick={() => handleNext("Support")}
               disabled={loading}
+              data-coachmark="support"
               className="group relative bg-gradient-to-br from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border border-blue-200 hover:border-blue-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex flex-col items-center space-y-2"
               title="Support - Get guided help"
             >
@@ -4392,6 +4417,7 @@ export default function ChatPage() {
             <button
               onClick={() => handleNext("Draft")}
               disabled={loading}
+              data-coachmark="draft"
               className="group relative bg-gradient-to-br from-emerald-50 to-green-50 hover:from-emerald-100 hover:to-green-100 border border-emerald-200 hover:border-emerald-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex flex-col items-center space-y-2"
               title="Draft - Generate content"
             >
@@ -4412,6 +4438,7 @@ export default function ChatPage() {
             <button
               onClick={() => handleNext(currentInput.trim() ? `Scrapping: ${currentInput}` : "Scrapping")}
               disabled={loading}
+              data-coachmark="scrapping"
               className="group relative bg-gradient-to-br from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 border border-orange-200 hover:border-orange-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex flex-col items-center space-y-2"
               title="Scrapping - Polish existing text"
             >
@@ -5236,6 +5263,7 @@ export default function ChatPage() {
                   <button
                     onClick={() => handleNext("Support")}
                     disabled={loading}
+                    data-coachmark="support"
                     className="group relative bg-gradient-to-br from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border border-blue-200 hover:border-blue-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                   >
                     <div className="flex flex-col items-center space-y-1">
@@ -5252,6 +5280,7 @@ export default function ChatPage() {
                 <button
                     onClick={() => handleNext("Draft")}
                     disabled={loading}
+                    data-coachmark="draft"
                     className="group relative bg-gradient-to-br from-emerald-50 to-green-50 hover:from-emerald-100 hover:to-green-100 border border-emerald-200 hover:border-emerald-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                   >
                     <div className="flex flex-col items-center space-y-1">
@@ -5268,6 +5297,7 @@ export default function ChatPage() {
                   <button
                     onClick={() => handleNext(currentInput.trim() ? `Scrapping: ${currentInput}` : "Scrapping")}
                     disabled={loading}
+                    data-coachmark="scrapping"
                     className="group relative bg-gradient-to-br from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 border border-orange-200 hover:border-orange-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                   >
                     <div className="flex flex-col items-center space-y-1">
@@ -5812,6 +5842,7 @@ export default function ChatPage() {
       {showInstructions && (
         <BusinessPlanningInstructions onClose={() => setShowInstructions(false)} />
       )}
-    </div>
+      </div>
+    </CoachMarkProvider>
   );
 }

@@ -39,3 +39,21 @@ export function markVentureOnboardingTipsComplete(sessionId?: string): void {
   if (!sessionId) return;
   safeSet(getScopedKey(sessionId), "1");
 }
+
+const COACH_MARK_TOUR_STORAGE_KEY_PREFIX = "founderport_coach_tour_v1";
+
+function getCoachTourKey(tourId: string, sessionId?: string): string {
+  return `${COACH_MARK_TOUR_STORAGE_KEY_PREFIX}:${sessionId || "unknown"}:${tourId}`;
+}
+
+export function isCoachTourSeen(tourId: string, sessionId?: string): boolean {
+  if (typeof window === "undefined") return true;
+  if (!sessionId) return true;
+  return safeGet(getCoachTourKey(tourId, sessionId)) === "1";
+}
+
+export function markCoachTourSeen(tourId: string, sessionId?: string): void {
+  if (typeof window === "undefined") return;
+  if (!sessionId) return;
+  safeSet(getCoachTourKey(tourId, sessionId), "1");
+}
