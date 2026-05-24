@@ -257,34 +257,27 @@ const getClientDisplayNumber = (
   return BP_TO_CLIENT[internalNumber] ?? String(internalNumber);
 };
 
+/**
+ * Resolve the displayed question number. The session's `asked_q` is the
+ * source of truth — the backend always sends it in `progress.asked_q`
+ * (see Angel-Backend/utils/progress.py). `result.question_number` is a
+ * convenience parse of the same tag and is null on command turns
+ * (Support/Draft/Scrapping/Modify) where no new tag is emitted; in those
+ * turns we fall back to the tag and recover the same number.
+ *
+ * The old `[[Q:GKY.NN]]` reply-text regex fallback was removed: the router
+ * strips those markers from `display_reply` before sending, so the regex
+ * could never match. Keeping it hid the real contract gap on `asked_q`.
+ */
 const deriveQuestionNumber = (
   backendQuestionNumber: number | null | undefined,
-  replyText: string,
+  _replyText: string,
   progressPayload?: Record<string, any>
 ): number | null => {
-  // For GKY phase, questions are now sequential (1-5), use directly
-  if (progressPayload?.phase === 'GKY' && typeof backendQuestionNumber === "number" && !Number.isNaN(backendQuestionNumber)) {
+  if (typeof backendQuestionNumber === "number" && !Number.isNaN(backendQuestionNumber)) {
     return backendQuestionNumber;
   }
-
-  // For Business Plan phase, use sequential numbering starting from 1
-  if (progressPayload?.phase === 'BUSINESS_PLAN' && typeof backendQuestionNumber === "number" && !Number.isNaN(backendQuestionNumber)) {
-    // Business Plan questions are sequential (1, 2, 3, etc.) — internal numbering
-    return backendQuestionNumber;
-  }
-
-  const askedTag = progressPayload?.asked_q;
-  const tagNumber = parseQuestionNumberFromTag(askedTag);
-  if (tagNumber !== null) {
-    return tagNumber;
-  }
-
-  const replyMatch = replyText?.match(/\[\[Q:[A-Z_]+\.(\d{2})]]/);
-  if (replyMatch) {
-    return parseInt(replyMatch[1], 10);
-  }
-
-  return null;
+  return parseQuestionNumberFromTag(progressPayload?.asked_q);
 };
 
 /**
