@@ -4356,8 +4356,11 @@ export default function ChatPage() {
     }
   };
 
+  const showProgressSidebar = progress.phase !== "GKY";
+  const chatContentMaxWidth = progress.phase === "GKY" ? "max-w-5xl" : "max-w-4xl";
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 text-sm flex flex-col lg:flex-row">
+    <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-teal-50 text-sm lg:flex-row">
       {/* Left Sidebar - Quick Actions (Support, Draft, Scrapping, Previous Question) */}
       {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
         progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) ||
@@ -4442,6 +4445,26 @@ export default function ChatPage() {
             </button>
           )}
 
+          {/* Skip to Q45 — testing only (desktop sidebar) */}
+          {progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) && (
+            <button
+              type="button"
+              onClick={() => handleNext("jump to question 45")}
+              disabled={loading}
+              className="group relative flex flex-col items-center space-y-2 rounded-xl border border-rose-200 bg-gradient-to-br from-rose-50 to-pink-50 p-3 transition-all duration-300 hover:scale-105 hover:border-rose-300 hover:from-rose-100 hover:to-pink-100 hover:shadow-lg disabled:transform-none disabled:cursor-not-allowed disabled:opacity-50"
+              title="Skip to Question 45 (Testing only)"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-rose-500 to-pink-600 text-xl text-white transition-transform duration-300 group-hover:scale-110">
+                ⏭️
+              </div>
+              <div className="text-center">
+                <div className="text-xs font-semibold text-rose-800 group-hover:text-rose-900">Skip Q45</div>
+                <div className="text-[10px] text-rose-600 group-hover:text-rose-700">Testing</div>
+              </div>
+              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-rose-500/10 to-pink-500/10 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+            </button>
+          )}
+
           {/* Save Button */}
           {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
             progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) ||
@@ -4508,7 +4531,7 @@ export default function ChatPage() {
       )}
       
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {/* Header Section */}
         <div className="flex-shrink-0 px-3 py-4 lg:px-3 lg:py-4">
           <div className="max-w-6xl mx-auto">
@@ -4603,7 +4626,8 @@ export default function ChatPage() {
                 </svg>
               </button>
 
-              {/* Mobile Navigation Toggle */}
+              {/* Mobile Navigation Toggle — hidden during GKY (empty sidebar) */}
+              {showProgressSidebar && (
               <button
                 onClick={() => setShowMobileNav(!showMobileNav)}
                 className="lg:hidden p-2 rounded-lg bg-white/80 backdrop-blur-sm border border-gray-200 hover:bg-white transition-colors"
@@ -4622,6 +4646,7 @@ export default function ChatPage() {
                   />
                 </svg>
               </button>
+              )}
             </div>
 
             {/* Single source of truth for BP progress: sidebar “Overall” bar. Hide floating circle on BP. */}
@@ -4836,16 +4861,13 @@ export default function ChatPage() {
           {/* Roadmap is now shown as a full page, not a modal */}
         </div>
 
-        {/* Scrollable Chat Area */}
+        {/* Single scroll: messages + input + picker */}
         <div
           ref={chatContainerRef}
-          className="flex-1 overflow-y-auto px-3 pb-4 lg:pb-4 chat-container"
-          style={{ 
-            maxHeight: "calc(100vh - 320px)",
-            minHeight: "calc(100vh - 320px)"
-          }}
+          className="chat-container min-h-0 flex-1 overflow-y-auto px-3 pb-4 lg:pb-4"
         >
-          <div className="max-w-4xl mx-auto space-y-4">
+          <div className={`mx-auto flex min-h-full flex-col ${chatContentMaxWidth}`}>
+            <div className="flex-1 space-y-4">
             {/* Chat History */}
             {history.map((pair, index) => (
               <div
@@ -5121,12 +5143,11 @@ export default function ChatPage() {
                 </div>
               </div>
             )}
-          </div>
-        </div>
+            </div>
 
-        {/* Fixed Input Area */}
-        <div className="flex-shrink-0 bg-gradient-to-br from-slate-50 to-teal-50 px-3 py-3">
-          <div className="max-w-4xl mx-auto">
+            {/* Input + actions — one scroll with chat; mt-auto pins to bottom when content is short */}
+            <div className="mt-4 flex-shrink-0 border-t border-gray-200/70 bg-gradient-to-br from-slate-50 to-teal-50 py-3">
+              <div className="w-full">
             {/* Web Search Progress Indicator */}
             <WebSearchIndicator 
               isSearching={webSearchStatus.is_searching} 
@@ -5166,20 +5187,6 @@ export default function ChatPage() {
               </div>
             )}
 
-            {/* Skip Button for Business Plan (Testing Only) */}
-            {progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) && !loading && (
-              <div className="mb-3 flex justify-center">
-                <button
-                  onClick={() => handleNext("jump to question 45")}
-                  disabled={loading}
-                  className="bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white px-4 py-2 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none text-sm flex items-center gap-2"
-                >
-                  <span>⏭️</span>
-                  <span>Skip to Question 45 (Testing)</span>
-                </button>
-              </div>
-            )}
-            
             {progress.phase !== 'GKY' && (
               <div className="mb-3 flex justify-center">
                 <button
@@ -5314,12 +5321,15 @@ export default function ChatPage() {
                   </p>
                 </div>
               )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Right Navigation Panel - Desktop */}
-      <div className="hidden lg:block w-80 flex-shrink-0 border-l border-gray-200 h-screen sticky top-0 overflow-y-auto">
+      {/* Right Navigation Panel - Desktop (hidden during GKY — sidebar has no useful content) */}
+      {showProgressSidebar && (
+      <div className="hidden h-screen w-80 flex-shrink-0 overflow-y-auto border-l border-gray-200 lg:sticky lg:top-0 lg:block">
         <QuestionNavigator
           questions={questions}
           currentPhase={progress.phase}
@@ -5348,9 +5358,10 @@ export default function ChatPage() {
           onUploadPlan={progress.phase === "BUSINESS_PLAN" ? openUploadPlanModal : undefined}
         />
       </div>
+      )}
 
       {/* Mobile Navigation Panel - Overlay */}
-      {showMobileNav && (
+      {showProgressSidebar && showMobileNav && (
         <div className="lg:hidden fixed inset-0 z-50">
           {/* Backdrop */}
           <div 

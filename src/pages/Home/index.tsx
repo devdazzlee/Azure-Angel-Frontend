@@ -161,19 +161,19 @@ const FounderportHome: React.FC = () => {
             className="mx-auto max-w-4xl text-center text-3xl font-bold leading-tight md:text-5xl"
             variants={fadeItem}
           >
-            Transform Your Business Idea Into a Clear, Actionable Plan
+            A centralized space to plan, learn, and build.
           </motion.h1>
           <motion.p className="mx-auto mt-5 max-w-4xl text-center text-base text-blue-100 md:text-lg" variants={fadeItem}>
-            Founderport is a centralized platform that helps first-time entrepreneurs move from idea
-            to launch through guided, step-by-step planning. Replace fragmented advice with clarity,
-            structure, and confidence for any business idea.
+            Starting with Founderport &mdash; the first widget in a growing suite for first-time
+            entrepreneurs. One workspace for every decision, milestone, and next step. More widgets
+            are on the way.
           </motion.p>
           <motion.div className="mt-7 flex flex-wrap items-center justify-center gap-3" variants={fadeItem}>
             <Link
               to={primaryCta}
               className="rounded-md bg-white px-7 py-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
             >
-              Start Planning Your Business
+              Start free
             </Link>
             <Link
               to="/services"
@@ -204,7 +204,7 @@ const FounderportHome: React.FC = () => {
             </motion.div>
             <motion.div variants={fadeItem}>
               <h3 className="text-3xl font-bold leading-tight sm:text-2xl">Start Free</h3>
-              <p className="mt-1.5 text-xl leading-snug text-blue-100 sm:text-base">No Credit Card Required</p>
+              <p className="mt-1.5 text-xl leading-snug text-blue-100 sm:text-base">Yeah, it&apos;s actually true</p>
             </motion.div>
           </motion.div>
         </div>
@@ -355,11 +355,11 @@ const FounderportHome: React.FC = () => {
             to={primaryCta}
             className="mt-6 inline-block rounded-xl bg-white px-6 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
           >
-            Begin Planning Your Business
+            Start free
           </Link>
           </motion.div>
           <motion.p className="mt-5 text-sm text-blue-100" variants={fadeItem}>
-            ✓ Start free, no credit card required &nbsp;&nbsp; ✓ Work at your own pace &nbsp;&nbsp; ✓ Always know what&apos;s next
+            ✓ Start free &mdash; yeah, it&apos;s actually true &nbsp;&nbsp; ✓ Work at your own pace &nbsp;&nbsp; ✓ Always know what&apos;s next
           </motion.p>
         </motion.div>
       </motion.section>

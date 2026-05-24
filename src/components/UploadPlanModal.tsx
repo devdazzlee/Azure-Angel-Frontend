@@ -42,6 +42,106 @@ interface UploadResponse {
   per_question_answers?: Record<string, string | null> | null;
 }
 
+const MIN_PASTE_CHARS = 80;
+
+/** Topics Angel maps to the 45-question business plan questionnaire (see upload_plan_service). */
+const PLAN_CONTENT_SECTIONS: { title: string; items: string[] }[] = [
+  {
+    title: 'Business overview',
+    items: [
+      'Business name and one-line idea',
+      'Problem you solve and your product or service',
+      'Current stage (idea, building, launching)',
+      'Team, roles, and near-term goals',
+    ],
+  },
+  {
+    title: 'Market & customers',
+    items: [
+      'Target customer and market size',
+      'Customer needs and how you reach them',
+      'Competitors and what makes you different',
+    ],
+  },
+  {
+    title: 'Operations',
+    items: [
+      'How you deliver the product or service',
+      'Location, suppliers, tools, or technology',
+    ],
+  },
+  {
+    title: 'Brand & marketing',
+    items: [
+      'Mission, vision, and brand positioning',
+      'Marketing channels and sales approach',
+      'Pricing and revenue model',
+    ],
+  },
+  {
+    title: 'Legal & regulatory',
+    items: [
+      'Business structure (LLC, sole prop, etc.)',
+      'Licenses, permits, insurance, compliance',
+    ],
+  },
+  {
+    title: 'Financials',
+    items: [
+      'Startup costs and funding needs',
+      'Revenue projections and break-even',
+    ],
+  },
+  {
+    title: 'Growth & long-term',
+    items: ['Scaling plans, milestones, partnerships'],
+  },
+  {
+    title: 'Risk & vision',
+    items: ['Key risks, contingency plans, long-term vision'],
+  },
+];
+
+function PlanRequirementsPanel({ mode }: { mode: 'upload' | 'paste' }) {
+  return (
+    <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-3.5">
+      <div className="flex items-start gap-2">
+        <span className="mt-0.5 text-base leading-none" aria-hidden="true">
+          📋
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-950">
+            What to include {mode === 'upload' ? 'in your document' : 'in your text'}
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-amber-900/90">
+            Angel reads your plan and maps it to our business questionnaire. The more topics you cover, the fewer questions you will need to answer afterward.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {PLAN_CONTENT_SECTIONS.map((section) => (
+              <div key={section.title}>
+                <p className="text-xs font-semibold text-amber-950">{section.title}</p>
+                <ul className="mt-1 space-y-0.5 text-[11px] leading-snug text-amber-900/85">
+                  {section.items.map((item) => (
+                    <li key={item} className="flex gap-1.5">
+                      <span className="text-amber-700" aria-hidden="true">
+                        •
+                      </span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-[11px] leading-relaxed text-amber-800/90">
+            <strong>Partial plans are fine.</strong> If a section is missing, Angel will ask you those questions during the business plan phase.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
   isOpen,
   onClose,
@@ -154,8 +254,13 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
   };
 
   const handleTextSubmit = async () => {
-    if (!pastedText.trim()) {
+    const trimmed = pastedText.trim();
+    if (!trimmed) {
       setTextError('Please paste your business plan content before submitting.');
+      return;
+    }
+    if (trimmed.length < MIN_PASTE_CHARS) {
+      setTextError(`Please paste at least ${MIN_PASTE_CHARS} characters so Angel can extract useful details.`);
       return;
     }
     setTextError('');
@@ -337,7 +442,7 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 mb-6">
+          <div className="flex flex-wrap items-center gap-3 mb-4">
             <button
               onClick={() => setActiveMode('upload')}
               className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors ${
@@ -360,7 +465,9 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
             </button>
           </div>
 
-          {/* Upload Area */}
+          <PlanRequirementsPanel mode={activeMode} />
+
+          {/* Upload / paste area */}
           <div className="space-y-6">
             {activeMode === 'upload' ? (
               <div
@@ -390,6 +497,10 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
                     <p className="text-sm text-gray-500 mt-1">
                       or click to browse files
                     </p>
+                    <p className="mt-2 max-w-md text-xs leading-relaxed text-gray-500">
+                      Your file should cover the topics listed above (overview, market, operations, marketing, legal, financials, growth, and risks).
+                    </p>
+                    <p className="text-xs text-gray-400">PDF, DOCX, or TXT — up to 10 MB</p>
                   </div>
                   
                   <button
@@ -429,7 +540,7 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
                 <textarea
                   value={pastedText}
                   onChange={(e) => setPastedText(e.target.value)}
-                  placeholder="Paste your business plan content here..."
+                  placeholder="Paste your full business plan here. Include as many sections as you can: business overview, target market, operations, marketing, legal structure, financials, growth plans, and risks."
                   rows={12}
                   className="w-full border border-indigo-200 rounded-xl p-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition-shadow"
                   disabled={uploading}
@@ -439,7 +550,7 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
                 )}
                 <div className="flex items-center justify-between text-xs text-gray-500">
                   <span>{pastedText.length.toLocaleString()} characters</span>
-                  <span>Tip: include every section you’d expect in a polished plan.</span>
+                  <span>Tip: use the checklist above — more sections means fewer follow-up questions.</span>
                 </div>
                 <button
                   onClick={handleTextSubmit}
@@ -466,7 +577,7 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
                 <h3 className="font-medium text-gray-900 mb-2">Supported File Types</h3>
                 <ul className="text-sm text-gray-600 space-y-1">
                   <li>• PDF documents (.pdf)</li>
-                  <li>• Microsoft Word (.doc, .docx)</li>
+                  <li>• Microsoft Word (.docx only — convert legacy .doc first)</li>
                   <li>• Text files (.txt)</li>
                   <li>• Maximum file size: 10MB</li>
                 </ul>
