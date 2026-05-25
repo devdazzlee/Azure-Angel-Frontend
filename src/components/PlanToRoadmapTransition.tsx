@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'react-toastify';
@@ -266,6 +267,16 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
     cachedTransition?.summary ?? businessPlanSummary
   );
   const [isLoadingSummary, setIsLoadingSummary] = useState(false);
+
+  // Tracks WHICH action put the parent into a loading state so the full-screen
+  // overlay can render the right message. Without this, clicking "Edit Plan"
+  // (a backward navigation) used to flash the "Setting Up Your Budget" overlay
+  // because the overlay copy was hardcoded to the forward path. Reset to null
+  // whenever the parent's `loading` prop flips back to false.
+  const [pendingAction, setPendingAction] = useState<'forward' | 'revisit' | null>(null);
+  useEffect(() => {
+    if (!loading) setPendingAction(null);
+  }, [loading]);
   const hasFetchedSummary = useRef(false); // Track if we've already attempted to fetch
 
   useEffect(() => {
@@ -616,37 +627,174 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
 
   return (
     <>
-      {/* Full-Screen Loading Overlay - Fixed Position */}
+      {/* Full-Screen Loading Overlay — copy depends on which action triggered
+          the loading state. Revisit (Edit Plan) is a BACKWARD navigation and
+          must never show "Setting Up Your Budget" / "Generating Your Roadmap"
+          which imply forward progress. */}
       {loading && (
         <div className="fixed inset-0 bg-white/95 backdrop-blur-md flex items-center justify-center z-[9999]">
           <div className="text-center">
-            <svg className="animate-spin h-20 w-20 text-green-500 mx-auto mb-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <svg
+              className={`animate-spin h-20 w-20 mx-auto mb-6 ${
+                pendingAction === 'revisit' ? 'text-teal-500' : 'text-green-500'
+              }`}
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
             <h3 className="text-3xl font-bold text-gray-900 mb-3">
-              {nextStep === 'budget' ? '💰 Setting Up Your Budget' : '🚀 Generating Your Roadmap'}
+              {pendingAction === 'revisit'
+                ? '📝 Returning to Chat'
+                : nextStep === 'budget'
+                ? '💰 Setting Up Your Budget'
+                : '🚀 Generating Your Roadmap'}
             </h3>
             <p className="text-lg text-gray-600 mb-6">
-              {nextStep === 'budget' ? 'Preparing your budget setup...' : 'Creating your personalized launch roadmap...'}
+              {pendingAction === 'revisit'
+                ? 'Reopening your business plan so you can edit your answers…'
+                : nextStep === 'budget'
+                ? 'Preparing your budget setup...'
+                : 'Creating your personalized launch roadmap...'}
             </p>
             <div className="flex items-center justify-center gap-3 mb-6">
-              <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-              <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-              <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              <div
+                className={`w-3 h-3 rounded-full animate-bounce ${
+                  pendingAction === 'revisit' ? 'bg-teal-500' : 'bg-green-500'
+                }`}
+                style={{ animationDelay: '0ms' }}
+              ></div>
+              <div
+                className={`w-3 h-3 rounded-full animate-bounce ${
+                  pendingAction === 'revisit' ? 'bg-teal-500' : 'bg-green-500'
+                }`}
+                style={{ animationDelay: '150ms' }}
+              ></div>
+              <div
+                className={`w-3 h-3 rounded-full animate-bounce ${
+                  pendingAction === 'revisit' ? 'bg-teal-500' : 'bg-green-500'
+                }`}
+                style={{ animationDelay: '300ms' }}
+              ></div>
             </div>
-            <p className="text-base text-gray-500">This may take 10-30 seconds...</p>
+            <p className="text-base text-gray-500">
+              {pendingAction === 'revisit' ? 'Just a moment…' : 'This may take 10-30 seconds...'}
+            </p>
           </div>
         </div>
       )}
       
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 flex items-center justify-center px-4 py-10 sm:py-14">
         <div className="w-full max-w-4xl bg-white/90 backdrop-blur-xl border border-white/30 shadow-2xl rounded-3xl p-8">
-        <header className="text-center mb-8">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Business plan summary</h1>
-          <p className="text-gray-600 mt-2 text-sm md:text-base">
-            Review your summary below, then continue or generate your full plan.
-          </p>
+        <header className="relative mb-10 pt-2 pb-6 border-b border-slate-200/70 overflow-hidden">
+          {/* Ambient decorative orbs — softly float behind the title.
+              `pointer-events-none` so they never block clicks. */}
+          <motion.div
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-10 left-1/4 h-40 w-40 rounded-full bg-teal-300/30 blur-3xl"
+            animate={{
+              x: [0, 20, -10, 0],
+              y: [0, -15, 10, 0],
+              scale: [1, 1.1, 0.95, 1],
+            }}
+            transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
+          />
+          <motion.div
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-8 right-1/4 h-32 w-32 rounded-full bg-blue-300/30 blur-3xl"
+            animate={{
+              x: [0, -25, 15, 0],
+              y: [0, 12, -10, 0],
+              scale: [1, 0.9, 1.15, 1],
+            }}
+            transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
+          />
+
+          {/* Back button — slides in from the left, lifts on hover. */}
+          <motion.button
+            type="button"
+            disabled={loading || isGeneratingArtifact}
+            onClick={() => {
+              setPendingAction('revisit');
+              onRevisit();
+            }}
+            initial={{ opacity: 0, x: -16 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
+            whileHover={{ x: -4 }}
+            whileTap={{ scale: 0.96 }}
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 backdrop-blur px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-white hover:border-teal-300 hover:text-teal-700 hover:shadow-md disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+            title="Go back to the chat and edit your answers"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M15 19l-7-7 7-7" />
+            </svg>
+            <span>Edit Plan</span>
+          </motion.button>
+
+          {/* Title block — staggered fade-up with a shimmering eyebrow pill. */}
+          <motion.div
+            className="relative text-center"
+            initial="hidden"
+            animate="show"
+            variants={{
+              hidden: {},
+              show: { transition: { staggerChildren: 0.08, delayChildren: 0.05 } },
+            }}
+          >
+            <motion.div
+              variants={{
+                hidden: { opacity: 0, y: -6 },
+                show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: 'easeOut' } },
+              }}
+              className="relative inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-teal-50 via-emerald-50 to-blue-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-700 ring-1 ring-teal-200/70 mb-3 overflow-hidden"
+            >
+              {/* Shine sweep across the pill, perpetual. */}
+              <motion.span
+                aria-hidden="true"
+                className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/70 to-transparent"
+                animate={{ x: ['-100%', '200%'] }}
+                transition={{ duration: 3.5, repeat: Infinity, repeatDelay: 2, ease: 'easeInOut' }}
+              />
+              <motion.span
+                aria-hidden="true"
+                animate={{ rotate: [0, 14, -10, 0], scale: [1, 1.15, 1] }}
+                transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                ✦
+              </motion.span>
+              <span className="relative">Summary</span>
+            </motion.div>
+
+            <motion.h1
+              variants={{
+                hidden: { opacity: 0, y: 10 },
+                show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } },
+              }}
+              className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-slate-900 via-teal-700 to-blue-700 bg-clip-text text-transparent bg-[length:200%_100%]"
+              style={{ backgroundPosition: '0% 50%' }}
+            >
+              <motion.span
+                className="inline-block bg-gradient-to-r from-slate-900 via-teal-700 to-blue-700 bg-clip-text text-transparent bg-[length:200%_100%]"
+                animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
+                transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                Business Plan Summary
+              </motion.span>
+            </motion.h1>
+
+            <motion.p
+              variants={{
+                hidden: { opacity: 0, y: 8 },
+                show: { opacity: 1, y: 0, transition: { duration: 0.45, ease: 'easeOut' } },
+              }}
+              className="mx-auto mt-3 max-w-xl text-sm md:text-base leading-relaxed text-slate-500"
+            >
+              Review your summary below, then continue or generate your full plan.
+            </motion.p>
+          </motion.div>
         </header>
 
         {/* Info Banner - How to Generate Full Plan */}
@@ -1055,6 +1203,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
                   toast.info('Subscription required to proceed to Roadmap phase');
                   return;
                 }
+                setPendingAction('forward');
                 onApprove();
               }}
               disabled={loading || (nextStep === 'roadmap' && !hasPaid)}

@@ -281,6 +281,65 @@ const deriveQuestionNumber = (
 };
 
 /**
+ * Rebuild ConversationPair[] from a flat chat history (alternating
+ * assistant/user records). Extracted from the post-upload flow so the same
+ * logic can run from any history-refresh callsite. Only assistant messages
+ * carrying a `[[Q:PHASE.NN]]` tag start a new pair — orphaned acks and
+ * commands are ignored, and "EMPTY" sentinel answers are skipped.
+ */
+function buildHistoryPairs(
+  records: Array<{ role: string; content?: string; phase?: string }>,
+  parseReply: (raw: string) => { acknowledgement: string; question: string },
+): ConversationPair[] {
+  const pairs: ConversationPair[] = [];
+  let pendingQuestion: string | null = null;
+  let pendingAck: string | null = null;
+  let pendingNumber: number | null = null;
+  let pendingPhase: ConversationPair["phase"] | null = null;
+  const phaseCounters: Record<string, number> = {};
+
+  for (const record of records) {
+    if (record.role === "assistant") {
+      if (!record.content) continue;
+      const tagMatch = record.content.match(/\[\[Q:([A-Z_]+)\.(\d{2})]]/);
+      if (!tagMatch) continue;
+
+      const { acknowledgement, question } = parseReply(record.content);
+      const rawPhase = tagMatch[1] || record.phase || "GKY";
+      const normalizedPhase = (rawPhase.toUpperCase() === "KYC" ? "GKY" : rawPhase.toUpperCase()) as ConversationPair["phase"];
+      const counter = phaseCounters[normalizedPhase as string] ?? 0;
+      const parsedNumber = parseInt(tagMatch[2], 10);
+      if (!Number.isNaN(parsedNumber)) {
+        phaseCounters[normalizedPhase as string] = Math.max(counter, parsedNumber);
+        pendingNumber = parsedNumber;
+      } else {
+        phaseCounters[normalizedPhase as string] = counter + 1;
+        pendingNumber = phaseCounters[normalizedPhase as string];
+      }
+      pendingQuestion = question;
+      pendingAck = acknowledgement;
+      pendingPhase = normalizedPhase;
+    } else if (record.role === "user") {
+      if (!pendingQuestion) continue;
+      const answerText = (record.content || "").trim();
+      if (!answerText || answerText.toUpperCase() === "EMPTY") continue;
+      pairs.push({
+        question: pendingQuestion,
+        answer: answerText,
+        acknowledgement: pendingAck || undefined,
+        questionNumber: pendingNumber ?? undefined,
+        phase: pendingPhase ?? undefined,
+      });
+      pendingQuestion = null;
+      pendingAck = null;
+      pendingNumber = null;
+      pendingPhase = null;
+    }
+  }
+  return pairs;
+}
+
+/**
  * Tiny effect-only child that lives inside the CoachMarkProvider so it can
  * call the hook. Kicks off the Business Plan quick-actions tour the first
  * time the user crosses into that phase. The provider itself short-circuits
@@ -4111,28 +4170,88 @@ export default function ChatPage() {
       const { data } = await httpClient.post<any>(`/angel/sessions/${sessionId}/transition-decision`, {
         decision: 'revisit',
       });
-      
-      if (data.success) {
-        toast.success("Plan review mode activated");
-        setTransitionData(null);
-        if (data.result?.progress) {
-          applyProgressUpdate(data.result.progress);
-        }
-        
-        // Refresh to get the first business plan question
-        await fetchQuestion("", sessionId!);
-      } else {
+
+      if (!data.success) {
         toast.error(data.message || "Failed to activate review mode");
+        return;
       }
+
+      toast.success("Plan review mode activated");
+      setTransitionData(null);
+      if (data.result?.progress) {
+        applyProgressUpdate(data.result.progress);
+      }
+
+      // Refresh the chat state from the backend. We MUST consume the response
+      // and update currentQuestion / acknowledgement, otherwise the chat
+      // renders the empty-string fallback (`currentQuestion || "Loading…"`)
+      // and the user is stuck staring at "Loading…" with no way forward.
+      const refreshed = await fetchQuestion("", sessionId!);
+      const { reply, progress: refreshedProgress, question_number } = refreshed.result;
+      const { acknowledgement, question } = parseAngelReply(reply);
+      const qn = deriveQuestionNumber(question_number, reply, refreshedProgress);
+
+      setCurrentQuestion(question);
+      setCurrentAcknowledgement(acknowledgement);
+      setCurrentQuestionNumber(qn);
+      updateQuestionTracker(refreshedProgress.phase, qn);
+      applyProgressUpdate(refreshedProgress);
     } catch (error) {
       console.error("❌ Failed to revisit plan:", error);
-      const errorMessage = 
+      const errorMessage =
         (error as any)?.message ||
         (error as any)?.response?.data?.detail ||
         (error as any)?.response?.data?.error ||
         (error as any)?.response?.data?.message ||
         "Failed to revisit plan. Please try again.";
       toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Re-open the Business Plan Summary screen from the chat. Used by the
+   * "View Business Plan Summary" call-to-action that appears once every BP
+   * question has been answered — without it the user has no way to leave the
+   * chat surface after clicking Back/Edit Plan, since there are no more
+   * questions to answer and the sidebar's "Business Plan" button is only
+   * visible during ROADMAP / IMPLEMENTATION phases.
+   */
+  const handleReopenPlanSummary = async () => {
+    setLoading(true);
+    try {
+      const { result } = await fetchQuestion(
+        "All business plan questions are answered. Continue to the launch roadmap.",
+        sessionId!,
+      );
+      // handleNext-style transition handling — we want the modal, not a chat bubble.
+      const business_plan_summary = (result as any).business_plan_summary || "";
+      const business_plan_artifact = (result as any).business_plan_artifact || null;
+      const transition_phase = (result as any).transition_phase;
+
+      if (transition_phase === "PLAN_TO_SUMMARY" || transition_phase === "PLAN_TO_ROADMAP") {
+        setTransitionData({
+          businessPlanSummary: business_plan_summary,
+          businessPlanArtifact: business_plan_artifact,
+          transitionPhase: transition_phase,
+        });
+        if (result.progress) applyProgressUpdate(result.progress);
+        return;
+      }
+
+      // Fall through: backend didn't fire a transition. Update chat state so
+      // we don't leave the user staring at "Loading…".
+      const { acknowledgement, question } = parseAngelReply(result.reply);
+      const qn = deriveQuestionNumber(result.question_number, result.reply, result.progress);
+      setCurrentQuestion(question);
+      setCurrentAcknowledgement(acknowledgement);
+      setCurrentQuestionNumber(qn);
+      updateQuestionTracker(result.progress.phase, qn);
+      applyProgressUpdate(result.progress);
+    } catch (error) {
+      console.error("❌ Failed to re-open Business Plan Summary:", error);
+      toast.error("Could not open the Business Plan Summary. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -5165,6 +5284,28 @@ export default function ChatPage() {
             )}
             </div>
 
+            {/* "View Business Plan Summary" CTA — visible when every BP
+                question is answered. Without this, a user who clicked
+                Back/Edit Plan from the Summary screen is stranded in the
+                chat with no way to return: there's no next question to
+                answer, and the sidebar's "Business Plan" button only
+                appears in ROADMAP / IMPLEMENTATION phases. */}
+            {progress.phase === "BUSINESS_PLAN" && bpPairs.length >= bpTotal && !pendingUserReply && (
+              <div className="mt-4 flex justify-center print:hidden">
+                <button
+                  type="button"
+                  onClick={handleReopenPlanSummary}
+                  disabled={loading}
+                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-500 to-blue-500 px-6 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:from-teal-600 hover:to-blue-600 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>View Business Plan Summary</span>
+                </button>
+              </div>
+            )}
+
             {/* Input + actions — one scroll with chat; mt-auto pins to bottom when content is short */}
             <div className="mt-4 flex-shrink-0 border-t border-gray-200/70 bg-gradient-to-br from-slate-50 to-teal-50 py-3">
               <div className="w-full">
@@ -5556,269 +5697,173 @@ export default function ChatPage() {
         onUploadSuccess={handleUploadPlanSuccess}
         sessionId={sessionId}
         onStartAnswering={async (analysis?: any, businessInfo?: any, perQuestionAnswers?: Record<string, string | null> | null) => {
-          // Close upload modal
           handleUploadModalClose();
-          
-          // Normalize analysis data structure (backend uses snake_case, frontend uses camelCase)
+
+          // Backend uses snake_case (missing_questions); frontend reads camelCase.
           let normalizedAnalysis = analysis || uploadAnalysis;
           if (normalizedAnalysis && normalizedAnalysis.missing_questions && !normalizedAnalysis.missingQuestions) {
-            normalizedAnalysis = {
-              ...normalizedAnalysis,
-              missingQuestions: normalizedAnalysis.missing_questions
-            };
+            normalizedAnalysis = { ...normalizedAnalysis, missingQuestions: normalizedAnalysis.missing_questions };
           }
-          
           const analysisToUse = normalizedAnalysis;
           const businessInfoToUse = businessInfo || (uploadAnalysis?.businessInfo);
-          
-          // Ensure we're in BUSINESS_PLAN phase (or set it if not)
+          const missingFromAnalysis = (analysisToUse?.missingQuestions || [])
+            .map((q: any) => q.question_number || q.questionNumber)
+            .filter((n: any) => typeof n === "number");
+
           try {
             setLoading(true);
-            
-            console.log("🎯 onStartAnswering called with:", {
+
+            console.log("🎯 onStartAnswering:", {
               hasAnalysis: !!analysisToUse,
               hasBusinessInfo: !!businessInfoToUse,
-              missingCount: analysisToUse?.missingQuestions?.length || 0,
-              analysisStructure: analysisToUse ? Object.keys(analysisToUse) : [],
-              firstMissing: analysisToUse?.missingQuestions?.[0]
+              missingCount: missingFromAnalysis.length,
             });
-            
-            // If we have missing questions from analysis, save found info and start from first missing question
-            if (analysisToUse && analysisToUse.missingQuestions && analysisToUse.missingQuestions.length > 0) {
-              const firstMissing = analysisToUse.missingQuestions[0];
-              // Handle both question_number (backend) and questionNumber (frontend) formats
-              const firstMissingNumber = firstMissing.question_number || firstMissing.questionNumber;
-              
-              if (!firstMissingNumber) {
-                console.error("❌ First missing question has no question_number:", firstMissing);
-                toast.error("Invalid analysis data. Please try uploading again.");
-                return;
-              }
-              
-              // First, ensure session is in BUSINESS_PLAN phase
+
+            // No analysis at all → caller wants to start the questionnaire from scratch.
+            // Reset and let the chat ask BP.01. This is the only path that should ever
+            // produce "Q1 after upload" — never the "all questions found" path.
+            if (!analysisToUse) {
               try {
                 await syncSessionProgress(sessionId!, {
                   phase: "BUSINESS_PLAN",
                   answered_count: 0,
-                  asked_q: undefined, // Will be set by jump message
+                  asked_q: undefined,
                 });
-                console.log("✅ Set session phase to BUSINESS_PLAN");
               } catch (phaseError) {
-                console.warn("Failed to set phase (continuing anyway):", phaseError);
+                console.warn("Failed to set phase:", phaseError);
               }
-              
-              // Extract missing question numbers from analysis
-              const missingNumbers = analysisToUse.missingQuestions.map((q: any) => q.question_number || q.questionNumber).filter((n: any) => n != null);
-              
-              // Save found information to chat history
-              // NOTE: Backend will process ALL 46 questions and determine which are truly found vs missing
-              // We send the original missing_questions from analysis, but backend will update it based on actual extraction results
-              try {
-                const { data: saveData } = await httpClient.post<any>('/upload-plan/save-found-info', {
-                  session_id: sessionId,
-                  business_info: businessInfoToUse || {},
-                  per_question_answers: perQuestionAnswers || {},
-                  found_questions: [],
-                  missing_questions: missingNumbers,
-                });
-                if (saveData.success) {
-                  console.log(`✅ Saved ${saveData.saved_count} found information entries to chat history`);
-                  console.log(`📊 Actual found questions: ${saveData.found_questions || []}`);
-                  console.log(`📊 Updated missing questions: ${saveData.missing_questions || []}`);
-                  console.log(`⚠️ Questions that failed extraction: ${saveData.failed_extraction || []}`);
-                  
-                  // Update analysis with actual found/missing questions from backend
-                  const actualFoundQuestions = saveData.found_questions || [];
-                  const actualMissingQuestions = saveData.missing_questions || [];
-                  
-                  // Update the analysis state with backend's actual results
-                  if (actualMissingQuestions.length > 0) {
-                    setUploadAnalysis({
-                      missingQuestions: actualMissingQuestions.map((qNum: number) => ({
-                        question_number: qNum,
-                        question_text: `Question ${qNum}`,
-                        category: "General",
-                        priority: "medium"
-                      })),
-                      businessInfo: businessInfoToUse || {}
-                    });
-                  }
-                  
-                  toast.success(`Saved ${saveData.saved_count} answers from your plan! ${actualMissingQuestions.length} questions still need answers.`);
-                  
-                  // CRITICAL: Refresh history to show uploaded Q&A pairs in the UI
-                  // The Q&A pairs are already saved to the database, now we need to reload them
-                  try {
-                    const refreshedHistory = await fetchSessionHistory(sessionId);
-                    
-                    // Rebuild conversation pairs from history (same logic as restoreSessionFromHistory)
-                    const buildPairs = (records: any[]) => {
-                      const pairs: ConversationPair[] = [];
-                      let pendingQuestion: string | null = null;
-                      let pendingAck: string | null = null;
-                      let pendingNumber: number | null = null;
-                      let pendingPhase: ConversationPair['phase'] | null = null;
-                      const phaseCounters: Record<string, number> = {};
-
-                      records.forEach((record) => {
-                        if (record.role === 'assistant') {
-                          if (!record.content) return;
-                          const hasQuestionTag = record.content.match(/\[\[Q:([A-Z_]+)\.(\d{2})]]/);
-                          if (!hasQuestionTag) return;
-                          
-                          const { acknowledgement, question } = parseAngelReply(record.content);
-                          const tagMatch = record.content.match(/\[\[Q:([A-Z_]+)\.(\d{2})]]/);
-                          const rawPhase = tagMatch ? tagMatch[1] : record.phase;
-                          const rawUpper3 = rawPhase ? rawPhase.toUpperCase() : 'GKY';
-                          const normalizedPhase = rawUpper3 === 'KYC' ? 'GKY' : rawUpper3;
-                          const counter = phaseCounters[normalizedPhase] ?? 0;
-                          const parsedNumber = tagMatch ? parseInt(tagMatch[2], 10) : null;
-
-                          if (parsedNumber) {
-                            phaseCounters[normalizedPhase] = Math.max(counter, parsedNumber);
-                            pendingNumber = parsedNumber;
-                          } else {
-                            phaseCounters[normalizedPhase] = counter + 1;
-                            pendingNumber = phaseCounters[normalizedPhase];
-                          }
-
-                          pendingQuestion = question;
-                          pendingAck = acknowledgement;
-                          pendingPhase = normalizedPhase as ConversationPair['phase'];
-                        } else if (record.role === 'user') {
-                          if (!pendingQuestion) return;
-                          const answerText = (record.content || '').trim();
-                          if (!answerText || answerText.toUpperCase() === 'EMPTY') {
-                            return;
-                          }
-                          pairs.push({
-                            question: pendingQuestion,
-                            answer: answerText,
-                            acknowledgement: pendingAck || undefined,
-                            questionNumber: pendingNumber ?? undefined,
-                            phase: pendingPhase ?? undefined,
-                          });
-                          pendingQuestion = null;
-                          pendingAck = null;
-                          pendingNumber = null;
-                          pendingPhase = null;
-                        }
-                      });
-
-                      return pairs;
-                    };
-                    
-                    const newPairs = buildPairs(refreshedHistory || []);
-                    setHistory(newPairs);
-                    console.log(`✅ Refreshed history - now showing ${newPairs.length} Q&A pairs (including ${saveData.saved_count} from uploaded plan)`);
-                  } catch (refreshError) {
-                    console.warn("Failed to refresh history after save:", refreshError);
-                    // Don't show error to user - history will refresh on next page load
-                  }
-                }
-              } catch (saveError) {
-                console.warn("Failed to save found info (continuing anyway):", saveError);
-                toast.warning("Some information may not have been saved. Please continue.");
-              }
-              
-              // Get updated missing questions from the save response (if we got it)
-              // Use the actual missing questions returned by backend, or fallback to original
-              let finalMissingQuestions = missingNumbers;
-              let finalFirstMissing = firstMissingNumber;
-              
-              // Try to get updated missing questions from the save response
-              // (The save response should have the actual missing questions after extraction)
-              // Note: We already called save-found-info above, so we should use those results
-              // But if that failed, we'll use the original analysis
-              
-              // Send a message to backend to jump to the first missing question
-              // Include missing questions list in the message for backend to track
-              const missingNumbersList = finalMissingQuestions.join(',');
-              const jumpMessage = `Start from question ${finalFirstMissing} to answer missing questions from uploaded plan. Missing questions: ${missingNumbersList}`;
-              
-              console.log(`🚀 Sending jump message: "${jumpMessage}"`);
-              console.log(`📋 First missing question: ${finalFirstMissing}`);
-              console.log(`📋 Total missing questions: ${finalMissingQuestions.length}`);
-              console.log(`📋 Missing questions list: [${missingNumbersList}]`);
-              
-              // Small delay to ensure session phase is synced
-              await new Promise(resolve => setTimeout(resolve, 100));
-              
-              try {
-                const {
-                  result: { reply, progress: updatedProgress, question_number },
-                } = await fetchQuestion(jumpMessage, sessionId!);
-                
-                console.log(`✅ Received reply from backend, question_number: ${question_number}`);
-                
-                // Update session with missing questions list
-                try {
-                  await syncSessionProgress(sessionId!, {
-                    phase: updatedProgress.phase,
-                    answered_count: updatedProgress.answered || 0,
-                    asked_q: `BUSINESS_PLAN.${firstMissingNumber.toString().padStart(2, '0')}`,
-                  });
-                } catch (syncError) {
-                  console.warn("Failed to sync progress:", syncError);
-                }
-                
-                const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
-                const questionNumber = deriveQuestionNumber(question_number, reply, updatedProgress);
-                
-                console.log(`📊 Derived question number: ${questionNumber}, Expected: ${firstMissingNumber}`);
-                
-                if (questionNumber !== firstMissingNumber) {
-                  console.warn(`⚠️ Expected question ${firstMissingNumber} but got ${questionNumber}`);
-                  console.warn(`⚠️ Reply preview: ${reply.substring(0, 200)}`);
-                }
-                
-                setCurrentQuestion(parsedQ);
-                setCurrentAcknowledgement(ack);
-                setCurrentQuestionNumber(questionNumber);
-                updateQuestionTracker(updatedProgress.phase, questionNumber);
-                applyProgressUpdate(updatedProgress);
-                
-                if (questionNumber === firstMissingNumber) {
-                  toast.success(`Starting from Question ${firstMissingNumber} - ${analysisToUse.missingQuestions.length} questions to answer!`);
-                } else {
-                  toast.warning(`Expected Question ${firstMissingNumber} but got Question ${questionNumber}. Please check the backend logs.`);
-                }
-              } catch (fetchError) {
-                console.error("❌ Error fetching question:", fetchError);
-                toast.error("Failed to jump to missing question. Please try again.");
-                throw fetchError;
-              }
-            } else {
-                // No missing questions or analysis - start from beginning
-                // Ensure phase is set first
-                try {
-                  await syncSessionProgress(sessionId!, {
-                    phase: "BUSINESS_PLAN",
-                    answered_count: 0,
-                    asked_q: undefined,
-                  });
-                } catch (phaseError) {
-                  console.warn("Failed to set phase:", phaseError);
-                }
-                
-                const {
-                  result: { reply, progress: updatedProgress, question_number },
-                } = await fetchQuestion("", sessionId!);
-                const { acknowledgement: ack2, question: parsedQ2 } = parseAngelReply(reply);
-                const questionNumber = deriveQuestionNumber(question_number, reply, updatedProgress);
-                setCurrentQuestion(parsedQ2);
-                setCurrentAcknowledgement(ack2);
-                setCurrentQuestionNumber(questionNumber);
-                updateQuestionTracker(updatedProgress.phase, questionNumber);
-                applyProgressUpdate(updatedProgress);
-                toast.success("Ready to answer questions!");
-              }
-            } catch (error) {
-              console.error("Failed to start answering:", error);
-              toast.error("Failed to start answering questions");
-            } finally {
-              setLoading(false);
+              const { result } = await fetchQuestion("", sessionId!);
+              const { acknowledgement, question } = parseAngelReply(result.reply);
+              const qn = deriveQuestionNumber(result.question_number, result.reply, result.progress);
+              setCurrentQuestion(question);
+              setCurrentAcknowledgement(acknowledgement);
+              setCurrentQuestionNumber(qn);
+              updateQuestionTracker(result.progress.phase, qn);
+              applyProgressUpdate(result.progress);
+              toast.success("Ready to answer questions!");
+              return;
             }
+
+            // Force phase to BUSINESS_PLAN so save-found-info / jump / completion
+            // all operate on the right session state regardless of where the user
+            // triggered the upload from.
+            try {
+              await syncSessionProgress(sessionId!, {
+                phase: "BUSINESS_PLAN",
+                answered_count: 0,
+                asked_q: undefined,
+              });
+            } catch (phaseError) {
+              console.warn("Failed to set phase (continuing anyway):", phaseError);
+            }
+
+            // ALWAYS persist extracted answers, regardless of missing count.
+            // Previously this only ran when missing > 0, so a 100%-complete upload
+            // silently discarded every extracted answer.
+            let savedCount = 0;
+            let actualMissing: number[] = missingFromAnalysis;
+            try {
+              const { data: saveData } = await httpClient.post<any>('/upload-plan/save-found-info', {
+                session_id: sessionId,
+                business_info: businessInfoToUse || {},
+                per_question_answers: perQuestionAnswers || {},
+                found_questions: [],
+                missing_questions: missingFromAnalysis,
+              });
+              if (saveData?.success) {
+                savedCount = saveData.saved_count || 0;
+                actualMissing = Array.isArray(saveData.missing_questions)
+                  ? saveData.missing_questions
+                  : missingFromAnalysis;
+                console.log(`✅ save-found-info: saved=${savedCount}, missing=[${actualMissing.join(",")}]`);
+
+                if (actualMissing.length > 0) {
+                  setUploadAnalysis({
+                    missingQuestions: actualMissing.map((qNum: number) => ({
+                      question_number: qNum,
+                      question_text: `Question ${qNum}`,
+                      category: "General",
+                      priority: "medium",
+                    })),
+                    businessInfo: businessInfoToUse || {},
+                  });
+                }
+
+                // Refresh chat history so the saved Q&A pairs show up in the UI.
+                try {
+                  const refreshedHistory = await fetchSessionHistory(sessionId);
+                  const newPairs = buildHistoryPairs(refreshedHistory || [], parseAngelReply);
+                  setHistory(newPairs);
+                  console.log(`✅ History refreshed: ${newPairs.length} pairs (incl. ${savedCount} from upload)`);
+                } catch (refreshError) {
+                  console.warn("Failed to refresh history after save:", refreshError);
+                }
+              }
+            } catch (saveError) {
+              console.warn("Failed to save found info (continuing anyway):", saveError);
+              toast.warning("Some information may not have been saved. Please continue.");
+            }
+
+            // Branch on whether the plan is complete or has gaps.
+            if (actualMissing.length === 0) {
+              // PLAN IS COMPLETE — every BUSINESS_PLAN question has an answer in
+              // the session. Trigger BP completion through the SAME path the chat
+              // uses (handleNext), so the response's transition_phase is honored
+              // (PLAN_TO_SUMMARY → PlanToRoadmapTransition modal, PLAN_TO_BUDGET
+              // → budget navigation, PLAN_TO_ROADMAP → roadmap flow). Calling
+              // fetchQuestion directly here dropped the transition_phase field on
+              // the floor and rendered the "Planning Champion Award" body as a
+              // chat bubble instead of opening the dedicated summary screen.
+              toast.success(`Plan is complete (${savedCount} answers saved). Continuing…`);
+              await handleNext(
+                "All business plan questions are answered from my uploaded plan. Continue to the launch roadmap.",
+              );
+              return;
+            }
+
+            // GAPS REMAIN — jump to the first missing question.
+            const firstMissingNumber = actualMissing[0];
+            const jumpMessage = `Start from question ${firstMissingNumber} to answer missing questions from uploaded plan. Missing questions: ${actualMissing.join(",")}`;
+            console.log(`🚀 Jump message: "${jumpMessage}"`);
+
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
+            try {
+              const { result } = await fetchQuestion(jumpMessage, sessionId!);
+              try {
+                await syncSessionProgress(sessionId!, {
+                  phase: result.progress.phase,
+                  answered_count: result.progress.answered || 0,
+                  asked_q: `BUSINESS_PLAN.${String(firstMissingNumber).padStart(2, "0")}`,
+                });
+              } catch (syncError) {
+                console.warn("Failed to sync progress after jump:", syncError);
+              }
+
+              const { acknowledgement, question } = parseAngelReply(result.reply);
+              const qn = deriveQuestionNumber(result.question_number, result.reply, result.progress);
+              setCurrentQuestion(question);
+              setCurrentAcknowledgement(acknowledgement);
+              setCurrentQuestionNumber(qn);
+              updateQuestionTracker(result.progress.phase, qn);
+              applyProgressUpdate(result.progress);
+
+              if (qn === firstMissingNumber) {
+                toast.success(`Starting from Question ${firstMissingNumber} — ${actualMissing.length} questions to answer.`);
+              } else {
+                console.warn(`⚠️ Expected Q${firstMissingNumber} but landed on Q${qn}.`);
+              }
+            } catch (fetchError) {
+              console.error("❌ Error fetching jump question:", fetchError);
+              toast.error("Failed to jump to missing question. Please try again.");
+              throw fetchError;
+            }
+          } catch (error) {
+            console.error("Failed to start answering:", error);
+            toast.error("Failed to start answering questions");
+          } finally {
+            setLoading(false);
+          }
         }}
       />
 

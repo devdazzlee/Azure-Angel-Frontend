@@ -78,17 +78,28 @@ const handleError = (error: any): never => {
         toast.error(msg401);
         break;
       }
+      case 404:
+      case 405: {
+        // Route exists in code but isn't reachable at the deployed backend —
+        // almost always means the API hasn't been redeployed after a route
+        // change. Surface this distinctly so it doesn't masquerade as a
+        // generic "Server error" and hide a deployment-drift bug.
+        const method = (error.config?.method || 'request').toUpperCase();
+        const path = error.config?.url || '';
+        toast.error(`This action isn't available at the backend yet (HTTP ${status} on ${method} ${path}).`);
+        break;
+      }
       case 429:
         toast.error(ErrorMessages[ErrorCodes.RATE_LIMIT]);
         break;
       case 500:
-        toast.error(ErrorMessages[ErrorCodes.SERVER_ERROR]);
+        toast.error(serverMsg || ErrorMessages[ErrorCodes.SERVER_ERROR]);
         break;
       default:
         if (!navigator.onLine) {
           toast.error(ErrorMessages[ErrorCodes.NETWORK_ERROR]);
         } else {
-          toast.error(ErrorMessages[ErrorCodes.SERVER_ERROR]);
+          toast.error(serverMsg || ErrorMessages[ErrorCodes.SERVER_ERROR]);
         }
     }
   } else {

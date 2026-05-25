@@ -1,45 +1,24 @@
-import React, { useState, useRef, useEffect } from 'react';
-import httpClient from '../api/httpClient';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import PlanAnalysisModal from './PlanAnalysisModal';
+import {
+  uploadPlanFile,
+  listImportableSources,
+  importPlanFromSession,
+  type PlanAnalysisDTO as PlanAnalysis,
+  type UploadPlanResponse,
+  type ImportableSource,
+} from '../services/uploadPlanService';
+
+type UploadMode = 'upload' | 'paste' | 'session';
 
 interface UploadPlanModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUploadSuccess: (businessInfo: any, analysis?: PlanAnalysis | null, perQuestionAnswers?: Record<string, string | null> | null) => void;
   sessionId?: string;
-  initialMode?: 'upload' | 'paste';
+  initialMode?: UploadMode;
   onStartAnswering?: (analysis?: PlanAnalysis, businessInfo?: any, perQuestionAnswers?: Record<string, string | null> | null) => void;
-}
-
-interface PlanAnalysis {
-  summary: string;
-  completeness_score: number;
-  found_information: Record<string, boolean>;
-  missing_questions: Array<{
-    question_number: number;
-    question_text: string;
-    category: string;
-    priority: 'high' | 'medium' | 'low';
-  }>;
-  recommendations: string;
-}
-
-interface UploadedPlan {
-  file_id: string;
-  file_name: string;
-  file_size: number;
-  file_type: string;
-  business_info: any;
-  status: string;
-  created_at: string;
-}
-
-interface UploadResponse {
-  success: boolean;
-  business_info?: any;
-  analysis?: PlanAnalysis | null;
-  per_question_answers?: Record<string, string | null> | null;
 }
 
 const MIN_PASTE_CHARS = 80;
@@ -102,7 +81,8 @@ const PLAN_CONTENT_SECTIONS: { title: string; items: string[] }[] = [
   },
 ];
 
-function PlanRequirementsPanel({ mode }: { mode: 'upload' | 'paste' }) {
+function PlanRequirementsPanel({ mode }: { mode: UploadMode }) {
+  if (mode === 'session') return null;
   return (
     <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-3.5">
       <div className="flex items-start gap-2">
@@ -152,13 +132,17 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
 }) => {
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [activeMode, setActiveMode] = useState<'upload' | 'paste'>(initialMode);
+  const [activeMode, setActiveMode] = useState<UploadMode>(initialMode);
   const [pastedText, setPastedText] = useState('');
   const [textError, setTextError] = useState('');
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [analysisData, setAnalysisData] = useState<PlanAnalysis | null>(null);
   const [uploadedBusinessInfo, setUploadedBusinessInfo] = useState<any>(null);
   const [uploadedPerQuestionAnswers, setUploadedPerQuestionAnswers] = useState<Record<string, string | null> | null>(null);
+  const [importSources, setImportSources] = useState<ImportableSource[]>([]);
+  const [sourcesLoading, setSourcesLoading] = useState(false);
+  const [sourcesError, setSourcesError] = useState<string>('');
+  const [importingSourceId, setImportingSourceId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modalContentRef = useRef<HTMLDivElement>(null);
 
@@ -205,12 +189,37 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
       setAnalysisData(null);
       setUploadedBusinessInfo(null);
       setUploading(false);
+      setImportSources([]);
+      setSourcesError('');
+      setImportingSourceId(null);
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     }
   }, [isOpen, initialMode]);
+
+  const loadImportSources = useCallback(async () => {
+    setSourcesLoading(true);
+    setSourcesError('');
+    try {
+      const sources = await listImportableSources(sessionId);
+      setImportSources(sources);
+    } catch (err: any) {
+      const message = err?.response?.data?.detail || err?.message || 'Could not load your other ventures.';
+      setSourcesError(message);
+    } finally {
+      setSourcesLoading(false);
+    }
+  }, [sessionId]);
+
+  // Fetch the picker list lazily — only when the user actually opens the
+  // "From another venture" tab, and refetch each time so newly-completed
+  // plans in other tabs show up without a page reload.
+  useEffect(() => {
+    if (!isOpen || activeMode !== 'session') return;
+    loadImportSources();
+  }, [isOpen, activeMode, loadImportSources]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -270,33 +279,61 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
     setPastedText('');
   };
 
+  /** Shared success path for all three input modes (file, paste, session). */
+  const applyUploadResponse = (response: UploadPlanResponse, successMessage: string) => {
+    const businessInfo = response.business_info || {};
+    const analysis = response.analysis || null;
+    const perQuestionAnswers = response.per_question_answers || null;
+
+    setUploadedBusinessInfo(businessInfo);
+    setUploadedPerQuestionAnswers(perQuestionAnswers);
+    toast.success(successMessage);
+
+    if (analysis) {
+      setAnalysisData(analysis);
+      setShowAnalysis(true);
+    } else {
+      onUploadSuccess(businessInfo, null, perQuestionAnswers);
+      onClose();
+    }
+  };
+
+  const resetFileInput = () => {
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  /** Translate axios errors into a user-actionable toast. 405 / 404 mean the
+   *  endpoint isn't reachable at the configured backend — show that explicitly
+   *  instead of the generic "Server error" the global interceptor would emit. */
+  const reportUploadError = (error: any, fallback: string) => {
+    console.error('Upload error:', error);
+    const status = error?.response?.status;
+    const detail = error?.response?.data?.detail || error?.response?.data?.message;
+    if (status === 404 || status === 405) {
+      toast.error(`Upload endpoint not reachable (HTTP ${status}). Check the backend deployment.`);
+      return;
+    }
+    toast.error(detail || error?.message || fallback);
+  };
+
   const handleFileUpload = async (file: File) => {
-    // Validate file type. Backend supports PDF/DOCX/TXT only — legacy .doc is
-    // intentionally excluded because the parser cannot read it.
-    const allowedTypes = [
+    // Backend supports PDF / DOCX / TXT only — legacy .doc is excluded because
+    // the parser cannot read it. Use a strict extension regex so files like
+    // "plan.pdf.exe" are rejected, and keep the MIME check as a second gate.
+    const allowedMimes = [
       'application/pdf',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain'
+      'text/plain',
     ];
-
-    const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
-    const allowedExtensions = ['.pdf', '.docx', '.txt'];
-
-    if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
+    if (!/\.(pdf|docx|txt)$/i.test(file.name) || !allowedMimes.includes(file.type || 'text/plain')) {
       toast.error('Please upload a PDF, DOCX, or TXT file. Older .doc format is not supported — convert to .docx first.');
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      resetFileInput();
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) { // 10MB limit
-      toast.error('File size must be less than 10MB.');
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File size must be less than 10 MB.');
+      resetFileInput();
       return;
     }
 
@@ -304,59 +341,39 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
     setDragActive(false);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await httpClient.post<UploadResponse>('/upload-plan', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        timeout: 120000, // 2 minute timeout for large file processing
-      });
-
-      if (response.data.success) {
-        toast.success('Business plan analyzed successfully!');
-
-        const businessInfo = response.data.business_info || {};
-        const analysis = response.data.analysis || null;
-        const perQuestionAnswers = response.data.per_question_answers || null;
-
-        setUploadedBusinessInfo(businessInfo);
-        setUploadedPerQuestionAnswers(perQuestionAnswers);
-
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-
-        if (analysis) {
-          setAnalysisData(analysis);
-          setShowAnalysis(true);
-        } else {
-          if (businessInfo) {
-            onUploadSuccess(businessInfo, null, perQuestionAnswers);
-          }
-          onClose();
-        }
-      } else {
+      const response = await uploadPlanFile(file);
+      if (!response.success) {
         toast.error('Failed to upload business plan. Please try again.');
-        // Reset file input on failure
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
+        return;
       }
-    } catch (error: any) {
-      console.error('Upload error:', error);
-      const errorMessage = error.response?.data?.detail || 
-                          error.message || 
-                          'Failed to upload business plan. Please try again.';
-      toast.error(errorMessage);
-      // Reset file input on error
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      applyUploadResponse(response, 'Business plan analyzed successfully!');
+    } catch (error) {
+      reportUploadError(error, 'Failed to upload business plan. Please try again.');
     } finally {
       setUploading(false);
       setDragActive(false);
+      resetFileInput();
+    }
+  };
+
+  const handleImportFromSession = async (source: ImportableSource) => {
+    setImportingSourceId(source.id);
+    setUploading(true);
+    try {
+      const response = await importPlanFromSession(source.id);
+      if (!response.success) {
+        toast.error('Failed to import the selected business plan. Please try again.');
+        return;
+      }
+      applyUploadResponse(
+        response,
+        `Imported business plan from "${source.title || 'venture'}"`,
+      );
+    } catch (error) {
+      reportUploadError(error, 'Failed to import the selected business plan.');
+    } finally {
+      setImportingSourceId(null);
+      setUploading(false);
     }
   };
 
@@ -445,7 +462,8 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <button
               onClick={() => setActiveMode('upload')}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+              disabled={uploading}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 activeMode === 'upload'
                   ? 'bg-purple-600 text-white border-purple-600'
                   : 'border-gray-200 text-gray-600 hover:border-purple-300 hover:text-purple-700'
@@ -455,7 +473,8 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
             </button>
             <button
               onClick={() => setActiveMode('paste')}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+              disabled={uploading}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 activeMode === 'paste'
                   ? 'bg-indigo-600 text-white border-indigo-600'
                   : 'border-gray-200 text-gray-600 hover:border-indigo-300 hover:text-indigo-700'
@@ -463,13 +482,101 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
             >
               Paste plan text
             </button>
+            <button
+              onClick={() => setActiveMode('session')}
+              disabled={uploading}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                activeMode === 'session'
+                  ? 'bg-teal-600 text-white border-teal-600'
+                  : 'border-gray-200 text-gray-600 hover:border-teal-300 hover:text-teal-700'
+              }`}
+            >
+              From another venture
+            </button>
           </div>
 
           <PlanRequirementsPanel mode={activeMode} />
 
-          {/* Upload / paste area */}
+          {/* Upload / paste / pick area */}
           <div className="space-y-6">
-            {activeMode === 'upload' ? (
+            {activeMode === 'session' ? (
+              <div className="rounded-xl border border-teal-200 bg-teal-50/40 p-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-teal-900">
+                      Reuse a plan from another venture
+                    </p>
+                    <p className="mt-1 text-xs text-teal-800/80">
+                      Pick a completed business plan Angel has already generated for one of your other ventures.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={loadImportSources}
+                    disabled={sourcesLoading || uploading}
+                    className="text-xs font-medium text-teal-700 underline-offset-4 hover:underline disabled:opacity-50"
+                  >
+                    {sourcesLoading ? 'Refreshing…' : 'Refresh'}
+                  </button>
+                </div>
+
+                {sourcesError && (
+                  <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    {sourcesError}
+                  </div>
+                )}
+
+                {sourcesLoading ? (
+                  <div className="flex items-center gap-2 py-8 text-sm text-teal-800">
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Loading your other ventures…
+                  </div>
+                ) : importSources.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-teal-300 bg-white/60 px-4 py-6 text-center text-sm text-teal-900/80">
+                    No other ventures with a completed business plan yet. Finish a plan in another venture
+                    and it will show up here.
+                  </div>
+                ) : (
+                  <ul className="space-y-2">
+                    {importSources.map((source) => {
+                      const generated = source.generated_at ? new Date(source.generated_at) : null;
+                      const generatedLabel = generated && !Number.isNaN(generated.getTime())
+                        ? generated.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+                        : 'Date unknown';
+                      const isThisImporting = importingSourceId === source.id;
+                      return (
+                        <li key={source.id}>
+                          <button
+                            type="button"
+                            onClick={() => handleImportFromSession(source)}
+                            disabled={uploading}
+                            className="group flex w-full items-center justify-between gap-4 rounded-xl border border-teal-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-teal-400 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-semibold text-slate-900">
+                                {source.title || 'Untitled venture'}
+                              </p>
+                              <p className="mt-0.5 truncate text-xs text-slate-500">
+                                {[source.business_name, source.industry].filter(Boolean).join(' • ') || 'Business plan ready to import'}
+                              </p>
+                              <p className="mt-0.5 text-[11px] text-slate-400">
+                                Completed {generatedLabel} · {Math.round(source.artifact_chars / 1000)}k characters
+                              </p>
+                            </div>
+                            <span className="shrink-0 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white transition group-hover:bg-teal-700">
+                              {isThisImporting ? 'Importing…' : 'Import'}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            ) : activeMode === 'upload' ? (
               <div
                 className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
                   dragActive

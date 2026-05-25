@@ -382,42 +382,36 @@ const BusinessPlanView: React.FC = () => {
       {/* Content */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-          {/* Document Header with Back Button and Actions */}
-          <div className="bg-gradient-to-r from-teal-500 to-blue-500 p-8 text-white print:bg-white print:text-gray-900 print:border-b print:border-gray-300">
-            {/* Back Button - Top Left (high-contrast, prominent) */}
-            <button
-              onClick={handleBackToChat}
-              className="mb-6 inline-flex items-center gap-2 px-5 py-3 bg-white hover:bg-gray-100 text-teal-600 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 print:hidden"
-              aria-label={backLabel}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-              <span>{backLabel}</span>
-            </button>
+          {/* Document Header
+              Two stacked rows:
+                Row 1: chrome — back button (left) + action toolbar (right).
+                Row 2: page title + generated-on date.
+              The previous one-row layout squeezed the title between the back
+              button and the four right-side actions, so the title competed
+              with chrome for horizontal space. Separating chrome from title
+              gives the page heading its own visual register. */}
+          <div className="bg-gradient-to-r from-teal-500 to-blue-500 px-6 sm:px-8 py-6 text-white print:bg-white print:text-gray-900 print:border-b print:border-gray-300">
+            {/* Row 1 — chrome */}
+            <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
+              <button
+                onClick={handleBackToChat}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 text-teal-600 rounded-lg text-sm font-semibold shadow-md transition-colors"
+                aria-label={backLabel}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                <span>{backLabel}</span>
+              </button>
 
-            <div className="flex items-start justify-between gap-6">
-              <div className="flex-1">
-                <h1 className="text-4xl font-bold mb-2">Business Plan</h1>
-                <p className="text-lg opacity-90 print:opacity-100">
-                  Generated on {new Date().toLocaleDateString('en-US', { 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                  })}
-                </p>
-              </div>
-              
-              {/* Action Buttons - In Header */}
-              <div className="flex flex-col items-end gap-3 print:hidden flex-shrink-0">
-                {/* View Toggle */}
+              <div className="flex flex-wrap items-center gap-2">
                 {businessPlan && businessPlanSummary && (
                   <div className="inline-flex bg-white/20 rounded-lg p-1 backdrop-blur-sm">
                     <button
                       onClick={() => setViewMode('summary')}
-                      className={`px-4 py-2 rounded-md text-sm font-semibold transition-all whitespace-nowrap ${
+                      className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all whitespace-nowrap ${
                         viewMode === 'summary'
-                          ? 'bg-white text-teal-600 shadow-md'
+                          ? 'bg-white text-teal-600 shadow-sm'
                           : 'text-white hover:bg-white/10'
                       }`}
                     >
@@ -425,9 +419,9 @@ const BusinessPlanView: React.FC = () => {
                     </button>
                     <button
                       onClick={() => setViewMode('full')}
-                      className={`px-4 py-2 rounded-md text-sm font-semibold transition-all whitespace-nowrap ${
+                      className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all whitespace-nowrap ${
                         viewMode === 'full'
-                          ? 'bg-white text-teal-600 shadow-md'
+                          ? 'bg-white text-teal-600 shadow-sm'
                           : 'text-white hover:bg-white/10'
                       }`}
                     >
@@ -436,28 +430,37 @@ const BusinessPlanView: React.FC = () => {
                   </div>
                 )}
 
-                {/* Download and Print Buttons */}
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleDownload}
-                    className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-gray-100 text-teal-600 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 whitespace-nowrap"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    Download
-                  </button>
-                  <button
-                    onClick={handlePrint}
-                    className="flex items-center gap-2 px-6 py-3 bg-white/20 hover:bg-white/30 text-white rounded-lg font-semibold border-2 border-white/50 transition-all duration-300 transform hover:scale-105 whitespace-nowrap"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                    </svg>
-                    Print
-                  </button>
-                </div>
+                <button
+                  onClick={handleDownload}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 text-teal-600 rounded-lg text-sm font-semibold shadow-md transition-colors whitespace-nowrap"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Download
+                </button>
+                <button
+                  onClick={handlePrint}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm font-semibold border border-white/50 transition-colors whitespace-nowrap"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  Print
+                </button>
               </div>
+            </div>
+
+            {/* Row 2 — title + date */}
+            <div className="mt-6 print:mt-0">
+              <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Business Plan</h1>
+              <p className="mt-2 text-sm md:text-base opacity-90 print:opacity-100">
+                Generated on {new Date().toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                })}
+              </p>
             </div>
           </div>
 
@@ -571,21 +574,6 @@ const BusinessPlanView: React.FC = () => {
           </div>
         </div>
 
-        {/* End-of-document navigation - No Print */}
-        {content && (
-          <div className="mt-8 flex justify-center print:hidden">
-            <button
-              onClick={handleBackToChat}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-white hover:bg-gray-50 text-teal-600 rounded-lg font-semibold border-2 border-teal-500 shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-105"
-              aria-label={backLabel}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-              <span>{backLabel}</span>
-            </button>
-          </div>
-        )}
 
         {/* Footer - No Print */}
         <div className="mt-6 text-center text-sm text-gray-500 print:hidden">
@@ -632,21 +620,6 @@ const BusinessPlanView: React.FC = () => {
         documentContent={contentRef.current?.innerHTML || content}
         documentType="business-plan"
       />
-
-      {/* Floating Back-to-Chat Button - Bottom Left, always visible while scrolling */}
-      <div className="fixed left-6 bottom-6 z-40 print:hidden">
-        <button
-          onClick={handleBackToChat}
-          className="group inline-flex items-center gap-2 px-5 py-3 bg-white hover:bg-gray-50 text-teal-600 rounded-full font-semibold border-2 border-teal-500 shadow-2xl hover:shadow-teal-500/30 transition-all duration-300 transform hover:scale-105"
-          title={backLabel}
-          aria-label={backLabel}
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          <span className="text-sm">{backLabel}</span>
-        </button>
-      </div>
 
       {/* Floating Continue to Roadmap Button - Right Side */}
       {roadmapAvailable && (
