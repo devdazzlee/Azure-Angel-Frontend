@@ -167,7 +167,7 @@ const QuestionDropdown: React.FC<QuestionDropdownProps> = ({
           onClick={handleSubmit}
           disabled={disabled || !hasSelection}
           className={`
-            px-8 py-2.5 font-medium rounded-xl shadow-lg
+            px-6 py-2.5 font-medium rounded-xl shadow-lg
             transition-all duration-200
             disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none
             ${hasSelection
@@ -176,10 +176,11 @@ const QuestionDropdown: React.FC<QuestionDropdownProps> = ({
             }
           `}
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-center gap-1.5">
+            {hasSelection && <span className="w-4 flex-shrink-0" aria-hidden="true" />}
             <span>{hasSelection ? 'Submit Answer' : 'Select an option first'}</span>
             {hasSelection && (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             )}

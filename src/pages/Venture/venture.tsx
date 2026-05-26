@@ -2091,9 +2091,28 @@ export default function ChatPage() {
 
     const paragraphs = text.split(/\n\s*\n/);
     if (paragraphs.length >= 2) {
-      const boldQuestionIdx = paragraphs.findIndex(
-        (p, i) => i > 0 && /\*\*[^*]{10,}\?\*\*/.test(p.trim())
-      );
+      // The canonical question is always emitted as the FINAL bold-wrapped
+      // line in the reply (the backend composes
+      //   `[[Q:tag]]\n\n{ack}\n\n**{canonical_question_text}**`
+      // deterministically). 10 of the 45 BUSINESS_PLAN canonical questions
+      // end in `.` or `:` rather than `?` — Q1 ("…in detail."), Q5
+      // ("Business Name (if decided):"), Q11/Q12/Q17/Q18/Q26/Q27/Q34/Q42.
+      // The old regex `\*\*[^*]{10,}\?\*\*` only matched `?`-terminated
+      // bolds, so every non-`?` question fell through to the catch-all and
+      // got dumped wholesale into the "question" slot. Two coordinated
+      // changes:
+      //   1. Broaden the terminator from `\?` to `[?.:]`.
+      //   2. Scan paragraphs from the END so we lock onto the FINAL bold
+      //      sentence — that's the canonical line. Scanning forward used
+      //      to false-positive on any earlier `**bold!**` inside the ack.
+      const CANONICAL_BOLD_RE = /^\*\*[^*\n]{10,}[?.:]\*\*$/;
+      let boldQuestionIdx = -1;
+      for (let i = paragraphs.length - 1; i > 0; i--) {
+        if (CANONICAL_BOLD_RE.test(paragraphs[i].trim())) {
+          boldQuestionIdx = i;
+          break;
+        }
+      }
       if (boldQuestionIdx > 0) {
         const ack = paragraphs.slice(0, boldQuestionIdx).join('\n\n').trim();
         const q = paragraphs.slice(boldQuestionIdx).join('\n\n').trim();
