@@ -1,5 +1,9 @@
 import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
+import {
+  isSectionSummaryContent,
+  normalizeSectionSummaryMarkdown,
+} from '../utils/angelMessageKind';
 
 interface QuestionFormatterProps {
   text: string;
@@ -98,14 +102,15 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
     return isCommandPrefix || hasAutoResearch;
   }, [processedText]);
 
-  const isSectionSummary = useMemo(() => {
-    const trimmed = processedText.trim();
-    return (
-      /Section Complete/i.test(trimmed) ||
-      /Summary of Your Information/i.test(trimmed) ||
-      /Ready to Continue\??/i.test(trimmed) && /Educational Insights|Critical Considerations/i.test(trimmed)
-    );
-  }, [processedText]);
+  const isSectionSummary = useMemo(
+    () => isSectionSummaryContent(processedText),
+    [processedText],
+  );
+
+  const sectionSummaryMarkdown = useMemo(
+    () => (isSectionSummary ? normalizeSectionSummaryMarkdown(processedText) : ''),
+    [isSectionSummary, processedText],
+  );
 
   const businessPlanParts = useMemo(() => {
     if (phase !== 'BUSINESS_PLAN') return null;
@@ -114,34 +119,36 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
     return parseBusinessPlanQuestionParts(processedText);
   }, [phase, processedText, isDraftOrCommandResponse, isSectionSummary]);
 
-  // Section summary: render via ReactMarkdown with clean styling
+  // Section summary: ReactMarkdown (library renders **bold**, lists, etc.)
   if (isSectionSummary) {
-    const cleanedSummary = processedText
-      .replace(/\[\[ACCEPT_MODIFY_BUTTONS\]\]/g, '')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-
     return (
-      <div className="question-formatter section-summary">
+      <div className="question-formatter section-summary whitespace-normal text-sm leading-relaxed">
         <ReactMarkdown
           components={{
-            strong: ({ children }) => (
-              <strong className="font-bold text-gray-900" style={{ fontWeight: 700 }}>
+            h3: ({ children }) => (
+              <h3 className="mt-3 mb-1.5 first:mt-0 text-sm font-bold text-gray-900">
                 {children}
-              </strong>
+              </h3>
             ),
-            p: ({ children }) => (
-              <p className="mb-2 leading-relaxed text-gray-800">{children}</p>
+            strong: ({ children }) => (
+              <strong className="font-semibold text-gray-900">{children}</strong>
             ),
+            p: ({ children }) => {
+              const flat = React.Children.toArray(children).join('').trim();
+              if (!flat) return null;
+              return (
+                <p className="mb-2 last:mb-0 leading-relaxed text-gray-800">{children}</p>
+              );
+            },
             ul: ({ children }) => (
-              <ul className="list-disc list-inside mb-2 text-gray-700 space-y-1">{children}</ul>
+              <ul className="mb-2 list-disc space-y-1 pl-5 text-gray-700">{children}</ul>
             ),
             li: ({ children }) => (
-              <li className="text-gray-700 leading-relaxed">{children}</li>
+              <li className="leading-relaxed [&>p]:mb-0 [&>p]:inline">{children}</li>
             ),
           }}
         >
-          {cleanedSummary}
+          {sectionSummaryMarkdown}
         </ReactMarkdown>
       </div>
     );

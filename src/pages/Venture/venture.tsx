@@ -41,6 +41,7 @@ import QuestionFormatter from "../../components/QuestionFormatter";
 import {
   getAngelMessageBadgeLabel,
   isSectionSummaryContent,
+  normalizeSectionSummaryMarkdown,
 } from "../../utils/angelMessageKind";
 import ReactMarkdown from "react-markdown";
 import type { Budget, BudgetItem, APIResponse } from "../../types/apiTypes";
@@ -60,8 +61,9 @@ interface ConversationPair {
   acknowledgement?: string;
   questionNumber?: number;
   phase?: 'GKY' | 'BUSINESS_PLAN' | 'ROADMAP' | 'ROADMAP_GENERATED' | 'IMPLEMENTATION' | 'PLAN_TO_ROADMAP_TRANSITION' | 'PLAN_TO_SUMMARY_TRANSITION' | 'PLAN_TO_BUDGET_TRANSITION' | 'ROADMAP_TO_IMPLEMENTATION_TRANSITION';
-  /** Section-end summary — not a numbered questionnaire item */
-  isSectionSummary?: boolean;
+  /** Section-end summary content shown after this Q&A once accepted */
+  sectionSummary?: string;
+  sectionSummaryAccepted?: boolean;
   /** Draft, Support, Scrapping etc. - display in chat but exclude from progress */
   isCommand?: boolean;
   /** Which quick action produced this row — used for the response card title only */
@@ -301,17 +303,23 @@ const resolveDisplayFromAngelResult = (
   return { isSectionSummary, questionNumber };
 };
 
+const isAcceptUserInput = (text: string) => text.trim().toLowerCase() === "accept";
+
 /**
- * Rebuild ConversationPair[] from a flat chat history (alternating
- * assistant/user records). Extracted from the post-upload flow so the same
- * logic can run from any history-refresh callsite. Only assistant messages
- * carrying a `[[Q:PHASE.NN]]` tag start a new pair — orphaned acks and
- * commands are ignored, and "EMPTY" sentinel answers are skipped.
+ * Rebuild ConversationPair[] from persisted chat_history.
+ * Tagged assistant messages start Q&A pairs; section summaries (no [[Q:…]]
+ * tag) attach to the preceding pair; Accept is not a separate Q&A row.
  */
 function buildHistoryPairs(
   records: Array<{ role: string; content?: string; phase?: string }>,
   parseReply: (raw: string) => { acknowledgement: string; question: string },
-): ConversationPair[] {
+): {
+  pairs: ConversationPair[];
+  pendingQuestion: string | null;
+  pendingAcknowledgement: string | null;
+  pendingNumber: number | null;
+  pendingPhase: ConversationPair["phase"] | null;
+} {
   const pairs: ConversationPair[] = [];
   let pendingQuestion: string | null = null;
   let pendingAck: string | null = null;
@@ -322,10 +330,26 @@ function buildHistoryPairs(
   for (const record of records) {
     if (record.role === "assistant") {
       if (!record.content) continue;
-      const tagMatch = record.content.match(/\[\[Q:([A-Z_]+)\.(\d{2})]]/);
+      const content = record.content;
+
+      if (isSectionSummaryContent(content)) {
+        const { question: summaryText } = parseReply(content);
+        const summary = (summaryText || content).trim();
+        if (pairs.length > 0 && summary) {
+          const lastIdx = pairs.length - 1;
+          pairs[lastIdx] = { ...pairs[lastIdx], sectionSummary: summary };
+        }
+        pendingQuestion = null;
+        pendingAck = null;
+        pendingNumber = null;
+        pendingPhase = null;
+        continue;
+      }
+
+      const tagMatch = content.match(/\[\[Q:([A-Z_]+)\.(\d{2})]]/);
       if (!tagMatch) continue;
 
-      const { acknowledgement, question } = parseReply(record.content);
+      const { acknowledgement, question } = parseReply(content);
       const rawPhase = tagMatch[1] || record.phase || "GKY";
       const normalizedPhase = (rawPhase.toUpperCase() === "KYC" ? "GKY" : rawPhase.toUpperCase()) as ConversationPair["phase"];
       const counter = phaseCounters[normalizedPhase as string] ?? 0;
@@ -341,9 +365,18 @@ function buildHistoryPairs(
       pendingAck = acknowledgement;
       pendingPhase = normalizedPhase;
     } else if (record.role === "user") {
-      if (!pendingQuestion) continue;
       const answerText = (record.content || "").trim();
       if (!answerText || answerText.toUpperCase() === "EMPTY") continue;
+
+      if (isAcceptUserInput(answerText)) {
+        if (pairs.length > 0 && pairs[pairs.length - 1].sectionSummary) {
+          const lastIdx = pairs.length - 1;
+          pairs[lastIdx] = { ...pairs[lastIdx], sectionSummaryAccepted: true };
+        }
+        continue;
+      }
+
+      if (!pendingQuestion) continue;
       pairs.push({
         question: pendingQuestion,
         answer: answerText,
@@ -357,7 +390,14 @@ function buildHistoryPairs(
       pendingPhase = null;
     }
   }
-  return pairs;
+
+  return {
+    pairs,
+    pendingQuestion,
+    pendingAcknowledgement: pendingAck,
+    pendingNumber,
+    pendingPhase,
+  };
 }
 
 /**
@@ -1282,6 +1322,30 @@ export default function ChatPage() {
   // Handle Accept button click
   const handleAccept = async () => {
     setShowVerificationButtons(false);
+
+    // Commit the live section summary into the last Q&A row before advancing.
+    const summaryToArchive =
+      isCurrentSectionSummary &&
+      (currentQuestion?.trim() || lastFullAssistantReplyRef.current?.trim())
+        ? currentQuestion?.trim() || lastFullAssistantReplyRef.current!.trim()
+        : null;
+
+    if (summaryToArchive) {
+      setHistory((prev) => {
+        if (prev.length === 0) return prev;
+        const last = prev[prev.length - 1];
+        if (last.sectionSummary) return prev;
+        return [
+          ...prev.slice(0, -1),
+          {
+            ...last,
+            sectionSummary: summaryToArchive,
+            sectionSummaryAccepted: true,
+          },
+        ];
+      });
+    }
+
     setLoading(true);
     
     try {
@@ -1985,10 +2049,7 @@ export default function ChatPage() {
       (/Summary of Your Information/i.test(formatted) && /Educational Insights|Critical Considerations/i.test(formatted));
 
     if (isSectionSummary) {
-      // Only do light cleanup — keep **bold**, bullets, numbered lists intact
-      formatted = formatted.replace(/\[\[ACCEPT_MODIFY_BUTTONS\]\]/g, '');
-      formatted = formatted.replace(/\n{3,}/g, "\n\n");
-      return formatted.trim();
+      return normalizeSectionSummaryMarkdown(formatted);
     }
 
     // ── Regular messages: aggressive formatting cleanup ──
@@ -2983,58 +3044,8 @@ export default function ChatPage() {
     const restoreSessionFromHistory = async () => {
       setLoading(true);
 
-      const buildConversationFromHistory = (records: RawChatRecord[]) => {
-        const pairs: ConversationPair[] = [];
-        let pendingQuestion: string | null = null;
-        let pendingAcknowledgement: string | null = null;
-        let pendingNumber: number | null = null;
-        let pendingPhase: ConversationPair['phase'] | null = null;
-        const phaseCounters: Record<string, number> = {};
-
-        records.forEach((record) => {
-          if (record.role === 'assistant') {
-            if (!record.content) return;
-            const { acknowledgement, question } = parseAngelReply(record.content);
-            const tagMatch = record.content.match(/\[\[Q:([A-Z_]+)\.(\d{2})]]/);
-            const rawPhase = tagMatch ? tagMatch[1] : record.phase;
-            const rawUpper = rawPhase ? rawPhase.toUpperCase() : 'GKY';
-            const normalizedPhase = rawUpper === 'KYC' ? 'GKY' : rawUpper;
-            const counter = phaseCounters[normalizedPhase] ?? 0;
-            const parsedNumber = tagMatch ? parseInt(tagMatch[2], 10) : null;
-
-            if (parsedNumber) {
-              phaseCounters[normalizedPhase] = Math.max(counter, parsedNumber);
-              pendingNumber = parsedNumber;
-            } else {
-              phaseCounters[normalizedPhase] = counter + 1;
-              pendingNumber = phaseCounters[normalizedPhase];
-            }
-
-            pendingQuestion = question;
-            pendingAcknowledgement = acknowledgement;
-            pendingPhase = normalizedPhase as ConversationPair['phase'];
-          } else if (record.role === 'user') {
-            if (!pendingQuestion) return;
-            const answerText = (record.content || '').trim();
-            if (!answerText || answerText.toUpperCase() === 'EMPTY') {
-              return;
-            }
-            pairs.push({
-              question: pendingQuestion,
-              answer: answerText,
-              acknowledgement: pendingAcknowledgement || undefined,
-              questionNumber: pendingNumber ?? undefined,
-              phase: pendingPhase ?? undefined,
-            });
-            pendingQuestion = null;
-            pendingAcknowledgement = null;
-            pendingNumber = null;
-            pendingPhase = null;
-          }
-        });
-
-        return { pairs, pendingQuestion, pendingAcknowledgement, pendingNumber, pendingPhase };
-      };
+      const buildConversationFromHistory = (records: RawChatRecord[]) =>
+        buildHistoryPairs(records, parseAngelReply);
 
       try {
         const [sessionsResponse, historyResponse] = await Promise.all([
@@ -5105,9 +5116,9 @@ export default function ChatPage() {
                       </div>
                       {(() => {
                         const badgeLabel = getAngelMessageBadgeLabel(pair.phase ?? progress.phase, {
-                          isSectionSummary: pair.isSectionSummary,
+                          isSectionSummary: Boolean(pair.sectionSummary),
                           questionNumber: pair.questionNumber,
-                          content: pair.question,
+                          content: pair.sectionSummary || pair.question,
                         });
                         return badgeLabel ? (
                           <div className="mb-2">
@@ -5220,6 +5231,31 @@ export default function ChatPage() {
                     </div>
                   </div>
                 </div>
+                {pair.sectionSummary && (
+                  <div className="border-t border-gray-100 bg-gradient-to-r from-teal-50 to-blue-50 p-3 sm:p-4">
+                    <div className="flex items-start gap-2 sm:gap-3">
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-r from-teal-500 to-blue-500 text-white shadow-md">
+                        <img
+                          src={FounderportIcon}
+                          alt="Angel"
+                          className="!h-14 !w-14 object-cover"
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-1 text-sm font-semibold text-gray-800">Angel</div>
+                        <div className="mb-2">
+                          <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+                            Section Summary
+                          </span>
+                        </div>
+                        <QuestionFormatter text={pair.sectionSummary} phase={pair.phase ?? progress.phase} />
+                        {pair.sectionSummaryAccepted && (
+                          <p className="mt-2 text-xs font-medium text-emerald-700">Accepted — continued to next section</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {pair.isCommand && pair.acknowledgement && (
                   <div className="p-3 sm:p-4 border-t border-gray-100 bg-emerald-50/40">
                     <div className="flex items-start gap-2 sm:gap-3">
@@ -5891,7 +5927,7 @@ export default function ChatPage() {
                 // Refresh chat history so the saved Q&A pairs show up in the UI.
                 try {
                   const refreshedHistory = await fetchSessionHistory(sessionId);
-                  const newPairs = buildHistoryPairs(refreshedHistory || [], parseAngelReply);
+                  const { pairs: newPairs } = buildHistoryPairs(refreshedHistory || [], parseAngelReply);
                   setHistory(newPairs);
                   console.log(`✅ History refreshed: ${newPairs.length} pairs (incl. ${savedCount} from upload)`);
                 } catch (refreshError) {
