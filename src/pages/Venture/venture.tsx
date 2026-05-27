@@ -5022,7 +5022,7 @@ export default function ChatPage() {
         {/* Single scroll: messages + input + picker */}
         <div
           ref={chatContainerRef}
-          className="chat-container min-h-0 flex-1 overflow-y-auto px-3 pb-4 lg:pb-4"
+          className="chat-container min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pb-4 lg:pb-4"
         >
           <div className={`mx-auto flex min-h-full flex-col ${chatContentMaxWidth}`}>
             <div className="flex-1 space-y-4">
@@ -5512,7 +5512,7 @@ export default function ChatPage() {
 
       {/* Right Navigation Panel - Desktop (hidden during GKY — sidebar has no useful content) */}
       {showProgressSidebar && (
-      <div className="hidden h-screen w-80 flex-shrink-0 overflow-y-auto border-l border-gray-200 lg:sticky lg:top-0 lg:block">
+      <div className="hidden h-screen w-80 flex-shrink-0 overflow-y-auto overflow-x-hidden border-l border-gray-200 lg:sticky lg:top-0 lg:block">
         <QuestionNavigator
           questions={questions}
           currentPhase={progress.phase}
@@ -5538,7 +5538,19 @@ export default function ChatPage() {
           currentQuestionNumber={currentQuestionNumber}
           showStepPercent={false}
           onEditPlan={progress.phase === "BUSINESS_PLAN" ? handleEditPlan : undefined}
-          onUploadPlan={progress.phase === "BUSINESS_PLAN" ? openUploadPlanModal : undefined}
+          /*
+           * The right-pane "Already have a business plan?" panel only shows
+           * BEFORE the user has engaged with the initial upload prompt
+           * (modal auto-opens at start of BP) — once they dismiss or upload,
+           * the panel hides to reclaim visual real estate. They can still
+           * trigger upload from the left-sidebar Import-plan quick action,
+           * so no functionality is lost.
+           */
+          onUploadPlan={
+            progress.phase === "BUSINESS_PLAN" && !hasSeenUploadPrompt && !hasUploadedPlan
+              ? openUploadPlanModal
+              : undefined
+          }
         />
       </div>
       )}

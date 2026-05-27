@@ -61,10 +61,10 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
   const bpCurrentQuestionNumber = Math.min(Math.max(currentQuestionNumber ?? 1, 1), bpTotal);
 
   return (
-    <div className="w-80 space-y-4">
+    <div className="w-full max-w-80 space-y-4 overflow-hidden">
       {/* Overall Progress Overview - Hidden during GKY phase (no progress bars in GKY) */}
       {currentPhase !== 'GKY' && (
-        <div className="bg-white shadow-xl rounded-xl overflow-hidden border border-gray-100 hover:shadow-2xl transition-all duration-300 hover:scale-[1.02]">
+        <div className="bg-white shadow-xl rounded-xl overflow-hidden border border-gray-100 hover:shadow-2xl transition-all duration-300">
           <div className="p-4 border-b border-gray-100">
             <h3 className="text-lg font-semibold text-gray-800">Progress Overview</h3>
           </div>

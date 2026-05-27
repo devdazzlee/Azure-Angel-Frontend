@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useMemo } from 'react';
 import {
   Building2,
   Package,
@@ -9,11 +9,10 @@ import {
   Scale,
   TrendingUp,
   Shield,
-  ArrowRight,
   Check,
-  Info,
+  ChevronDown,
 } from 'lucide-react';
-import { motion, useReducedMotion, LayoutGroup } from 'framer-motion';
+import { motion, useReducedMotion, AnimatePresence } from 'framer-motion';
 
 interface BusinessPlanSection {
   id: string;
@@ -131,35 +130,47 @@ const SECTIONS: BusinessPlanSection[] = [
   },
 ];
 
-function sectionStatus(
-  section: BusinessPlanSection,
-  currentQuestionNumber: number
-): 'complete' | 'current' | 'upcoming' {
-  if (currentQuestionNumber > section.endQuestion) return 'complete';
-  if (
-    currentQuestionNumber >= section.startQuestion &&
-    currentQuestionNumber <= section.endQuestion
-  ) {
-    return 'current';
-  }
-  return 'upcoming';
-}
-
 const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
   currentQuestionNumber,
   className = '',
 }) => {
   const q = Math.min(Math.max(currentQuestionNumber, 1), BP_TOTAL_QUESTIONS);
   const reduceMotion = useReducedMotion();
-  const currentSectionRef = useRef<HTMLDivElement | null>(null);
 
-  const currentSection = useMemo(() => {
-    return (
-      SECTIONS.find((s) => q >= s.startQuestion && q <= s.endQuestion) ??
-      SECTIONS.find((s) => q < s.startQuestion) ??
-      SECTIONS[SECTIONS.length - 1]
-    );
+  const { currentSection, currentIdx } = useMemo(() => {
+    const idx =
+      SECTIONS.findIndex((s) => q >= s.startQuestion && q <= s.endQuestion) ??
+      -1;
+    const safeIdx =
+      idx >= 0
+        ? idx
+        : Math.max(
+            0,
+            SECTIONS.findIndex((s) => q < s.startQuestion),
+          );
+    const finalIdx = safeIdx === -1 ? SECTIONS.length - 1 : safeIdx;
+    return { currentSection: SECTIONS[finalIdx], currentIdx: finalIdx };
   }, [q]);
+
+  /**
+   * Three-section window centred on the current section.
+   * Renders prev / current / next so the user always sees where they came
+   * from, where they are, and where they're headed — without horizontal
+   * scrolling. Edge cases:
+   *   - If on the first section, the "prev" slot renders an empty
+   *     start-marker stub so the layout stays balanced.
+   *   - If on the last section, the "next" slot renders a "Finish" stub.
+   * The previous version showed all 9 sections in a swipable strip that
+   * snapped back to the first item on each completion event — confusing
+   * users when their progress advanced.
+   */
+  const windowedSections = useMemo(() => {
+    return [
+      currentIdx > 0 ? SECTIONS[currentIdx - 1] : null,
+      SECTIONS[currentIdx],
+      currentIdx < SECTIONS.length - 1 ? SECTIONS[currentIdx + 1] : null,
+    ];
+  }, [currentIdx]);
 
   const questionsInCurrentSection =
     currentSection.endQuestion - currentSection.startQuestion + 1;
@@ -167,15 +178,6 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
     1,
     q - currentSection.startQuestion + 1
   );
-
-  useEffect(() => {
-    if (!currentSectionRef.current) return;
-    currentSectionRef.current.scrollIntoView({
-      behavior: 'smooth',
-      block: 'nearest',
-      inline: 'center',
-    });
-  }, [currentSection.id]);
 
   const spring = reduceMotion
     ? { duration: 0 }
@@ -246,110 +248,140 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
           </div>
         </motion.div>
 
-        {/* Section strip */}
+        {/* Section windowed view — prev / current / next.
+            Always three columns. The middle column is the current section,
+            visually emphasised with the arrow indicator above and a violet
+            ring/badge. The previous column shows a completed (check-marked)
+            section; the next column shows the upcoming one in a dashed/muted
+            style. No scrolling required; the user can always see where they
+            came from, where they are, and where they're going. */}
         <div className="space-y-1.5 sm:space-y-2 pt-0.5">
           <div className="flex items-center justify-between gap-1">
             <h4 className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">
               Sections
             </h4>
-            <span
-              className="inline-flex items-center gap-0.5 text-[9px] sm:text-[10px] text-gray-400 shrink-0"
-              title="Swipe to see all sections. Completed = checkmark."
-            >
-              <Info className="w-2.5 h-2.5 sm:w-3 sm:h-3 opacity-70" aria-hidden />
-              <span className="leading-none">Swipe →</span>
+            <span className="text-[9px] sm:text-[10px] text-gray-400 shrink-0 tabular-nums">
+              Step {currentIdx + 1} of {SECTIONS.length}
             </span>
           </div>
 
-          <div
-            className="relative -mx-0.5 sm:-mx-1 px-0.5 sm:px-1 pb-0.5 overflow-x-auto scroll-smooth snap-x snap-mandatory
-              [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent]
-              hover:[scrollbar-color:rgba(139,92,246,0.55)_transparent]"
-          >
-            <LayoutGroup>
-            <div className="flex flex-nowrap items-stretch gap-0 min-w-min py-1 sm:py-2 pl-0.5 pr-2 sm:pl-1 sm:pr-3">
-              {SECTIONS.map((section, index) => {
-                const status = sectionStatus(section, q);
-                const isComplete = status === 'complete';
-                const isCurrent = status === 'current';
+          {/* Arrow indicator that points DOWN to the current card. Renders
+              in the centre column only, so the user's eye is drawn to the
+              middle card automatically. */}
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-2 -mb-1">
+            <div aria-hidden />
+            <motion.div
+              key={`arrow-${currentSection.id}`}
+              className="flex flex-col items-center justify-end text-violet-600"
+              initial={reduceMotion ? false : { opacity: 0, y: -4 }}
+              animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+              transition={spring}
+              aria-hidden
+            >
+              <span className="text-[7px] sm:text-[8px] font-bold uppercase tracking-[0.15em] text-violet-600 leading-none mb-0.5">
+                You are here
+              </span>
+              <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2.5} />
+            </motion.div>
+            <div aria-hidden />
+          </div>
+
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.div
+              key={`window-${currentSection.id}`}
+              className="grid grid-cols-3 gap-1.5 sm:gap-2 items-stretch"
+              initial={reduceMotion ? false : { opacity: 0, x: 12 }}
+              animate={reduceMotion ? undefined : { opacity: 1, x: 0 }}
+              exit={reduceMotion ? undefined : { opacity: 0, x: -12 }}
+              transition={spring}
+            >
+              {windowedSections.map((section, position) => {
+                // position 0 = previous, 1 = current, 2 = next
+                const isCurrent = position === 1;
+                const isComplete = position === 0;
+
+                if (!section) {
+                  // Edge stub: shown when current is the first or last section.
+                  // Keeps the 3-column grid balanced visually.
+                  const isStart = position === 0;
+                  return (
+                    <div
+                      key={`stub-${position}`}
+                      className="rounded-lg sm:rounded-xl border border-dashed border-gray-200 bg-gray-50/40 flex flex-col items-center justify-center text-center px-1.5 py-2 sm:px-2.5 sm:py-3 min-h-[4.5rem] sm:min-h-[5rem]"
+                      aria-hidden
+                    >
+                      <span className="text-[8px] sm:text-[9px] uppercase tracking-wider text-gray-400 font-semibold">
+                        {isStart ? 'Start' : 'Finish'}
+                      </span>
+                    </div>
+                  );
+                }
 
                 return (
-                  <React.Fragment key={section.id}>
-                    {index > 0 && (
-                      <div
-                        className="flex items-center justify-center w-3 sm:w-3.5 flex-shrink-0 text-violet-600"
-                        aria-hidden
+                  <motion.div
+                    key={section.id}
+                    title={section.title}
+                    className={[
+                      'rounded-lg sm:rounded-xl flex flex-col items-center justify-center text-center px-1.5 py-2 sm:px-2.5 sm:py-3 border transition-shadow min-h-[4.5rem] sm:min-h-[5rem]',
+                      isComplete &&
+                        'border-emerald-200/90 bg-gradient-to-b from-emerald-50/90 to-emerald-50/40 text-emerald-900',
+                      isCurrent &&
+                        'border-violet-500 bg-gradient-to-b from-violet-50 to-white text-gray-900 shadow-md shadow-violet-500/10 ring-2 ring-violet-200/80 z-10',
+                      !isComplete &&
+                        !isCurrent &&
+                        'border-gray-200/80 bg-gray-50/50 text-gray-500 border-dashed',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    initial={false}
+                    animate={
+                      reduceMotion
+                        ? undefined
+                        : isCurrent
+                          ? { scale: 1.04, y: -2 }
+                          : { scale: 1, y: 0 }
+                    }
+                    transition={spring}
+                  >
+                    {isComplete && (
+                      <motion.span
+                        className="mb-1 flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full bg-emerald-500 text-white"
+                        initial={reduceMotion ? false : { scale: 0 }}
+                        animate={reduceMotion ? undefined : { scale: 1 }}
+                        transition={{ ...spring, delay: 0.02 }}
                       >
-                        <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 opacity-95" strokeWidth={2.25} />
-                      </div>
+                        <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5" strokeWidth={2.5} />
+                      </motion.span>
                     )}
-                    <motion.div
-                      ref={isCurrent ? currentSectionRef : null}
-                      layout
-                      title={section.title}
-                      className={[
-                        'snap-center shrink-0 w-[88px] min-[400px]:w-[96px] sm:w-[118px] md:w-[128px] rounded-lg sm:rounded-xl flex flex-col items-center justify-center text-center px-1.5 py-2 sm:px-2.5 sm:py-3 border transition-shadow min-h-[4.25rem] sm:min-h-0',
-                        isComplete &&
-                          'border-emerald-200/90 bg-gradient-to-b from-emerald-50/90 to-emerald-50/40 text-emerald-900',
-                        isCurrent &&
-                          'border-violet-500 bg-gradient-to-b from-violet-50 to-white text-gray-900 shadow-sm sm:shadow-md shadow-violet-500/10 ring-1 sm:ring-2 ring-violet-200/80 z-10',
-                        !isComplete &&
-                          !isCurrent &&
-                          'border-gray-200/80 bg-gray-50/50 text-gray-400 border-dashed',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                      initial={false}
-                      animate={
-                        reduceMotion
-                          ? undefined
-                          : isCurrent
-                            ? { scale: 1.01, y: -1 }
-                            : { scale: 1, y: 0 }
-                      }
-                      whileHover={reduceMotion || isCurrent ? undefined : { scale: 1.02, y: -0.5 }}
-                      whileTap={reduceMotion ? undefined : { scale: 0.98 }}
-                      transition={spring}
-                    >
-                      {isComplete && (
-                        <motion.span
-                          className="mb-1 flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full bg-emerald-500 text-white"
-                          initial={reduceMotion ? false : { scale: 0 }}
-                          animate={reduceMotion ? undefined : { scale: 1 }}
-                          transition={{ ...spring, delay: 0.02 }}
-                        >
-                          <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5" strokeWidth={2.5} />
-                        </motion.span>
-                      )}
-                      {isCurrent && (
-                        <motion.span
-                          layoutId="bp-current-pill"
-                          className="mb-1 inline-flex rounded-full bg-violet-600 px-1.5 py-px sm:px-2 sm:py-0.5 text-[7px] sm:text-[9px] font-bold uppercase tracking-wide text-white shadow-sm"
-                        >
-                          <span className="sm:hidden">Now</span>
-                          <span className="hidden sm:inline">Current</span>
-                        </motion.span>
-                      )}
-                      <span className="text-[9px] sm:text-[11px] md:text-xs font-semibold leading-[1.2] text-balance px-0.5 line-clamp-2">
-                        {section.compactTitle ? (
-                          <>
-                            <span className="sm:hidden">{section.compactTitle}</span>
-                            <span className="hidden sm:inline">{section.shortTitle}</span>
-                          </>
-                        ) : (
-                          section.shortTitle
-                        )}
+                    {isCurrent && (
+                      <span className="mb-1 inline-flex rounded-full bg-violet-600 px-1.5 py-px sm:px-2 sm:py-0.5 text-[7px] sm:text-[9px] font-bold uppercase tracking-wide text-white shadow-sm">
+                        <span className="sm:hidden">Now</span>
+                        <span className="hidden sm:inline">Current</span>
                       </span>
-                      <span className="mt-0.5 sm:mt-1 text-[8px] sm:text-[9px] tabular-nums text-gray-500 opacity-90">
-                        Q{section.startQuestion}-{section.endQuestion}
+                    )}
+                    {!isComplete && !isCurrent && (
+                      <span className="mb-1 text-[7px] sm:text-[9px] font-bold uppercase tracking-wider text-gray-400">
+                        Next
                       </span>
-                    </motion.div>
-                  </React.Fragment>
+                    )}
+                    <span className="text-[9px] sm:text-[11px] md:text-xs font-semibold leading-[1.2] text-balance px-0.5 line-clamp-2">
+                      {section.compactTitle ? (
+                        <>
+                          <span className="sm:hidden">{section.compactTitle}</span>
+                          <span className="hidden sm:inline">{section.shortTitle}</span>
+                        </>
+                      ) : (
+                        section.shortTitle
+                      )}
+                    </span>
+                    <span className="mt-0.5 sm:mt-1 text-[8px] sm:text-[9px] tabular-nums text-gray-500 opacity-90">
+                      Q{section.startQuestion}-{section.endQuestion}
+                    </span>
+                  </motion.div>
                 );
               })}
-            </div>
-            </LayoutGroup>
-          </div>
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
     </motion.div>

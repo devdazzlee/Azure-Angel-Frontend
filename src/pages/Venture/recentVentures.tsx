@@ -23,6 +23,7 @@ const RecentVenturePage = () => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const hasFetched = useRef(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (hasFetched.current) return;
@@ -58,16 +59,33 @@ const RecentVenturePage = () => {
     }
   };
 
-  const getPhaseColor = (phase: string) => {
-    const phaseColors = {
-      'GKY': 'bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800 border border-blue-300',
-      'BUSINESS_PLAN': 'bg-gradient-to-r from-purple-100 to-purple-200 text-purple-800 border border-purple-300',
-      'ROADMAP': 'bg-gradient-to-r from-green-100 to-green-200 text-green-800 border border-green-300',
-      'IMPLEMENTATION': 'bg-gradient-to-r from-orange-100 to-orange-200 text-orange-800 border border-orange-300',
-      'COMPLETE': 'bg-gradient-to-r from-emerald-100 to-emerald-200 text-emerald-800 border border-emerald-300'
+  const getPhaseLabel = (phase: string) => {
+    const labels: Record<string, string> = {
+      'GKY': 'Getting to Know You',
+      'BUSINESS_PLAN': 'Business Plan',
+      'PLAN_TO_SUMMARY_TRANSITION': 'Plan Summary',
+      'PLAN_TO_BUDGET_TRANSITION': 'Budget Planning',
+      'PLAN_TO_ROADMAP_TRANSITION': 'Roadmap Prep',
+      'ROADMAP': 'Roadmap',
+      'ROADMAP_TO_IMPLEMENTATION_TRANSITION': 'Starting Implementation',
+      'IMPLEMENTATION': 'Implementation',
+      'COMPLETE': 'Completed',
     };
+    return labels[(phase || '').toUpperCase()] || phase?.replace(/_/g, ' ') || 'In Progress';
+  };
+
+  const getPhaseColor = (phase: string) => {
     const normalized = (phase || '').toUpperCase();
-    return phaseColors[normalized as keyof typeof phaseColors] || 'bg-gradient-to-r from-gray-100 to-gray-200 text-gray-800 border border-gray-300';
+
+    if (normalized === 'GKY') return 'bg-blue-50 text-blue-700 ring-1 ring-blue-200';
+    if (normalized === 'BUSINESS_PLAN') return 'bg-purple-50 text-purple-700 ring-1 ring-purple-200';
+    if (normalized.startsWith('PLAN_TO')) return 'bg-violet-50 text-violet-700 ring-1 ring-violet-200';
+    if (normalized === 'ROADMAP') return 'bg-green-50 text-green-700 ring-1 ring-green-200';
+    if (normalized.startsWith('ROADMAP_TO')) return 'bg-teal-50 text-teal-700 ring-1 ring-teal-200';
+    if (normalized === 'IMPLEMENTATION') return 'bg-orange-50 text-orange-700 ring-1 ring-orange-200';
+    if (normalized === 'COMPLETE') return 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200';
+
+    return 'bg-gray-50 text-gray-700 ring-1 ring-gray-200';
   };
 
   const QUESTION_COUNTS: Record<string, number> = {
@@ -123,9 +141,9 @@ const RecentVenturePage = () => {
             <p className="text-gray-600 text-lg mb-10 max-w-md mx-auto">Start your first business venture and begin your entrepreneurial journey today</p>
             <button
               onClick={() => navigate('/ventures/new-session')}
-              className="group relative inline-flex items-center gap-3 bg-gradient-to-r from-teal-500 via-blue-500 to-purple-500 hover:from-teal-600 hover:via-blue-600 hover:to-purple-600 text-white px-10 py-4 rounded-2xl font-bold text-lg transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:scale-105"
+              className="group relative inline-flex items-center gap-3 bg-gradient-to-r from-teal-500 via-blue-500 to-purple-500 hover:from-teal-600 hover:via-blue-600 hover:to-purple-600 text-white px-8 py-3.5 rounded-xl font-semibold text-base transition-all duration-300 shadow-lg hover:shadow-xl"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
               Start New Venture
@@ -151,36 +169,31 @@ const RecentVenturePage = () => {
                 {/* Card content */}
                 <div className="relative p-7">
                   {/* Header section */}
-                  <div className="flex items-start justify-between mb-5">
-                    <div className="flex-1">
-                      {/* Venture icon */}
-                      <div className="w-12 h-12 bg-gradient-to-br from-teal-400 to-blue-500 rounded-xl flex items-center justify-center mb-4 shadow-md group-hover:scale-110 transition-transform duration-300">
-                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                      </div>
-                      <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-teal-600 transition-colors line-clamp-2">
-                        {sesh.title || 'Untitled Venture'}
-                      </h3>
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        {sesh.created_at ? formatDate(sesh.created_at) : 'Recent'}
-                      </div>
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-teal-400 to-blue-500 rounded-xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform duration-300">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
                     </div>
-                    <div className="flex items-center text-gray-300 group-hover:text-teal-500 transition-all duration-300 group-hover:translate-x-1">
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400 font-medium">
+                        {sesh.created_at ? formatDate(sesh.created_at) : 'Recent'}
+                      </span>
+                      <svg className="w-5 h-5 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-0.5 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
                     </div>
                   </div>
 
+                  <h3 className="text-xl font-bold text-gray-900 mb-4 group-hover:text-teal-600 transition-colors line-clamp-2">
+                    {sesh.title || 'Untitled Venture'}
+                  </h3>
+
                   {/* Phase badge */}
                   <div className="mb-5">
-                    <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-xs font-semibold shadow-sm ${getPhaseColor(sesh.current_phase)}`}>
-                      <span className="w-2 h-2 bg-current rounded-full mr-2 animate-pulse"></span>
-                      {sesh.current_phase || 'In Progress'}
+                    <span className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold ${getPhaseColor(sesh.current_phase)}`}>
+                      <span className="w-1.5 h-1.5 bg-current rounded-full mr-2"></span>
+                      {getPhaseLabel(sesh.current_phase)}
                     </span>
                   </div>
 
@@ -228,12 +241,12 @@ const RecentVenturePage = () => {
         )}
 
         {sessions.length > 0 && (
-          <div className="text-center mt-16">
+          <div ref={bottomRef} className="text-center mt-16">
             <button
               onClick={() => navigate('/ventures/new-session')}
-              className="group inline-flex items-center gap-3 bg-gradient-to-r from-teal-500 via-blue-500 to-purple-500 hover:from-teal-600 hover:via-blue-600 hover:to-purple-600 text-white px-10 py-4 rounded-2xl font-bold text-lg transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:scale-105"
+              className="group inline-flex items-center gap-3 bg-gradient-to-r from-teal-500 via-blue-500 to-purple-500 hover:from-teal-600 hover:via-blue-600 hover:to-purple-600 text-white px-8 py-3.5 rounded-xl font-semibold text-base transition-all duration-300 shadow-lg hover:shadow-xl"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
               Start New Venture
@@ -244,6 +257,23 @@ const RecentVenturePage = () => {
           </div>
         )}
         </div>
+
+        {/* Scroll to bottom button */}
+        {!loading && sessions.length > 3 && (
+          <div className="fixed bottom-8 right-8 z-50 group">
+            <button
+              onClick={() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' })}
+              className="w-11 h-11 flex items-center justify-center bg-white border border-gray-200 text-gray-500 hover:text-teal-600 hover:border-teal-300 rounded-full shadow-lg hover:shadow-xl transition-all duration-300"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+              </svg>
+            </button>
+            <span className="absolute bottom-full right-0 mb-2 px-3 py-1.5 bg-gray-800 text-white text-xs font-medium rounded-lg shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200">
+              Scroll to Start New Venture
+            </span>
+          </div>
+        )}
       </div>
     </>
   );

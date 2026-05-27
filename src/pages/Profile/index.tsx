@@ -251,7 +251,7 @@ const ProfilePage = () => {
                 <span className="text-gray-600 font-medium">Number of Ventures:</span>
                 <div className="flex items-center gap-3">
                   <span className="text-gray-900 font-semibold flex items-center gap-2">
-                    <span className="w-10 h-10 bg-gradient-to-r from-teal-500 to-blue-500 rounded-full text-white font-bold text-lg shadow-md flex items-center justify-center">
+                    <span className="min-w-7 h-7 px-2 bg-gradient-to-r from-teal-500 to-blue-500 rounded-full text-white font-bold text-sm shadow-sm flex items-center justify-center">
                       {venturesCount}
                     </span>
                     <span className="text-sm text-gray-500">venture{venturesCount !== 1 ? 's' : ''}</span>
