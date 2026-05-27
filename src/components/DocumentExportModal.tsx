@@ -8,6 +8,8 @@ interface DocumentExportModalProps {
   documentTitle: string;
   documentContent: string; // Markdown content
   documentType: 'business-plan' | 'roadmap';
+  /** When false, success toasts are omitted (e.g. Business Plan view uses its own UX). */
+  showSuccessToast?: boolean;
 }
 
 const DocumentExportModal: React.FC<DocumentExportModalProps> = ({
@@ -15,7 +17,8 @@ const DocumentExportModal: React.FC<DocumentExportModalProps> = ({
   onClose,
   documentTitle,
   documentContent,
-  documentType
+  documentType,
+  showSuccessToast = true,
 }) => {
   const [selectedFormat, setSelectedFormat] = useState<'pdf' | 'docx' | null>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -47,10 +50,14 @@ const DocumentExportModal: React.FC<DocumentExportModalProps> = ({
 
       if (selectedFormat === 'pdf') {
         await generatePDF(cleanContent, filename, documentTitle);
-        toast.success('PDF downloaded successfully!');
+        if (showSuccessToast) {
+          toast.success('PDF downloaded successfully!');
+        }
       } else if (selectedFormat === 'docx') {
         await generateDOCX(cleanContent, filename, documentTitle);
-        toast.success('DOCX downloaded successfully!');
+        if (showSuccessToast) {
+          toast.success('DOCX downloaded successfully!');
+        }
       }
       
       onClose();

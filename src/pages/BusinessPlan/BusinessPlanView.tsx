@@ -10,6 +10,8 @@ import { checkIsFreeIntroPeriod } from '../../utils/freeIntroPeriod';
 import { useAppDispatch, useAppSelector } from '../../store';
 import { upsertTransitionSession } from '../../store/businessPlanTransitionSlice';
 import httpClient from '../../api/httpClient';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/ui/tooltip';
+import { responsiveMarkdownTableComponents } from '../../components/ResponsiveMarkdownTable';
 
 interface LocationState {
   businessPlan?: string;
@@ -66,13 +68,16 @@ const BusinessPlanView: React.FC = () => {
   const location = useLocation();
   const locationState = (location.state as LocationState) || {};
   const backTarget = locationState.backTarget === 'budget' ? 'budget' : 'chat';
-  const backLabel = backTarget === 'budget' ? 'Back to Budget' : 'Back to Chat';
+  const backLabel =
+    backTarget === 'budget' ? 'Back to Budget' : 'Back to Business Summary';
   const dispatch = useAppDispatch();
   const normalizedSessionId = sessionId ?? 'anonymous';
   const cachedTransition = useAppSelector(
     (state) => state.businessPlanTransition.bySessionId[normalizedSessionId]
   );
   const contentRef = useRef<HTMLDivElement>(null);
+  const documentEndRef = useRef<HTMLDivElement>(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const sessionCache = useMemo(() => readBpSessionCache(sessionId), [sessionId]);
 
   // Initialize from navigation state, Redux (in-memory), then sessionStorage (survives refresh)
@@ -136,6 +141,34 @@ const BusinessPlanView: React.FC = () => {
       writeBpSessionCache(sessionId, businessPlan, businessPlanSummary);
     }
   }, [businessPlan, businessPlanSummary, dispatch, normalizedSessionId, sessionId]);
+
+  const generatedDateLabel = useMemo(
+    () =>
+      new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      }),
+    [],
+  );
+
+  useEffect(() => {
+    const target = documentEndRef.current;
+    if (!target || loading) {
+      setShowScrollToBottom(false);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowScrollToBottom(!entry.isIntersecting),
+      { threshold: 0, rootMargin: '0px 0px -72px 0px' },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [loading, businessPlan, businessPlanSummary, viewMode]);
+
+  const scrollToDocumentEnd = () => {
+    documentEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  };
 
   // Check subscription status from backend on mount
   useEffect(() => {
@@ -377,107 +410,164 @@ const BusinessPlanView: React.FC = () => {
   const content =
     viewMode === 'full' && businessPlan ? businessPlan : businessPlanSummary;
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 pt-4 sm:pt-6">
-      {/* Content */}
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-          {/* Document Header
-              Two stacked rows:
-                Row 1: chrome — back button (left) + action toolbar (right).
-                Row 2: page title + generated-on date.
-              The previous one-row layout squeezed the title between the back
-              button and the four right-side actions, so the title competed
-              with chrome for horizontal space. Separating chrome from title
-              gives the page heading its own visual register. */}
-          <div className="bg-gradient-to-r from-teal-500 to-blue-500 px-6 sm:px-8 py-6 text-white print:bg-white print:text-gray-900 print:border-b print:border-gray-300">
-            {/* Row 1 — chrome */}
-            <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-              <button
-                onClick={handleBackToChat}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 text-teal-600 rounded-lg text-sm font-semibold shadow-md transition-colors"
-                aria-label={backLabel}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                <span>{backLabel}</span>
-              </button>
+  const headerActionBtn =
+    'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors';
 
-              <div className="flex flex-wrap items-center gap-2">
-                {businessPlan && businessPlanSummary && (
-                  <div className="inline-flex bg-white/20 rounded-lg p-1 backdrop-blur-sm">
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 pt-2 sm:pt-4">
+      {showScrollToBottom && (
+        <div
+          className={`fixed z-[100] print:hidden ${
+            roadmapAvailable ? 'bottom-20 left-4 sm:bottom-8 sm:left-auto sm:right-8' : 'bottom-4 right-4 sm:bottom-8 sm:right-8'
+          }`}
+        >
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={scrollToDocumentEnd}
+                aria-label="Scroll to end of document"
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-800 text-white shadow-[0_4px_14px_rgba(15,23,42,0.35)] transition-colors hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-800"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.25} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left" sideOffset={10} className="max-w-[220px] text-sm">
+              Scroll to the end of your business plan
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      )}
+
+      <div className="mx-auto max-w-5xl px-3 py-3 sm:px-6 sm:py-6 lg:px-8">
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg sm:rounded-2xl">
+          {/* Compact document toolbar — 1–2 lines on desktop; wraps cleanly on mobile */}
+          <div className="relative border-b border-teal-700/30 bg-gradient-to-r from-teal-600 to-blue-600 px-3 py-3 text-white shadow-sm sm:px-5 sm:py-3.5 print:border-gray-300 print:bg-white print:text-gray-900 print:shadow-none">
+
+            <div className="relative flex flex-col gap-2 print:hidden md:flex-row md:items-center md:justify-between md:gap-4">
+              <div className="flex min-w-0 items-center gap-2 md:max-w-[55%] md:gap-3 lg:max-w-none lg:flex-1">
+                <Tooltip>
+                  <TooltipTrigger asChild>
                     <button
+                      type="button"
+                      onClick={handleBackToChat}
+                      className={`${headerActionBtn} shrink-0 border border-white/20 bg-white/10 text-white hover:bg-white/15`}
+                      aria-label={backLabel}
+                    >
+                      <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                      </svg>
+                      <span className="hidden whitespace-nowrap sm:inline">{backLabel}</span>
+                      <span className="whitespace-nowrap sm:hidden">Back</span>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-[240px] text-sm">
+                    Return to your business plan summary review page
+                  </TooltipContent>
+                </Tooltip>
+
+                <div className="hidden h-8 w-px shrink-0 bg-white/20 md:block" aria-hidden />
+
+                <div className="min-w-0 flex-1 border-l border-white/15 pl-2 md:border-0 md:pl-0">
+                  <h1 className="truncate text-base font-semibold leading-tight md:text-lg">
+                    Business Plan
+                  </h1>
+                  <p className="truncate text-xs text-white/80 md:text-sm">
+                    Generated {generatedDateLabel}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 md:shrink-0 md:justify-end">
+                {businessPlan && businessPlanSummary && (
+                  <div
+                    className="inline-flex shrink-0 rounded-lg bg-black/25 p-0.5"
+                    role="tablist"
+                    aria-label="Document view"
+                  >
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={viewMode === 'summary'}
                       onClick={() => setViewMode('summary')}
-                      className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all whitespace-nowrap ${
+                      className={`${headerActionBtn} ${
                         viewMode === 'summary'
-                          ? 'bg-white text-teal-600 shadow-sm'
-                          : 'text-white hover:bg-white/10'
+                          ? 'bg-white text-teal-800 shadow-sm'
+                          : 'text-white/90 hover:bg-white/10'
                       }`}
                     >
-                      📋 Summary
+                      <span className="whitespace-nowrap">Summary</span>
                     </button>
                     <button
+                      type="button"
+                      role="tab"
+                      aria-selected={viewMode === 'full'}
                       onClick={() => setViewMode('full')}
-                      className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all whitespace-nowrap ${
+                      className={`${headerActionBtn} ${
                         viewMode === 'full'
-                          ? 'bg-white text-teal-600 shadow-sm'
-                          : 'text-white hover:bg-white/10'
+                          ? 'bg-white text-teal-800 shadow-sm'
+                          : 'text-white/90 hover:bg-white/10'
                       }`}
                     >
-                      📄 Full Plan
+                      <span className="whitespace-nowrap">Full plan</span>
                     </button>
                   </div>
                 )}
 
-                <button
-                  onClick={handleDownload}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 text-teal-600 rounded-lg text-sm font-semibold shadow-md transition-colors whitespace-nowrap"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  Download
-                </button>
-                <button
-                  onClick={handlePrint}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm font-semibold border border-white/50 transition-colors whitespace-nowrap"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                  </svg>
-                  Print
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={handleDownload}
+                      className={`${headerActionBtn} shrink-0 bg-white text-teal-800 hover:bg-teal-50`}
+                    >
+                      <span className="whitespace-nowrap">Download</span>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-sm">
+                    Export this document
+                  </TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={handlePrint}
+                      className={`${headerActionBtn} shrink-0 border border-white/25 bg-white/10 text-white hover:bg-white/15`}
+                    >
+                      <span className="whitespace-nowrap">Print</span>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-sm">
+                    Print this document
+                  </TooltipContent>
+                </Tooltip>
               </div>
             </div>
 
-            {/* Row 2 — title + date */}
-            <div className="mt-6 print:mt-0">
-              <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Business Plan</h1>
-              <p className="mt-2 text-sm md:text-base opacity-90 print:opacity-100">
-                Generated on {new Date().toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                })}
-              </p>
+            <div className="hidden print:block">
+              <h1 className="text-2xl font-bold text-gray-900">Business Plan</h1>
+              <p className="mt-1 text-sm text-gray-600">Generated {generatedDateLabel}</p>
             </div>
           </div>
 
           {/* Document Content */}
-          <div className="p-8 sm:p-12" ref={contentRef} id="document-content">
+          <div className="p-4 sm:p-8 md:p-12" ref={contentRef} id="document-content">
             {content ? (
-              <div className="prose prose-lg max-w-none">
+              <div className="prose prose-sm max-w-none break-words sm:prose-base md:prose-lg">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
                     h1: ({ children }) => (
-                      <h1 className="text-3xl font-bold text-gray-900 mb-6 mt-8 pb-3 border-b-2 border-gray-200">
+                      <h1 className="mb-4 mt-6 border-b-2 border-gray-200 pb-3 text-2xl font-bold text-gray-900 sm:mb-6 sm:mt-8 sm:text-3xl">
                         {children}
                       </h1>
                     ),
                     h2: ({ children }) => (
-                      <h2 className="text-2xl font-bold text-gray-900 mb-4 mt-8">
+                      <h2 className="mb-3 mt-6 text-xl font-bold text-gray-900 sm:mb-4 sm:mt-8 sm:text-2xl">
                         {children}
                       </h2>
                     ),
@@ -492,17 +582,17 @@ const BusinessPlanView: React.FC = () => {
                       </h4>
                     ),
                     p: ({ children }) => (
-                      <p className="text-gray-700 leading-relaxed mb-4 text-justify">
+                      <p className="mb-4 text-left text-gray-700 leading-relaxed sm:text-justify">
                         {children}
                       </p>
                     ),
                     ul: ({ children }) => (
-                      <ul className="list-disc ml-8 space-y-2 text-gray-700 mb-4">
+                      <ul className="mb-4 ml-4 list-disc space-y-2 pl-1 text-gray-700 sm:ml-8">
                         {children}
                       </ul>
                     ),
                     ol: ({ children }) => (
-                      <ol className="list-decimal ml-8 space-y-2 text-gray-700 mb-4">
+                      <ol className="mb-4 ml-4 list-decimal space-y-2 pl-1 text-gray-700 sm:ml-8">
                         {children}
                       </ol>
                     ),
@@ -512,38 +602,7 @@ const BusinessPlanView: React.FC = () => {
                     strong: ({ children }) => (
                       <strong className="text-gray-900 font-bold">{children}</strong>
                     ),
-                    table: ({ children }) => (
-                      <div className="overflow-x-auto my-6 shadow-md rounded-lg">
-                        <table className="min-w-full border-collapse bg-white">
-                          {children}
-                        </table>
-                      </div>
-                    ),
-                    thead: ({ children }) => (
-                      <thead className="bg-gradient-to-r from-teal-600 to-blue-600 text-white">
-                        {children}
-                      </thead>
-                    ),
-                    tbody: ({ children }) => (
-                      <tbody className="divide-y divide-gray-200 tbody-hover-rows">
-                        {children}
-                      </tbody>
-                    ),
-                    tr: ({ children }) => (
-                      <tr>
-                        {children}
-                      </tr>
-                    ),
-                    th: ({ children }) => (
-                      <th className="px-6 py-4 text-left text-sm font-bold uppercase tracking-wider">
-                        {children}
-                      </th>
-                    ),
-                    td: ({ children }) => (
-                      <td className="px-6 py-4 text-sm text-gray-700">
-                        {children}
-                      </td>
-                    ),
+                    ...responsiveMarkdownTableComponents,
                     blockquote: ({ children }) => (
                       <blockquote className="border-l-4 border-teal-500 pl-4 py-2 my-4 bg-teal-50 rounded-r-lg">
                         {children}
@@ -567,10 +626,11 @@ const BusinessPlanView: React.FC = () => {
                   onClick={handleBackToChat}
                   className="px-6 py-3 bg-teal-500 hover:bg-teal-600 text-white rounded-lg font-medium transition-colors"
                 >
-                  {backTarget === 'budget' ? 'Return to Budget' : 'Return to Chat'}
+                  {backTarget === 'budget' ? 'Return to Budget' : 'Return to Business Summary'}
                 </button>
               </div>
             )}
+            <div ref={documentEndRef} className="h-px w-full scroll-mt-8" aria-hidden />
           </div>
         </div>
 
@@ -619,12 +679,14 @@ const BusinessPlanView: React.FC = () => {
         documentTitle="Business Plan"
         documentContent={contentRef.current?.innerHTML || content}
         documentType="business-plan"
+        showSuccessToast={false}
       />
 
       {/* Floating Continue to Roadmap Button - Right Side */}
       {roadmapAvailable && (
-        <div className="fixed right-6 top-1/2 -translate-y-1/2 z-40 print:hidden">
+        <div className="fixed bottom-4 right-4 z-40 sm:bottom-auto sm:right-6 sm:top-1/2 sm:-translate-y-1/2 print:hidden">
           <button
+            type="button"
             onClick={async () => {
               if (!sessionId) return;
               
@@ -653,13 +715,17 @@ const BusinessPlanView: React.FC = () => {
                 toast.error('Failed to navigate to roadmap');
               }
             }}
-            className="group bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white px-6 py-4 rounded-xl shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:scale-110 flex flex-col items-center gap-2 min-w-[140px] border-2 border-green-400"
+            className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-emerald-700 sm:min-w-[140px] sm:flex-col sm:gap-1 sm:px-5 sm:py-4"
             title="Continue to Roadmap"
           >
-            <div className="text-2xl animate-pulse">🚀</div>
-            <div className="text-sm font-bold text-center">Continue to</div>
-            <div className="text-sm font-bold text-center">Roadmap</div>
-            <div className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+            <span className="whitespace-nowrap sm:whitespace-normal sm:text-center sm:leading-tight">
+              <span className="hidden sm:block">Continue to</span>
+              <span className="hidden sm:block">Roadmap</span>
+              <span className="sm:hidden">Continue to Roadmap</span>
+            </span>
           </button>
         </div>
       )}

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'react-toastify';
@@ -12,6 +12,8 @@ import { checkIsFreeIntroPeriod } from '../utils/freeIntroPeriod';
 import { useAppDispatch, useAppSelector } from '../store';
 import { upsertTransitionSession } from '../store/businessPlanTransitionSlice';
 import httpClient from '../api/httpClient';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+import { responsiveMarkdownTableComponents } from './ResponsiveMarkdownTable';
 
 interface PlanToRoadmapTransitionProps {
   businessPlanSummary: string;
@@ -247,6 +249,8 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
     (state) => state.businessPlanTransition.bySessionId[normalizedSessionId]
   );
   const contentRef = useRef<HTMLDivElement>(null);
+  const decisionSectionRef = useRef<HTMLDivElement>(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showModificationModal, setShowModificationModal] = useState(false);
@@ -277,6 +281,40 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
   useEffect(() => {
     if (!loading) setPendingAction(null);
   }, [loading]);
+
+  // Show floating control when the action buttons are below the viewport.
+  useEffect(() => {
+    const target = decisionSectionRef.current;
+    if (!target || loading) {
+      setShowScrollToBottom(false);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowScrollToBottom(!entry.isIntersecting),
+      { threshold: 0.15, rootMargin: '0px 0px -48px 0px' },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [loading, actualSummary, isLoadingSummary, businessPlanArtifact]);
+
+  const scrollToSummaryActions = () => {
+    decisionSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  const continueButtonTooltip = useMemo(() => {
+    if (nextStep === 'budget') {
+      return 'Confirm your business plan summary is accurate, then continue to the budget workspace to plan costs, revenue, and cash flow.';
+    }
+    if (!hasPaid) {
+      return 'Confirm your summary and continue to generate your personalized launch roadmap. A subscription may be required.';
+    }
+    return 'Confirm your business plan summary is accurate, then generate your step-by-step launch roadmap.';
+  }, [nextStep, hasPaid]);
+
+  const modifyButtonTooltip =
+    'Return to the business plan questionnaire to update specific answers or sections before you continue to the next phase.';
+
   const hasFetchedSummary = useRef(false); // Track if we've already attempted to fetch
 
   useEffect(() => {
@@ -686,9 +724,50 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
         </div>
       )}
       
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 flex items-center justify-center px-4 py-10 sm:py-14">
-        <div className="w-full max-w-4xl bg-white/90 backdrop-blur-xl border border-white/30 shadow-2xl rounded-3xl p-8">
-        <header className="relative mb-10 pt-2 pb-6 border-b border-slate-200/70 overflow-hidden">
+      <AnimatePresence>
+        {!loading && showScrollToBottom && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-4 right-4 z-[100] sm:bottom-8 sm:right-8"
+          >
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={scrollToSummaryActions}
+                  aria-label="Scroll to continue and action buttons"
+                  className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-800 text-white shadow-[0_4px_14px_rgba(15,23,42,0.35)] transition-colors hover:bg-slate-700 active:bg-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-800"
+                >
+                  <svg
+                    className="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2.25}
+                      d="M19 14l-7 7m0 0l-7-7m7 7V3"
+                    />
+                  </svg>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="left" sideOffset={10} className="max-w-[220px] text-sm">
+                Jump to Continue and Modify actions at the bottom
+              </TooltipContent>
+            </Tooltip>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 flex items-center justify-center px-3 py-6 sm:px-4 sm:py-10 md:py-14">
+        <div className="w-full max-w-4xl bg-white/90 backdrop-blur-xl border border-white/30 shadow-2xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8">
+        <header className="relative mb-6 sm:mb-10 pt-2 pb-5 sm:pb-6 border-b border-slate-200/70 overflow-hidden">
           {/* Ambient decorative orbs — softly float behind the title.
               `pointer-events-none` so they never block clicks. */}
           <motion.div
@@ -725,7 +804,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
             transition={{ duration: 0.4, ease: 'easeOut' }}
             whileHover={{ x: -4 }}
             whileTap={{ scale: 0.96 }}
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 backdrop-blur px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-white hover:border-teal-300 hover:text-teal-700 hover:shadow-md disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+            className="relative z-10 mb-4 inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-white/80 backdrop-blur px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-white hover:border-teal-300 hover:text-teal-700 hover:shadow-md disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 sm:absolute sm:left-0 sm:top-1/2 sm:mb-0 sm:w-auto sm:-translate-y-1/2 sm:justify-start"
             title="Go back to the chat and edit your answers"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -736,7 +815,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
 
           {/* Title block — staggered fade-up with a shimmering eyebrow pill. */}
           <motion.div
-            className="relative text-center"
+            className="relative text-center sm:px-24"
             initial="hidden"
             animate="show"
             variants={{
@@ -773,7 +852,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
                 hidden: { opacity: 0, y: 10 },
                 show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } },
               }}
-              className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-slate-900 via-teal-700 to-blue-700 bg-clip-text text-transparent bg-[length:200%_100%]"
+              className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-slate-900 via-teal-700 to-blue-700 bg-clip-text text-transparent bg-[length:200%_100%]"
               style={{ backgroundPosition: '0% 50%' }}
             >
               <motion.span
@@ -799,7 +878,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
 
         {/* Info Banner - How to Generate Full Plan */}
         {!businessPlanArtifact && !isGeneratingArtifact && (
-          <div className="mb-6 bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4">
+          <div className="mb-6 rounded-lg border-l-4 border-blue-500 bg-blue-50 p-3 sm:p-4">
             <div className="flex items-start gap-3">
               <svg className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -815,50 +894,47 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
         )}
 
         {/* Business Plan Summary Overview */}
-        <div className="mb-8" ref={contentRef} id="business-plan-summary-content">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              📋 Business Plan Summary Overview
+        <div className="mb-6 sm:mb-8" ref={contentRef} id="business-plan-summary-content">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <h2 className="text-lg font-bold text-gray-900 sm:text-xl md:text-2xl">
+              Business Plan Summary Overview
             </h2>
-            <div className="flex gap-2">
-              <button
-                disabled={isGeneratingArtifact}
-                onClick={() => {
-                  if (businessPlanArtifact) {
-                    // Artifact exists - navigate to view it
-                    navigate(`/ventures/${sessionId}/business-plan`, {
-                      state: {
-                        businessPlan: businessPlanArtifact,
-                        businessPlanSummary: actualSummary || businessPlanSummary,
-                        sessionId: sessionId
-                      }
-                    });
-                  } else {
-                    // Artifact doesn't exist - generate it on-demand
-                    handleGenerateArtifact();
-                  }
-                }}
-                className={`bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none`}
-                title={businessPlanArtifact ? 'View your complete business plan' : 'Click to generate your full business plan'}
-              >
-                {isGeneratingArtifact ? (
-                  <>
-                    <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span>⏳ Generating... (30-60s)</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <span>{businessPlanArtifact ? '📄 View Full Business Plan' : '🎯 Generate Full Business Plan'}</span>
-                  </>
-                )}
-              </button>
-            </div>
+            <button
+              type="button"
+              disabled={isGeneratingArtifact}
+              onClick={() => {
+                if (businessPlanArtifact) {
+                  navigate(`/ventures/${sessionId}/business-plan`, {
+                    state: {
+                      businessPlan: businessPlanArtifact,
+                      businessPlanSummary: actualSummary || businessPlanSummary,
+                      sessionId: sessionId,
+                    },
+                  });
+                } else {
+                  handleGenerateArtifact();
+                }
+              }}
+              className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-md transition-colors hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-500 sm:w-auto sm:px-5 sm:text-base"
+              title={businessPlanArtifact ? 'View your complete business plan' : 'Click to generate your full business plan'}
+            >
+              {isGeneratingArtifact ? (
+                <>
+                  <svg className="h-5 w-5 animate-spin shrink-0" fill="none" viewBox="0 0 24 24" aria-hidden>
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  <span>Generating… (30–60s)</span>
+                </>
+              ) : (
+                <>
+                  <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>{businessPlanArtifact ? 'View Full Business Plan' : 'Generate Full Business Plan'}</span>
+                </>
+              )}
+            </button>
           </div>
           
           {/* Full Viewable Business Plan Summary - No Height Restriction */}
@@ -875,17 +951,17 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
                 </div>
               </div>
             )}
-            <div className="p-8 prose prose-lg max-w-none">
+            <div className="p-4 prose prose-sm max-w-none break-words sm:p-6 sm:prose-base md:p-8 md:prose-lg">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
                   h1: ({ children }) => (
-                    <h1 className="text-3xl font-bold text-gray-900 mb-6 pb-4 border-b-2 border-teal-500">
+                    <h1 className="mb-4 border-b-2 border-teal-500 pb-3 text-2xl font-bold text-gray-900 sm:mb-6 sm:pb-4 sm:text-3xl">
                       {children}
                     </h1>
                   ),
                   h2: ({ children }) => (
-                    <h2 className="text-2xl font-bold text-gray-900 mb-4 mt-8 flex items-center gap-2">
+                    <h2 className="mb-3 mt-6 flex items-center gap-2 text-xl font-bold text-gray-900 sm:mb-4 sm:mt-8 sm:text-2xl">
                       <span className="w-2 h-8 bg-gradient-to-b from-teal-500 to-blue-500 rounded-full"></span>
                       {children}
                     </h2>
@@ -901,7 +977,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
                     </h4>
                   ),
                   p: ({ children }) => (
-                    <p className="text-gray-700 leading-relaxed mb-4 text-justify">
+                    <p className="mb-4 text-left text-gray-700 leading-relaxed sm:text-justify">
                       {children}
                     </p>
                   ),
@@ -932,38 +1008,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
                       <div className="text-gray-800 italic">{children}</div>
                     </blockquote>
                   ),
-                  table: ({ children }) => (
-                    <div className="my-8 overflow-x-auto shadow-lg rounded-lg">
-                      <table className="min-w-full border-collapse bg-white">
-                        {children}
-                      </table>
-                    </div>
-                  ),
-                  thead: ({ children }) => (
-                    <thead className="bg-gradient-to-r from-teal-600 to-blue-600">
-                      {children}
-                    </thead>
-                  ),
-                  tbody: ({ children }) => (
-                    <tbody className="divide-y divide-gray-200 bg-white tbody-hover-rows">
-                      {children}
-                    </tbody>
-                  ),
-                  tr: ({ children }) => (
-                    <tr>
-                      {children}
-                    </tr>
-                  ),
-                  th: ({ children }) => (
-                    <th className="px-6 py-4 text-left text-sm font-bold text-white uppercase tracking-wider">
-                      {children}
-                    </th>
-                  ),
-                  td: ({ children }) => (
-                    <td className="px-6 py-4 text-sm text-gray-700 leading-relaxed">
-                      {children}
-                    </td>
-                  ),
+                  ...responsiveMarkdownTableComponents,
                   hr: () => (
                     <hr className="my-8 border-t-2 border-gray-200" />
                   ),
@@ -1186,88 +1231,128 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
         )}
 
         {/* Decision Buttons */}
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">
-            Ready to Move Forward?
+        <div
+          ref={decisionSectionRef}
+          id="summary-actions"
+          className="mx-auto max-w-2xl scroll-mt-24 text-center"
+        >
+          <h2 className="text-xl font-semibold text-gray-900 sm:text-2xl">
+            Ready to move forward?
           </h2>
-          <p className="text-gray-600 mb-8">
-            Please review your business plan summary above. If everything looks accurate and complete, you can:
+          <p className="mt-2 text-sm leading-relaxed text-gray-600 sm:text-base">
+            Review your summary above. When you&apos;re satisfied, continue — or go back to refine
+            anything that needs a change.
           </p>
-          
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button
-              onClick={() => {
-                // Check subscription only for roadmap transition, not for budget
-                if (nextStep === 'roadmap' && !hasPaid) {
-                  setShowPaymentModal(true);
-                  toast.info('Subscription required to proceed to Roadmap phase');
-                  return;
-                }
-                setPendingAction('forward');
-                onApprove();
-              }}
-              disabled={loading || (nextStep === 'roadmap' && !hasPaid)}
-              className="group relative bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white px-10 py-5 rounded-xl text-xl font-bold shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border-2 border-green-400"
-            >
-              {loading ? (
-                <div className="flex flex-col items-center justify-center gap-2">
-                  <div className="flex items-center justify-center gap-3">
-                    <svg className="animate-spin h-7 w-7 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span className="text-2xl font-bold">
-                      {nextStep === 'budget' ? 'Setting Up Budget...' : 'Generating Roadmap...'}
-                    </span>
-                  </div>
-                  <div className="text-sm opacity-95 font-medium">
-                    {nextStep === 'budget' ? 'Preparing your budget setup' : 'This may take 10-30 seconds'}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center gap-2">
-                  <div className="flex items-center justify-center gap-3">
-                    <span className="text-2xl animate-pulse">🚀</span>
-                    <span className="text-2xl">
-                      {nextStep === 'budget' ? 'Continue to Budget' : 'Continue to Roadmap'}
-                    </span>
-                  </div>
-                  <div className="text-sm opacity-95 font-medium">
-                    {nextStep === 'budget' ? 'Proceed to budget setup' : 'Proceed to roadmap generation'}
-                  </div>
-                </div>
-              )}
-              <div className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-            </button>
 
-            <button
-              onClick={handleRevisitClick}
-              disabled={loading}
-              className="group relative bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-8 py-4 rounded-xl text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-            >
-              {loading ? (
-                <div className="flex flex-col items-center justify-center gap-2">
-                  <div className="flex items-center justify-center gap-3">
-                    <svg className="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span className="text-lg font-semibold">Loading...</span>
-                  </div>
-                  <div className="text-sm opacity-90">Preparing review mode</div>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center justify-center gap-3">
-                    <span className="text-xl">🔄</span>
-                    <span>Modify</span>
-                  </div>
-                  <div className="text-sm opacity-90 mt-1">Adjust any aspects that need refinement</div>
-                </>
-              )}
-              <div className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-            </button>
+          <div className="mt-8 flex flex-col items-stretch justify-center gap-4 sm:flex-row sm:items-stretch sm:justify-center">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (nextStep === 'roadmap' && !hasPaid) {
+                      setShowPaymentModal(true);
+                      toast.info('Subscription required to proceed to Roadmap phase');
+                      return;
+                    }
+                    setPendingAction('forward');
+                    onApprove();
+                  }}
+                  disabled={loading || (nextStep === 'roadmap' && !hasPaid)}
+                  className="inline-flex min-h-[52px] w-full items-center justify-center gap-2.5 rounded-xl bg-emerald-600 px-8 py-3.5 text-base font-semibold text-white shadow-md transition-colors hover:bg-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-[240px] sm:flex-1"
+                >
+                  {loading ? (
+                    <>
+                      <svg
+                        className="h-5 w-5 animate-spin text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        aria-hidden
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                      </svg>
+                      <span>
+                        {nextStep === 'budget' ? 'Setting up budget…' : 'Generating roadmap…'}
+                      </span>
+                    </>
+                  ) : (
+                    <span>
+                      {nextStep === 'budget' ? 'Continue to budget' : 'Continue to roadmap'}
+                    </span>
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={8} className="max-w-[280px] text-sm leading-snug">
+                {continueButtonTooltip}
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={handleRevisitClick}
+                  disabled={loading}
+                  className="inline-flex min-h-[52px] w-full items-center justify-center gap-2.5 rounded-xl border-2 border-gray-300 bg-white px-8 py-3.5 text-base font-semibold text-gray-800 shadow-sm transition-colors hover:border-gray-400 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-[240px] sm:flex-1"
+                >
+                  {loading ? (
+                    <>
+                      <svg
+                        className="h-5 w-5 animate-spin text-gray-500"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        aria-hidden
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                      </svg>
+                      <span>Preparing…</span>
+                    </>
+                  ) : (
+                    <span>Modify plan</span>
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={8} className="max-w-[280px] text-sm leading-snug">
+                {modifyButtonTooltip}
+              </TooltipContent>
+            </Tooltip>
           </div>
+
+          <p className="mt-4 text-sm text-gray-500">
+            {loading
+              ? nextStep === 'budget'
+                ? 'Preparing your budget workspace.'
+                : 'This may take 10–30 seconds.'
+              : nextStep === 'budget'
+                ? 'Next: set up your budget from this plan.'
+                : 'Next: generate your launch roadmap.'}
+          </p>
         </div>
       </div>
 
