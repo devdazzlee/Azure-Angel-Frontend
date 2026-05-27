@@ -41,6 +41,7 @@ import QuestionFormatter from "../../components/QuestionFormatter";
 import {
   getAngelMessageBadgeLabel,
   isSectionSummaryContent,
+  normalizeAngelMarkdown,
   normalizeSectionSummaryMarkdown,
 } from "../../utils/angelMessageKind";
 import ReactMarkdown from "react-markdown";
@@ -2123,9 +2124,8 @@ export default function ChatPage() {
     // AND as buttons below — a visible duplicate.
     formatted = stripPickerOptionLines(formatted);
 
-    // Clean up excessive whitespace
-    formatted = formatted.replace(/\n{3,}/g, "\n\n");
-    formatted = formatted.replace(/\n\s*\n\s*\n/g, "\n\n");
+    // Clean up excessive whitespace (ReactMarkdown turns extra newlines into empty <p> gaps)
+    formatted = normalizeAngelMarkdown(formatted);
     formatted = formatted.replace(/[ \t]{2,}/g, " ");
     
     // Compact spacing between numbered list items
@@ -5156,7 +5156,7 @@ export default function ChatPage() {
                                           ),
                                         }}
                                       >
-                                        {snapAck}
+                                        {normalizeAngelMarkdown(snapAck)}
                                       </ReactMarkdown>
                                     </div>
                                   </div>
@@ -5165,7 +5165,7 @@ export default function ChatPage() {
                                       Next Question
                                     </p>
                                     <div className="rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3">
-                                      <div className="text-gray-800 whitespace-pre-wrap text-sm">
+                                      <div className="text-gray-800 whitespace-normal text-sm">
                                         <QuestionFormatter text={snapQ} phase={progress.phase} />
                                       </div>
                                     </div>
@@ -5176,7 +5176,7 @@ export default function ChatPage() {
                             return (
                               <div>
                                 <div className="rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3">
-                                  <div className="text-gray-800 whitespace-pre-wrap text-sm">
+                                  <div className="text-gray-800 whitespace-normal text-sm">
                                     <QuestionFormatter text={pair.question} phase={progress.phase} />
                                   </div>
                                 </div>
@@ -5196,7 +5196,7 @@ export default function ChatPage() {
                                     strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
                                   }}
                                 >
-                                  {pair.acknowledgement}
+                                  {normalizeAngelMarkdown(pair.acknowledgement)}
                                 </ReactMarkdown>
                               </div>
                             </div>
@@ -5206,7 +5206,7 @@ export default function ChatPage() {
                               <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-600">Next Question</p>
                             )}
                             <div className={pair.acknowledgement ? "rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3" : ""}>
-                              <div className="text-gray-800 whitespace-pre-wrap text-sm">
+                              <div className="text-gray-800 whitespace-normal text-sm">
                                 <QuestionFormatter text={pair.question} phase={progress.phase} />
                               </div>
                             </div>
@@ -5320,7 +5320,7 @@ export default function ChatPage() {
                         </div>
                       ) : null;
                     })()}
-                    <div className="text-gray-800 whitespace-pre-wrap text-sm angel-intro-text">
+                    <div className="text-gray-800 whitespace-normal text-sm angel-intro-text">
                       {progress.phase === "ROADMAP" || progress.phase === "ROADMAP_GENERATED" ? (
                         loading ? (
                           <AngelThinkingLoader />
@@ -5361,7 +5361,7 @@ export default function ChatPage() {
                                       strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
                                     }}
                                   >
-                                    {currentAcknowledgement}
+                                    {normalizeAngelMarkdown(currentAcknowledgement)}
                                   </ReactMarkdown>
                                 </div>
                               </div>

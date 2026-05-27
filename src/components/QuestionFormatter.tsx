@@ -1,9 +1,35 @@
 import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import {
+  isAutoResearchContent,
   isSectionSummaryContent,
+  normalizeAngelMarkdown,
   normalizeSectionSummaryMarkdown,
 } from '../utils/angelMessageKind';
+
+/** Shared ReactMarkdown mapping — avoids empty <p> margins and list spacing blowups */
+const angelMarkdownComponents = {
+  h3: ({ children }: { children?: React.ReactNode }) => (
+    <h3 className="mt-3 mb-1.5 first:mt-0 text-sm font-bold text-gray-900">{children}</h3>
+  ),
+  strong: ({ children }: { children?: React.ReactNode }) => (
+    <strong className="font-semibold text-gray-900">{children}</strong>
+  ),
+  p: ({ children }: { children?: React.ReactNode }) => {
+    const flat = React.Children.toArray(children).join('').trim();
+    if (!flat) return null;
+    return <p className="mb-2 last:mb-0 leading-relaxed text-gray-800">{children}</p>;
+  },
+  ul: ({ children }: { children?: React.ReactNode }) => (
+    <ul className="mb-2 list-disc space-y-1 pl-5 text-gray-700">{children}</ul>
+  ),
+  ol: ({ children }: { children?: React.ReactNode }) => (
+    <ol className="mb-2 list-decimal space-y-1 pl-5 text-gray-700">{children}</ol>
+  ),
+  li: ({ children }: { children?: React.ReactNode }) => (
+    <li className="leading-relaxed [&>p]:mb-0 [&>p]:inline">{children}</li>
+  ),
+};
 
 interface QuestionFormatterProps {
   text: string;
@@ -23,6 +49,9 @@ export function parseBusinessPlanQuestionParts(inputText: string): {
 
   const rawLines = (inputText || '')
     .replace(/\r\n/g, '\n')
+    // Split merged hint labels into separate logical lines.
+    .replace(/\s+(🧠\s*Thought Starter\s*:)/gi, '\n$1')
+    .replace(/\s+(💡\s*(?:Quick Tip|Pro Tip|Tip)\s*:)/gi, '\n$1')
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean);
@@ -83,10 +112,18 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
       return match;
     });
 
+    // Enforce newline before guidance labels in model output.
+    next = normalizeAngelMarkdown(next);
+
     return next;
   }, [text]);
 
   // Detect draft/command/auto-research responses that should NOT be parsed/reordered
+  const hasAutoResearch = useMemo(
+    () => isAutoResearchContent(processedText),
+    [processedText],
+  );
+
   const isDraftOrCommandResponse = useMemo(() => {
     const commandPrefixes = [
       /^Here's a (research-backed )?draft/i,
@@ -98,9 +135,13 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
       /^Here's what I've captured so far/i,
     ];
     const isCommandPrefix = commandPrefixes.some(regex => regex.test(processedText.trim()));
-    const hasAutoResearch = /🔍\s*\*\*.*(?:Research|Suggested|Estimated).*\*\*/i.test(processedText);
     return isCommandPrefix || hasAutoResearch;
-  }, [processedText]);
+  }, [processedText, hasAutoResearch]);
+
+  const normalizedMarkdown = useMemo(
+    () => normalizeAngelMarkdown(processedText),
+    [processedText],
+  );
 
   const isSectionSummary = useMemo(
     () => isSectionSummaryContent(processedText),
@@ -119,36 +160,23 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
     return parseBusinessPlanQuestionParts(processedText);
   }, [phase, processedText, isDraftOrCommandResponse, isSectionSummary]);
 
-  // Section summary: ReactMarkdown (library renders **bold**, lists, etc.)
+  // Section summary — ReactMarkdown with normalized spacing
   if (isSectionSummary) {
     return (
       <div className="question-formatter section-summary whitespace-normal text-sm leading-relaxed">
-        <ReactMarkdown
-          components={{
-            h3: ({ children }) => (
-              <h3 className="mt-3 mb-1.5 first:mt-0 text-sm font-bold text-gray-900">
-                {children}
-              </h3>
-            ),
-            strong: ({ children }) => (
-              <strong className="font-semibold text-gray-900">{children}</strong>
-            ),
-            p: ({ children }) => {
-              const flat = React.Children.toArray(children).join('').trim();
-              if (!flat) return null;
-              return (
-                <p className="mb-2 last:mb-0 leading-relaxed text-gray-800">{children}</p>
-              );
-            },
-            ul: ({ children }) => (
-              <ul className="mb-2 list-disc space-y-1 pl-5 text-gray-700">{children}</ul>
-            ),
-            li: ({ children }) => (
-              <li className="leading-relaxed [&>p]:mb-0 [&>p]:inline">{children}</li>
-            ),
-          }}
-        >
+        <ReactMarkdown components={angelMarkdownComponents}>
           {sectionSummaryMarkdown}
+        </ReactMarkdown>
+      </div>
+    );
+  }
+
+  // Auto-research (Q11 competitors, Q12 trends, etc.) — full body via ReactMarkdown
+  if (hasAutoResearch) {
+    return (
+      <div className="question-formatter auto-research whitespace-normal text-sm leading-relaxed">
+        <ReactMarkdown components={angelMarkdownComponents}>
+          {normalizedMarkdown}
         </ReactMarkdown>
       </div>
     );
@@ -269,26 +297,24 @@ const QuestionFormatter: React.FC<QuestionFormatterProps> = ({ text, phase }) =>
   mutableText = mutableText.replace(/\n{3,}/g, '\n\n');
 
   return (
-    <div className="question-formatter">
+    <div className="question-formatter whitespace-normal text-sm leading-relaxed">
       <ReactMarkdown
         components={{
+          ...angelMarkdownComponents,
           strong: ({ children }) => {
             const text = String(children);
             if (text.includes('?')) {
-              return <strong className="font-bold text-gray-900" style={{ fontWeight: 700 }}>{children}</strong>;
+              return (
+                <strong className="font-bold text-gray-900" style={{ fontWeight: 700 }}>
+                  {children}
+                </strong>
+              );
             }
-            return <strong className="font-semibold text-gray-800" style={{ fontWeight: 600 }}>{children}</strong>;
-          },
-          p: ({ children }) => {
-            const text = String(children);
-            if (text.match(/(🧠|💡|📌|📋|🚀|🧩|🌍).*(Thought Starter|Quick Tip|Educational Insight|Goal|Thought|Tip):.*\*\*.*\?\*\*/u)) {
-              return <p className="mb-2 leading-relaxed text-gray-800" style={{ display: 'block' }}>{children}</p>;
-            }
-            return <p className="mb-2 leading-relaxed text-gray-800">{children}</p>;
+            return angelMarkdownComponents.strong({ children });
           },
         }}
       >
-        {mutableText}
+        {normalizeAngelMarkdown(mutableText)}
       </ReactMarkdown>
     </div>
   );
