@@ -74,7 +74,9 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
             <div className="mb-3 flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-pulse"></div>
-                <span className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Overall Progress</span>
+                <span className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                  {currentPhase === 'BUSINESS_PLAN' ? 'Business Plan Progress' : 'Overall Progress'}
+                </span>
               </div>
               <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg shadow-sm border border-gray-200">
                 <span className="text-lg font-bold text-gray-900">

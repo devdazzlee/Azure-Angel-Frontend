@@ -68,7 +68,9 @@ export interface AngelResponse {
         transition_phase?: string;
         business_plan_summary?: string;
         show_accept_modify?: boolean;
-        question_number?: number;
+        question_number?: number | null;
+        /** True when the reply is a section-end summary (not a questionnaire question). */
+        is_section_summary?: boolean;
     };
 }
 

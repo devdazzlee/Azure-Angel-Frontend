@@ -38,6 +38,10 @@ import BusinessQuestionFormatter from "../../components/BusinessQuestionFormatte
 import BackButton from "../../components/BackButton";
 import AngelThinkingLoader from "../../components/AngelThinkingLoader";
 import QuestionFormatter from "../../components/QuestionFormatter";
+import {
+  getAngelMessageBadgeLabel,
+  isSectionSummaryContent,
+} from "../../utils/angelMessageKind";
 import ReactMarkdown from "react-markdown";
 import type { Budget, BudgetItem, APIResponse } from "../../types/apiTypes";
 import BusinessPlanningInstructions from "../../components/BusinessPlanningInstructions";
@@ -56,6 +60,8 @@ interface ConversationPair {
   acknowledgement?: string;
   questionNumber?: number;
   phase?: 'GKY' | 'BUSINESS_PLAN' | 'ROADMAP' | 'ROADMAP_GENERATED' | 'IMPLEMENTATION' | 'PLAN_TO_ROADMAP_TRANSITION' | 'PLAN_TO_SUMMARY_TRANSITION' | 'PLAN_TO_BUDGET_TRANSITION' | 'ROADMAP_TO_IMPLEMENTATION_TRANSITION';
+  /** Section-end summary — not a numbered questionnaire item */
+  isSectionSummary?: boolean;
   /** Draft, Support, Scrapping etc. - display in chat but exclude from progress */
   isCommand?: boolean;
   /** Which quick action produced this row — used for the response card title only */
@@ -116,10 +122,11 @@ interface ProgressState {
   percent: number;
   asked_q?: string;  // Current question tag (e.g., "BUSINESS_PLAN.44")
   combined?: boolean;  // Flag for combined progress
-  overall_progress?: {  // Combined progress for GKY + Business Plan (50 total)
+  overall_progress?: {  // Phase-scoped UI progress (GKY: X/5, BP: X/45 — not mixed)
     answered: number;
     total: number;
     percent: number;
+    scope?: 'gky' | 'business_plan';
     phase_breakdown?: {
       gky_completed: number;
       gky_total: number;
@@ -272,12 +279,26 @@ const getClientDisplayNumber = (
 const deriveQuestionNumber = (
   backendQuestionNumber: number | null | undefined,
   _replyText: string,
-  progressPayload?: Record<string, any>
+  progressPayload?: Record<string, any>,
+  options?: { isSectionSummary?: boolean },
 ): number | null => {
+  if (options?.isSectionSummary) return null;
   if (typeof backendQuestionNumber === "number" && !Number.isNaN(backendQuestionNumber)) {
     return backendQuestionNumber;
   }
   return parseQuestionNumberFromTag(progressPayload?.asked_q);
+};
+
+/** Map API reply metadata to display state (section summaries are not questions). */
+const resolveDisplayFromAngelResult = (
+  result: { question_number?: number | null; is_section_summary?: boolean },
+  progress: Record<string, any>,
+) => {
+  const isSectionSummary = Boolean(result.is_section_summary);
+  const questionNumber = isSectionSummary
+    ? null
+    : deriveQuestionNumber(result.question_number, "", progress);
+  return { isSectionSummary, questionNumber };
 };
 
 /**
@@ -745,6 +766,7 @@ export default function ChatPage() {
   const [currentQuestion, setCurrentQuestion] = useState("");
   const [currentAcknowledgement, setCurrentAcknowledgement] = useState("");
   const [currentQuestionNumber, setCurrentQuestionNumber] = useState<number | null>(null);
+  const [isCurrentSectionSummary, setIsCurrentSectionSummary] = useState(false);
   const [currentInput, setCurrentInput] = useState("");
   const [loading, setLoading] = useState(false);
   /** User's answer displayed while waiting for Angel's reply (keeps question + reply visible during loading) */
@@ -816,21 +838,23 @@ export default function ChatPage() {
       let phaseAnsweredForDisplay: number;
       
       if (progressData.phase === "GKY" || progressData.phase === "BUSINESS_PLAN") {
-        combinedTotal = QUESTION_COUNTS.GKY + QUESTION_COUNTS.BUSINESS_PLAN;
-        
-        if (progressData.phase === "GKY") {
-          phaseAnsweredForDisplay = phaseAnswered;
-          combinedAnswered = phaseAnsweredForDisplay;
-        } else {
-          phaseAnsweredForDisplay = phaseAnswered;
-          combinedAnswered = QUESTION_COUNTS.GKY + phaseAnswered;
-        }
+        // Backend sends phase-scoped overall_progress (never GKY+BP mixed in BP UI).
+        const scoped = progressData.overall_progress;
+        phaseAnsweredForDisplay = phaseAnswered;
+        combinedTotal =
+          typeof scoped?.total === "number"
+            ? scoped.total
+            : progressData.phase === "GKY"
+              ? QUESTION_COUNTS.GKY
+              : QUESTION_COUNTS.BUSINESS_PLAN;
+        combinedAnswered =
+          typeof scoped?.answered === "number" ? scoped.answered : phaseAnswered;
       } else {
         combinedTotal = phaseTotal;
         phaseAnsweredForDisplay = phaseAnswered;
         combinedAnswered = phaseAnswered;
       }
-      
+
       const overallAnswered =
         typeof progressData.overall_progress?.answered === "number"
           ? progressData.overall_progress.answered
@@ -1264,12 +1288,16 @@ export default function ChatPage() {
       // IMPORTANT: Send only "Accept" to the backend, not the full content
       // The backend will understand "Accept" as a command to move to the next question
       const {
-        result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number },
+        result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number, is_section_summary },
       } = await fetchQuestion("Accept", sessionId!);
       const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
-      const questionNumber = deriveQuestionNumber(question_number, reply, progress);
+      const { isSectionSummary, questionNumber } = resolveDisplayFromAngelResult(
+        { question_number, is_section_summary },
+        progress,
+      );
       setCurrentQuestion(parsedQ);
       setCurrentAcknowledgement(ack);
+      setIsCurrentSectionSummary(isSectionSummary);
       setCurrentQuestionNumber(questionNumber);
       updateQuestionTracker(progress.phase, questionNumber);
       applyProgressUpdate(progress);
@@ -3035,6 +3063,24 @@ export default function ChatPage() {
         const numberFromTag = parseQuestionNumberFromTag(sessionMeta.asked_q);
         const rawSessionPhase = ((sessionMeta.current_phase as string) || "GKY").toUpperCase();
         const phase = (rawSessionPhase === 'KYC' ? 'GKY' : rawSessionPhase) as ProgressState['phase'];
+
+        // Section summary: asked_q stays on the last question of the section (e.g. .04),
+        // but the active UI is the summary — not "Question 4".
+        let pausedOnSectionSummary = false;
+        let sectionSummaryContent: string | null = null;
+        if (historyResponse && Array.isArray(historyResponse)) {
+          for (let i = historyResponse.length - 1; i >= 0; i--) {
+            const rec = historyResponse[i];
+            if (rec.role === "assistant" && rec.content) {
+              lastFullAssistantReplyRef.current = rec.content;
+              if (isSectionSummaryContent(rec.content)) {
+                pausedOnSectionSummary = true;
+                sectionSummaryContent = rec.content;
+              }
+              break;
+            }
+          }
+        }
         
         // Filter history to only include Q&A pairs up to the backend's asked_q
         // If backend says we're on Q2, we should only show Q1 as answered
@@ -3042,14 +3088,14 @@ export default function ChatPage() {
         let currentQuestionFromHistory: string | null = null;
         
         if (numberFromTag !== null) {
-          // Backend says we're on question numberFromTag
-          // So we should only have pairs with questionNumber < numberFromTag
-          // IMPORTANT: Keep ALL pairs with questionNumber < numberFromTag, including duplicates
-          // (e.g., if Question 4 was asked twice, keep both attempts)
+          // Normal: asked_q is the next question → keep pairs with number < tag.
+          // Section summary: asked_q is still the section's last question → keep <= tag.
           filteredPairs = reconstructed.pairs.filter((pair) => {
             if (pair.phase !== phase) return true; // Keep pairs from other phases
             if (typeof pair.questionNumber !== 'number') return true; // Keep pairs without numbers
-            // Keep all questions before the current one (including re-asked questions)
+            if (pausedOnSectionSummary) {
+              return pair.questionNumber <= numberFromTag;
+            }
             return pair.questionNumber < numberFromTag;
           });
           
@@ -3078,9 +3124,13 @@ export default function ChatPage() {
             }
           }
           
-          // Find the current question text from history (even if not in a completed pair)
-          // Look for assistant messages with the current question number
-          if (historyResponse && Array.isArray(historyResponse)) {
+          if (pausedOnSectionSummary && sectionSummaryContent) {
+            const { question } = parseAngelReply(sectionSummaryContent);
+            reconstructed.pendingQuestion = question;
+            reconstructed.pendingNumber = null;
+            reconstructed.pendingPhase = phase as ConversationPair['phase'];
+          } else if (historyResponse && Array.isArray(historyResponse)) {
+            // Find the current question text from history (tagged assistant message)
             for (let i = historyResponse.length - 1; i >= 0; i--) {
               const record = historyResponse[i];
               if (record.role === 'assistant' && record.content) {
@@ -3098,11 +3148,11 @@ export default function ChatPage() {
           }
           
           // Update pending question to match backend's asked_q
-          if (currentQuestionFromHistory) {
+          if (!pausedOnSectionSummary && currentQuestionFromHistory) {
             reconstructed.pendingQuestion = currentQuestionFromHistory;
             reconstructed.pendingNumber = numberFromTag;
             reconstructed.pendingPhase = phase as ConversationPair['phase'];
-          } else if (reconstructed.pendingNumber !== null && reconstructed.pendingNumber >= numberFromTag) {
+          } else if (!pausedOnSectionSummary && reconstructed.pendingNumber !== null && reconstructed.pendingNumber >= numberFromTag) {
             // The pending question is ahead of where backend says we are, so clear it
             // We'll need to fetch the question
             reconstructed.pendingQuestion = null;
@@ -3112,16 +3162,6 @@ export default function ChatPage() {
         }
         
         setHistory(filteredPairs);
-
-        if (historyResponse && Array.isArray(historyResponse)) {
-          for (let i = historyResponse.length - 1; i >= 0; i--) {
-            const rec = historyResponse[i];
-            if (rec.role === "assistant" && rec.content) {
-              lastFullAssistantReplyRef.current = rec.content;
-              break;
-            }
-          }
-        }
 
         const phaseQuestionSets: Record<string, Set<number>> = {};
         filteredPairs.forEach((pair) => {
@@ -3141,56 +3181,57 @@ export default function ChatPage() {
         const effectiveAnsweredPhase = Math.max(answeredPhase, backendAnswered);
 
         const totalPhase = QUESTION_COUNTS[phase as keyof typeof QUESTION_COUNTS] || QUESTION_COUNTS.GKY;
-        const phasePercent = totalPhase > 0 ? Math.min(Math.round((effectiveAnsweredPhase / totalPhase) * 100), 100) : 0;
-
-        // Overall progress always includes ALL question phases (GKY + BP = 50)
-        const overallTotal = QUESTION_COUNTS.GKY + QUESTION_COUNTS.BUSINESS_PLAN; // 5 + 45 = 50
-        let overallAnswered = 0;
-        Object.entries(phaseQuestionSets).forEach(([phaseKey, questions]) => {
-          const normalizedPhase = phaseKey.toUpperCase();
-          const phaseTotal = QUESTION_COUNTS[normalizedPhase as keyof typeof QUESTION_COUNTS];
-          if (phaseTotal) {
-            overallAnswered += questions.size;
-          }
-        });
-        // Use max(history-derived, backend) so we never undercount
-        overallAnswered = Math.max(overallAnswered, backendAnswered);
-        if (overallAnswered === 0) {
-          overallAnswered = effectiveAnsweredPhase;
-        }
-        const overallPercent = overallTotal > 0 ? Math.min(Math.round((overallAnswered / overallTotal) * 100), 100) : phasePercent;
 
         // Use backend's asked_q as the source of truth for current question
         const pendingNumber = numberFromTag ?? reconstructed.pendingNumber;
 
-        // Calculate phase_breakdown from actual data (don't rely on previous state which is empty on restore)
         const gkyTotal = QUESTION_COUNTS.GKY || 5;
         const bpTotalCalc = QUESTION_COUNTS.BUSINESS_PLAN || 45;
+
+        // Match backend: progress from asked_q tag, not a drifting answered_count counter.
+        const tagDerivedAnswered =
+          numberFromTag !== null
+            ? pausedOnSectionSummary
+              ? numberFromTag
+              : Math.max(0, numberFromTag - 1)
+            : Math.max(effectiveAnsweredPhase, backendAnswered);
+
+        const scopedAnswered =
+          phase === "GKY" || phase === "BUSINESS_PLAN"
+            ? tagDerivedAnswered
+            : effectiveAnsweredPhase;
+        const scopedTotal =
+          phase === "BUSINESS_PLAN" ? bpTotalCalc : phase === "GKY" ? gkyTotal : totalPhase;
+        const scopedPercent =
+          scopedTotal > 0
+            ? Math.min(Math.round((scopedAnswered / scopedTotal) * 100), 100)
+            : 0;
+
         let gkyCompleted = 0;
         let bpCompleted = 0;
-        
         if (phase === "GKY") {
-          gkyCompleted = Math.min(effectiveAnsweredPhase, gkyTotal);
+          gkyCompleted = scopedAnswered;
           bpCompleted = 0;
         } else if (phase === "BUSINESS_PLAN") {
-          gkyCompleted = gkyTotal; // GKY is complete if in BP
-          bpCompleted = Math.min(effectiveAnsweredPhase, bpTotalCalc);
+          gkyCompleted = gkyTotal;
+          bpCompleted = scopedAnswered;
         } else {
           gkyCompleted = gkyTotal;
           bpCompleted = bpTotalCalc;
         }
-        
+
         setProgress((prev) => ({
           ...prev,
           phase,
-          answered: overallAnswered,
-          phase_answered: effectiveAnsweredPhase,
+          answered: scopedAnswered,
+          phase_answered: scopedAnswered,
           total: totalPhase,
-          percent: phasePercent,
+          percent: scopedPercent,
           overall_progress: {
-            answered: overallAnswered,
-            total: overallTotal,
-            percent: overallPercent,
+            answered: scopedAnswered,
+            total: scopedTotal,
+            percent: scopedPercent,
+            scope: phase === "BUSINESS_PLAN" ? "business_plan" : phase === "GKY" ? "gky" : undefined,
             phase_breakdown: {
               gky_completed: gkyCompleted,
               gky_total: gkyTotal,
@@ -3213,7 +3254,7 @@ export default function ChatPage() {
         try {
           await syncSessionProgress(sessionId, {
             phase,
-            answered_count: overallAnswered,
+            answered_count: scopedAnswered,
             asked_q: askedTag,
           });
         } catch (syncError) {
@@ -3221,10 +3262,10 @@ export default function ChatPage() {
         }
 
         setBackendTotals({
-          answered: effectiveAnsweredPhase,
+          answered: scopedAnswered,
           total: totalPhase,
-          overallAnswered,
-          overallTotal,
+          overallAnswered: scopedAnswered,
+          overallTotal: scopedTotal,
         });
 
         // CRITICAL: Check if we're in PLAN_TO_SUMMARY_TRANSITION phase
@@ -3247,7 +3288,7 @@ export default function ChatPage() {
               transitionPhase: "PLAN_TO_SUMMARY"
             });
 
-            setBackendTotals({ answered: effectiveAnsweredPhase, total: totalPhase, overallAnswered, overallTotal });
+            setBackendTotals({ answered: scopedAnswered, total: totalPhase, overallAnswered: scopedAnswered, overallTotal: scopedTotal });
             setLoading(false);
             return;
           } catch (summaryError) {
@@ -3257,7 +3298,7 @@ export default function ChatPage() {
               businessPlanArtifact: null,
               transitionPhase: "PLAN_TO_SUMMARY"
             });
-            setBackendTotals({ answered: effectiveAnsweredPhase, total: totalPhase, overallAnswered, overallTotal });
+            setBackendTotals({ answered: scopedAnswered, total: totalPhase, overallAnswered: scopedAnswered, overallTotal: scopedTotal });
             setLoading(false);
             return;
           }
@@ -3315,7 +3356,7 @@ export default function ChatPage() {
               });
             }
 
-            setBackendTotals({ answered: effectiveAnsweredPhase, total: totalPhase, overallAnswered, overallTotal });
+            setBackendTotals({ answered: scopedAnswered, total: totalPhase, overallAnswered: scopedAnswered, overallTotal: scopedTotal });
             setLoading(false);
             return;
           } catch (error) {
@@ -3333,7 +3374,7 @@ export default function ChatPage() {
                 state: { preferVentureChat: true },
               });
             }
-            setBackendTotals({ answered: effectiveAnsweredPhase, total: totalPhase, overallAnswered, overallTotal });
+            setBackendTotals({ answered: scopedAnswered, total: totalPhase, overallAnswered: scopedAnswered, overallTotal: scopedTotal });
             setLoading(false);
             return;
           }
@@ -3376,7 +3417,7 @@ export default function ChatPage() {
               transitionPhase: "PLAN_TO_ROADMAP"
             });
             
-            setBackendTotals({ answered: effectiveAnsweredPhase, total: totalPhase, overallAnswered, overallTotal });
+            setBackendTotals({ answered: scopedAnswered, total: totalPhase, overallAnswered: scopedAnswered, overallTotal: scopedTotal });
             setLoading(false);
             return;
           } catch (summaryError) {
@@ -3386,7 +3427,7 @@ export default function ChatPage() {
               businessPlanArtifact: null,
               transitionPhase: "PLAN_TO_ROADMAP"
             });
-            setBackendTotals({ answered: effectiveAnsweredPhase, total: totalPhase, overallAnswered, overallTotal });
+            setBackendTotals({ answered: scopedAnswered, total: totalPhase, overallAnswered: scopedAnswered, overallTotal: scopedTotal });
             setLoading(false);
             return;
           }
@@ -3413,7 +3454,7 @@ export default function ChatPage() {
               if (data.result?.progress) {
                 applyProgressUpdate(data.result.progress);
               }
-              setBackendTotals({ answered: effectiveAnsweredPhase, total: totalPhase, overallAnswered, overallTotal });
+              setBackendTotals({ answered: scopedAnswered, total: totalPhase, overallAnswered: scopedAnswered, overallTotal: scopedTotal });
               setLoading(false);
               return;
             } else {
@@ -3486,15 +3527,19 @@ export default function ChatPage() {
         if (reconstructed.pendingQuestion) {
           setCurrentQuestion(reconstructed.pendingQuestion);
           setCurrentAcknowledgement(reconstructed.pendingAcknowledgement || '');
-          setCurrentQuestionNumber(pendingNumber);
+          setIsCurrentSectionSummary(pausedOnSectionSummary);
+          setCurrentQuestionNumber(pausedOnSectionSummary ? null : pendingNumber);
+          if (pausedOnSectionSummary) {
+            setShowVerificationButtons(true);
+          }
           setNeedsInitialQuestion(false);
-          setBackendTotals({ answered: effectiveAnsweredPhase, total: totalPhase, overallAnswered, overallTotal });
+          setBackendTotals({ answered: scopedAnswered, total: totalPhase, overallAnswered: scopedAnswered, overallTotal: scopedTotal });
           setLoading(false);
           return;
         }
 
         setNeedsInitialQuestion(true);
-        setBackendTotals({ answered: effectiveAnsweredPhase, total: totalPhase, overallAnswered, overallTotal });
+        setBackendTotals({ answered: scopedAnswered, total: totalPhase, overallAnswered: scopedAnswered, overallTotal: scopedTotal });
       } catch (error: any) {
         console.error("❌ Failed to restore venture session:", error);
         
@@ -3577,7 +3622,7 @@ export default function ChatPage() {
         ? await fetchQuestion(input, sessionId!, { modify: options.modify })
         : await fetchQuestion(input, sessionId!);
       const {
-        result: { reply, progress, web_search_status, immediate_response, transition_phase, business_plan_summary, show_accept_modify, question_number },
+        result: { reply, progress, web_search_status, immediate_response, transition_phase, business_plan_summary, show_accept_modify, question_number, is_section_summary },
       } = response;
       
       // Get business_plan_artifact from response if available
@@ -3668,12 +3713,10 @@ export default function ChatPage() {
       }
       
       const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
-      // Section summary: stay on current question until user accepts (don't advance to next)
-      const sectionSummaryMarkers = ["Section Complete", "Summary of Your Information", "Ready to Continue"];
-      const isSectionSummary = show_accept_modify && sectionSummaryMarkers.some((m) => reply?.includes(m));
-      const nextQuestionNumber = isSectionSummary && previousQuestionNumber != null
-        ? previousQuestionNumber
-        : deriveQuestionNumber(question_number, reply, progress);
+      const { isSectionSummary, questionNumber: nextQuestionNumber } = resolveDisplayFromAngelResult(
+        { question_number, is_section_summary },
+        progress,
+      );
 
       if (options?.modify) {
         const reviseDisplay = (
@@ -3721,6 +3764,7 @@ export default function ChatPage() {
 
         setCurrentQuestion(previousQuestion);
         setCurrentAcknowledgement("");
+        setIsCurrentSectionSummary(false);
         setCurrentQuestionNumber(previousQuestionNumber);
         if (typeof previousQuestionNumber === "number") {
           updateQuestionTracker(progress.phase, previousQuestionNumber);
@@ -3772,6 +3816,7 @@ export default function ChatPage() {
         // Hide previous long acknowledgment block during command turns to avoid
         // duplicate "Next Question" confusion around Draft responses.
         setCurrentAcknowledgement("");
+        setIsCurrentSectionSummary(false);
         setCurrentQuestionNumber(previousQuestionNumber);
         if (typeof previousQuestionNumber === "number") {
           updateQuestionTracker(progress.phase, previousQuestionNumber);
@@ -3779,6 +3824,7 @@ export default function ChatPage() {
       } else {
         setCurrentQuestion(parsedQ);
         setCurrentAcknowledgement(ack);
+        setIsCurrentSectionSummary(isSectionSummary);
         setCurrentQuestionNumber(nextQuestionNumber);
         updateQuestionTracker(progress.phase, nextQuestionNumber);
         lastFullAssistantReplyRef.current = reply;
@@ -4323,14 +4369,25 @@ export default function ChatPage() {
   const answeredCount = Math.max(backendTotals.answered, historyPhaseAnswered);
   const percent = total > 0 ? Math.round((answeredCount / total) * 100) : 0;
 
-  const overallTotal = progress.overall_progress?.total ?? backendTotals.overallTotal ?? 50;
-  const historyOverall = Math.min(gkyPairs.length + bpPairs.length, overallTotal);
-  const backendOverall = progress.overall_progress?.answered ?? backendTotals.overallAnswered ?? 0;
-  const rawOverallAnswered = Math.max(backendOverall, historyOverall);
-  const overallPercent = overallTotal > 0 ? Math.round((rawOverallAnswered / overallTotal) * 100) : percent;
+  // Phase-scoped progress for header + sidebar (GKY: X/5, Business Plan: X/45).
+  // Must align with asked_q / currentQuestionNumber — not a separate drift counter.
+  const isBusinessPlanPhase = progress.phase === "BUSINESS_PLAN";
+  const isGKYPhase = progress.phase === "GKY";
+  const phaseScopedTotal =
+    isBusinessPlanPhase || isGKYPhase
+      ? (progress.overall_progress?.total ??
+        (isBusinessPlanPhase ? bpTotal : gkyTotal))
+      : total;
+  const phaseScopedAnswered =
+    isBusinessPlanPhase || isGKYPhase
+      ? (progress.overall_progress?.answered ?? progress.answered ?? answeredCount)
+      : answeredCount;
+  const phaseScopedPercent =
+    phaseScopedTotal > 0
+      ? Math.round((phaseScopedAnswered / phaseScopedTotal) * 100)
+      : progress.overall_progress?.percent ?? percent;
 
-  // Header step should reflect the active question when available.
-  // Using answeredCount in GKY made Q4 display as "3 of 5".
+  // Active question index for non-questionnaire phases / fallbacks.
   const headerStep = Math.max(
     0,
     Math.min(
@@ -4340,6 +4397,11 @@ export default function ChatPage() {
       total
     )
   );
+
+  const headerDisplayAnswered =
+    isBusinessPlanPhase || isGKYPhase ? phaseScopedAnswered : headerStep;
+  const headerDisplayTotal =
+    isBusinessPlanPhase || isGKYPhase ? phaseScopedTotal : total;
 
   // Short-form phase labels for the header (user requested abbreviations)
   const phaseDisplayLabel: Record<string, string> = {
@@ -4736,9 +4798,7 @@ export default function ChatPage() {
                     </span>
                     <div className="h-4 w-px bg-gradient-to-b from-emerald-300 to-teal-300"></div>
                     <span className="text-sm font-medium text-gray-700">
-                      {progress.phase === 'BUSINESS_PLAN'
-                        ? `${rawOverallAnswered} of ${overallTotal}`
-                        : `${headerStep} of ${total}`}
+                      {`${headerDisplayAnswered} of ${headerDisplayTotal}`}
                     </span>
                   </div>
                 </div>
@@ -4752,9 +4812,7 @@ export default function ChatPage() {
                       {headerPhaseLabel}
                     </span>
                     <span className="text-xs font-medium text-gray-700">
-                      {progress.phase === 'BUSINESS_PLAN'
-                        ? `${rawOverallAnswered}/${overallTotal}`
-                        : `${headerStep}/${total}`}
+                      {`${headerDisplayAnswered}/${headerDisplayTotal}`}
                     </span>
                   </div>
                 </div>
@@ -5045,13 +5103,20 @@ export default function ChatPage() {
                       <div className="font-semibold text-gray-800 mb-1 text-sm">
                         Angel
                       </div>
-                      {(progress.phase === "GKY" || progress.phase === "BUSINESS_PLAN") && pair.questionNumber && (
-                        <div className="mb-2">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            Question {pair.questionNumber}
-                          </span>
-                        </div>
-                      )}
+                      {(() => {
+                        const badgeLabel = getAngelMessageBadgeLabel(pair.phase ?? progress.phase, {
+                          isSectionSummary: pair.isSectionSummary,
+                          questionNumber: pair.questionNumber,
+                          content: pair.question,
+                        });
+                        return badgeLabel ? (
+                          <div className="mb-2">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {badgeLabel}
+                            </span>
+                          </div>
+                        ) : null;
+                      })()}
                       {pair.isCommand ? (
                         pair.question?.trim() ? (
                           (() => {
@@ -5205,13 +5270,20 @@ export default function ChatPage() {
                     <div className="font-semibold text-gray-800 mb-1 text-sm">
                       Angel
                     </div>
-                    {(progress.phase === "GKY" || progress.phase === "BUSINESS_PLAN") && currentQuestionNumber && (
-                      <div className="mb-2">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          Question {currentQuestionNumber}
-                        </span>
-                      </div>
-                    )}
+                    {(() => {
+                      const badgeLabel = getAngelMessageBadgeLabel(progress.phase, {
+                        isSectionSummary: isCurrentSectionSummary,
+                        questionNumber: currentQuestionNumber,
+                        content: currentQuestion,
+                      });
+                      return badgeLabel ? (
+                        <div className="mb-2">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {badgeLabel}
+                          </span>
+                        </div>
+                      ) : null;
+                    })()}
                     <div className="text-gray-800 whitespace-pre-wrap text-sm angel-intro-text">
                       {progress.phase === "ROADMAP" || progress.phase === "ROADMAP_GENERATED" ? (
                         loading ? (
@@ -5519,19 +5591,19 @@ export default function ChatPage() {
           onQuestionSelect={handleQuestionSelect}
           currentProgress={{
             phase: progress.phase,
-            answered: answeredCount,
-            total,
-            percent,
-            phase_answered: answeredCount,
-            overall_progress: {
-              answered: rawOverallAnswered,
-              total: overallTotal,
-              percent: overallPercent,
-              phase_breakdown: progress.overall_progress?.phase_breakdown ?? {
-                gky_completed: 0,
-                gky_total: 5,
-                bp_completed: 0,
-                bp_total: 45,
+            answered: phaseScopedAnswered,
+            total: phaseScopedTotal,
+            percent: phaseScopedPercent,
+            phase_answered: phaseScopedAnswered,
+            overall_progress: progress.overall_progress ?? {
+              answered: phaseScopedAnswered,
+              total: phaseScopedTotal,
+              percent: phaseScopedPercent,
+              phase_breakdown: {
+                gky_completed: isGKYPhase ? phaseScopedAnswered : gkyTotal,
+                gky_total: gkyTotal,
+                bp_completed: isBusinessPlanPhase ? phaseScopedAnswered : 0,
+                bp_total: bpTotal,
               },
             },
           }}
@@ -5605,17 +5677,13 @@ export default function ChatPage() {
                   <div className="text-sm font-medium text-gray-600 mb-1">Current Progress</div>
                   <div className="text-lg font-bold text-gray-900">{headerPhaseLabel}</div>
                   <div className="text-sm text-gray-500">
-                    {progress.phase === 'BUSINESS_PLAN'
-                      ? `${rawOverallAnswered} of ${overallTotal} overall`
-                      : `Step ${headerStep} of ${total}`}
+                    {`${headerDisplayAnswered} of ${headerDisplayTotal}`}
                   </div>
                   <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
                     <div 
                       className="bg-gradient-to-r from-teal-500 to-blue-500 h-2 rounded-full transition-all duration-300"
                       style={{
-                        width: `${
-                          progress.phase === 'BUSINESS_PLAN' ? overallPercent : percent
-                        }%`,
+                        width: `${phaseScopedPercent}%`,
                       }}
                     ></div>
                   </div>
