@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowUp, Menu, X, Download, FileText, ArrowLeft, RefreshCw, Save, Rocket } from 'lucide-react';
+import { Download, ArrowLeft, RefreshCw, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -20,9 +20,11 @@ import { BudgetCharts } from '@/components/Budget/BudgetCharts';
 import { formatCurrency } from '@/lib/formatters';
 import { toast } from 'react-toastify';
 import { budgetService } from '@/services/budgetService';
-import { exportBudgetToExcel } from '@/utils/excelExport';
-import httpClient from '@/api/httpClient';
 import BudgetDashboard from '@/components/Budget/BudgetDashboard';
+import BudgetContinueToRoadmapCta from '@/components/Budget/BudgetContinueToRoadmapCta';
+import DocumentExportModal from '@/components/DocumentExportModal';
+import type { BudgetExportActions } from '@/components/Budget/budgetExportActions';
+import httpClient from '@/api/httpClient';
 
 import type { Budget, BudgetItem, RevenueStream } from '@/types/apiTypes';
 import { useBusinessContext } from '@/hooks/useBusinessContext';
@@ -76,8 +78,9 @@ const BudgetPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const budgetExportsRef = useRef<BudgetExportActions | null>(null);
   const { context: businessContext } = useBusinessContext(id);
-  const businessName = businessContext.business_name || undefined;
   const businessType = businessContext.business_type;
 
   useEffect(() => {
@@ -189,11 +192,9 @@ const BudgetPage: React.FC = () => {
     }
   };
 
-  const handleExportExcel = () => {
-    if (!budget) return;
-    exportBudgetToExcel(budget, businessName);
-    toast.success('Budget exported to Excel');
-  };
+  const handleRegisterBudgetExports = useCallback((actions: BudgetExportActions) => {
+    budgetExportsRef.current = actions;
+  }, []);
 
   const handleDeleteItem = async (itemId: string) => {
     if (!id) return;
@@ -210,56 +211,24 @@ const BudgetPage: React.FC = () => {
     }
   };
 
-  const exportBudget = () => {
-    if (!budget) return;
-    
-    const csvContent = [
-      ['Item Name', 'Category', 'Estimated Amount', 'Actual Amount', 'Description'],
-      ...budget.items.map(item => [
-        item.name,
-        item.category,
-        item.estimated_amount.toString(),
-        item.actual_amount?.toString() || '',
-        item.description || ''
-      ])
-    ].map(row => row.join(',')).join('\n');
-    
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `budget-${budget.session_id}-${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-    
-    toast.success('Budget exported successfully');
-  };
-
   const handleContinueToRoadmap = async () => {
-    if (!id) return;
+    if (!id || transitioning) return;
     setTransitioning(true);
     try {
-      // Save budget first
       if (budget) {
         await budgetService.saveBudget(id, budget);
       }
-      // Call transition-decision to move to roadmap phase
       const response = await httpClient.post(`/angel/sessions/${id}/transition-decision`, {
         decision: 'approve',
-        transition_type: 'budget_to_roadmap'
+        transition_type: 'budget_to_roadmap',
       });
-      const data = response.data as any;
+      const data = response.data as { success?: boolean; message?: string; requires_subscription?: boolean };
       if (data.success) {
-        toast.success('Budget complete! Generating your roadmap...');
         navigate(`/ventures/${id}/roadmap`);
+      } else if (data.requires_subscription) {
+        toast.error(data.message || 'Subscription required to proceed to Roadmap phase');
       } else {
-        if (data.requires_subscription) {
-          toast.error(data.message || 'Subscription required to proceed to Roadmap phase');
-        } else {
-          toast.error(data.message || 'Failed to proceed to roadmap');
-        }
+        toast.error(data.message || 'Failed to proceed to roadmap. Please try again.');
       }
     } catch (error) {
       console.error('Failed to proceed to roadmap:', error);
@@ -300,13 +269,55 @@ const BudgetPage: React.FC = () => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
-      className="min-h-screen bg-gray-50"
+      className="min-h-screen min-w-0 overflow-x-hidden bg-gray-50"
     >
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center py-4 gap-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-6 w-full md:w-auto">
+      <header className="sticky top-0 z-50 border-b border-gray-200 bg-white shadow-sm">
+        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 md:py-4 lg:px-8">
+          {/* Mobile: toolbar row + title block */}
+          <div className="md:hidden">
+            <div className="flex items-center justify-between gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  navigate(`/ventures/${id}`, {
+                    state: {
+                      restorePlanSummaryOverview: true,
+                      preferVentureChat: true,
+                    },
+                  })
+                }
+                className="-ml-2 h-9 shrink-0 gap-1.5 px-2 text-gray-600"
+              >
+                <ArrowLeft className="h-4 w-4 shrink-0" />
+                Back
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowExportModal(true)}
+                className="h-9 shrink-0 gap-1.5 px-3"
+              >
+                <Download className="h-4 w-4 shrink-0" />
+                Download
+              </Button>
+            </div>
+            <div className="mt-2.5 border-t border-gray-100 pt-2.5">
+              <h1 className="text-lg font-bold leading-tight tracking-tight text-gray-900">
+                {fromTransition ? 'Budget Setup' : 'Budget Tracking'}
+              </h1>
+              <p className="mt-1 text-xs leading-relaxed text-gray-500">
+                {fromTransition
+                  ? 'Set up your startup budget, then continue to your roadmap'
+                  : 'Manage your business finances'}
+              </p>
+            </div>
+          </div>
+
+          {/* Desktop */}
+          <div className="hidden md:flex md:flex-row md:items-center md:justify-between md:gap-6">
+            <div className="flex min-w-0 items-center gap-6">
               <Button
                 variant="ghost"
                 onClick={() =>
@@ -317,86 +328,42 @@ const BudgetPage: React.FC = () => {
                     },
                   })
                 }
-                className="flex items-center gap-2 text-gray-500 hover:text-gray-900 border border-transparent hover:border-gray-200"
+                className="shrink-0 gap-2 text-gray-500 hover:text-gray-900"
               >
-                <ArrowLeft className="w-4 h-4" />
-                <span>Back to Summary Overview</span>
+                <ArrowLeft className="h-4 w-4 shrink-0" />
+                Back to Summary Overview
               </Button>
-              <div className="hidden sm:block h-10 border-l border-gray-200"></div>
-              <div>
-                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
+              <div className="h-10 w-px shrink-0 bg-gray-200" aria-hidden />
+              <div className="min-w-0">
+                <h1 className="text-2xl font-bold tracking-tight text-gray-900">
                   {fromTransition ? 'Budget Setup' : 'Budget Tracking'}
                 </h1>
-                <p className="text-sm text-gray-500 mt-0.5">
+                <p className="mt-0.5 text-sm text-gray-500">
                   {fromTransition
                     ? 'Set up your startup budget, then continue to your roadmap'
                     : 'Manage your business finances'}
                 </p>
               </div>
             </div>
-
-            <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 hide-scrollbar">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportExcel}
-                className="flex items-center gap-2 text-green-600 hover:text-green-700 border-green-200 hover:bg-green-50 shrink-0"
-              >
-                <Download className="w-4 h-4" />
-                Excel
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={exportBudget}
-                className="flex items-center gap-2 shrink-0 hidden lg:flex"
-              >
-                <Download className="w-4 h-4" />
-                CSV
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={saveBudget}
-                disabled={saving}
-                className="flex items-center gap-2 shrink-0"
-              >
-                {saving ? (
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Save className="w-4 h-4" />
-                )}
-                <span className="hidden sm:inline">{saving ? 'Saving...' : 'Save'}</span>
-              </Button>
-
-              {fromTransition && (
-                <Button
-                  size="sm"
-                  onClick={handleContinueToRoadmap}
-                  disabled={transitioning}
-                  className="flex items-center gap-2 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white shadow-md ml-1 shrink-0"
-                >
-                  {transitioning ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Rocket className="w-4 h-4" />
-                  )}
-                  <span className="hidden sm:inline">
-                    {transitioning ? 'Processing...' : 'Continue to Roadmap'}
-                  </span>
-                  <span className="sm:hidden">
-                    {transitioning ? '...' : 'Roadmap'}
-                  </span>
-                </Button>
-              )}
-            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowExportModal(true)}
+              className="shrink-0 gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Download
+            </Button>
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* Main Content */}
-      <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 ${fromTransition ? 'pb-28' : ''}`}>
+      {/* Main Content — extra bottom pad only on desktop where footer is fixed */}
+      <div
+        className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 min-w-0 ${
+          fromTransition ? 'pb-4 md:pb-28' : 'pb-20 md:pb-24'
+        }`}
+      >
         <BudgetDashboard
           budget={budget}
           onUpdateBudget={handleUpdateBudget}
@@ -404,43 +371,125 @@ const BudgetPage: React.FC = () => {
           onDeleteItem={handleDeleteItem}
           businessType={businessType}
           sessionId={id!}
+          businessContext={businessContext}
+          showRoadmapFab={!fromTransition}
+          embeddedInSetup={fromTransition}
+          onRegisterExportActions={handleRegisterBudgetExports}
         />
       </div>
 
-      {/* Sticky footer for transition flow */}
+      {/* Budget setup actions: in page flow on mobile (no overlap); fixed bar on desktop */}
       {fromTransition && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-            <Button
-              variant="outline"
-              onClick={() => navigate(`/ventures/${id}`)}
-              className="flex items-center gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Cancel
-            </Button>
-            <div className="flex items-center gap-3">
+        <footer
+          className="relative z-30 mt-4 border-t border-gray-200 bg-white mb-[max(0.75rem,env(safe-area-inset-bottom,0px))] md:fixed md:bottom-0 md:left-0 md:right-0 md:mt-0 md:mb-0 md:shadow-[0_-4px_24px_rgba(0,0,0,0.08)] md:backdrop-blur-sm md:bg-white/95 md:pb-0"
+          aria-label="Budget setup actions"
+        >
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 md:py-4">
+            {/* Mobile: compact 2-row layout — scrolls with content, does not cover fields */}
+            <div className="flex flex-col gap-2 md:hidden">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate(`/ventures/${id}`)}
+                  disabled={transitioning}
+                  className="h-9 gap-1.5 px-2 text-xs"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={saveBudget}
+                  disabled={saving || transitioning}
+                  variant="outline"
+                  className="h-9 gap-1.5 px-2 text-xs"
+                >
+                  {saving ? (
+                    <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                  ) : (
+                    <Save className="h-3.5 w-3.5 shrink-0" />
+                  )}
+                  <span className="truncate">{saving ? 'Saving…' : 'Save setup'}</span>
+                </Button>
+              </div>
+              <BudgetContinueToRoadmapCta
+                variant="header"
+                onClick={handleContinueToRoadmap}
+                isLoading={transitioning}
+                className="h-10 w-full justify-center rounded-lg text-sm"
+                mobileLabel="full"
+              />
+            </div>
+
+            {/* Desktop: original horizontal layout */}
+            <div className="hidden md:flex md:flex-row md:items-center md:justify-between md:gap-4">
               <Button
-                onClick={saveBudget}
-                disabled={saving}
                 variant="outline"
+                onClick={() => navigate(`/ventures/${id}`)}
+                disabled={transitioning}
                 className="flex items-center gap-2"
               >
-                {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                {saving ? 'Saving...' : 'Complete Budget Setup'}
+                <ArrowLeft className="w-4 h-4" />
+                Cancel
               </Button>
-              <Button
-                onClick={handleContinueToRoadmap}
-                disabled={transitioning}
-                className="flex items-center gap-2 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white shadow-md px-6 py-2.5"
-              >
-                {transitioning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Rocket className="w-4 h-4" />}
-                {transitioning ? 'Processing...' : 'Continue to Roadmap'}
-              </Button>
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={saveBudget}
+                  disabled={saving || transitioning}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  {saving ? 'Saving...' : 'Complete Budget Setup'}
+                </Button>
+                <BudgetContinueToRoadmapCta
+                  variant="header"
+                  onClick={handleContinueToRoadmap}
+                  isLoading={transitioning}
+                  className="justify-center"
+                />
+              </div>
             </div>
           </div>
-        </div>
+        </footer>
       )}
+
+      {fromTransition && transitioning && (
+        <div
+          className="fixed inset-0 z-[25] bg-slate-900/15 backdrop-blur-[1px] pointer-events-none"
+          aria-hidden
+        />
+      )}
+
+      <DocumentExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        documentTitle="Budget Setup"
+        documentType="budget"
+        showSuccessToast={false}
+        onExportPdf={async () => {
+          if (!budgetExportsRef.current) {
+            toast.error('Budget is still loading. Please try again.');
+            return;
+          }
+          await budgetExportsRef.current.exportPdf();
+        }}
+        onExportExcel={async () => {
+          if (!budgetExportsRef.current) {
+            toast.error('Budget is still loading. Please try again.');
+            return;
+          }
+          await budgetExportsRef.current.exportExcel();
+        }}
+        onExportDocx={async () => {
+          if (!budgetExportsRef.current) {
+            toast.error('Budget is still loading. Please try again.');
+            return;
+          }
+          await budgetExportsRef.current.exportDocx();
+        }}
+      />
     </motion.div>
   );
 };

@@ -4,9 +4,9 @@ import { Slider } from './slider';
 import { Input } from './input';
 import { FaDollarSign } from 'react-icons/fa';
 import {
-  formatCurrency,
+  formatAmountForInput,
   parseCurrency,
-  formatInputCurrency
+  formatTypingAmount,
 } from '../../lib/currency-utils';
 
 interface CurrencyInputProps {
@@ -43,7 +43,7 @@ const CurrencyInput: React.FC<CurrencyInputProps> = ({
   getSmartStep,
 }) => {
   const value = Number(rawValue) || 0;
-  const [inputValue, setInputValue] = useState<string>(formatCurrency(value, currencySymbol));
+  const [inputValue, setInputValue] = useState<string>(formatAmountForInput(value));
   const inputRef = useRef<HTMLInputElement>(null);
 
   const effectiveStep = useMemo(() => {
@@ -63,22 +63,22 @@ const CurrencyInput: React.FC<CurrencyInputProps> = ({
 
   useEffect(() => {
     if (inputRef.current && document.activeElement !== inputRef.current) {
-      setInputValue(formatCurrency(value, currencySymbol));
+      setInputValue(formatAmountForInput(value));
     }
-  }, [value, currencySymbol]);
+  }, [value]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value;
-    setInputValue(formatInputCurrency(rawValue, currencySymbol));
+    setInputValue(formatTypingAmount(rawValue));
     const parsedValue = parseCurrency(rawValue);
     if (!isNaN(parsedValue) && parsedValue !== value) {
       onChange(parsedValue);
     }
-  }, [onChange, currencySymbol, value]);
+  }, [onChange, value]);
 
   const handleInputBlur = useCallback(() => {
-    setInputValue(formatCurrency(value, currencySymbol));
-  }, [value, currencySymbol]);
+    setInputValue(formatAmountForInput(value));
+  }, [value]);
 
   const handleSliderChange = useCallback((sliderValues: number[]) => {
     const newValue = sliderValues[0];
@@ -119,7 +119,7 @@ const CurrencyInput: React.FC<CurrencyInputProps> = ({
           max={max}
           step={propStep}
           disabled={disabled}
-          className="pl-8 pr-2 w-full h-9 text-sm"
+          className="pl-8 pr-3 w-full min-w-0 h-10 text-sm tabular-nums"
           inputMode="decimal"
         />
       </div>

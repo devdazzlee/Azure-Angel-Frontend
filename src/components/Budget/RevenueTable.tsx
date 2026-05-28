@@ -8,6 +8,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { Button } from '@/components/ui/button';
 import { formatMoney } from '@/lib/formatters'; // Import from new formatters
 import CurrencyInput from '../ui/CurrencyInput'; // Import CurrencyInput
+import BudgetTableScroll from './BudgetTableScroll';
+import BudgetRevenueMobileCards from './BudgetRevenueMobileCards';
 
 
 interface RevenueTableProps {
@@ -109,7 +111,24 @@ const RevenueTable: React.FC<RevenueTableProps> = ({
 
   return (
     <div className="w-full">
-      <div className="w-full overflow-x-auto rounded-xl border border-gray-200/60">
+      <BudgetRevenueMobileCards
+        items={items}
+        currency={currency}
+        selectedItemIds={selectedItemIds}
+        editingStreamId={editingStreamId}
+        editingStreamName={editingStreamName}
+        onToggleItemSelection={onToggleItemSelection}
+        onToggleAllSelection={onToggleAllSelection}
+        onEditNameClick={handleEditNameClick}
+        onEditingNameChange={setEditingStreamName}
+        onSaveNameEdit={handleSaveNameEdit}
+        onPriceChange={handlePriceChange}
+        onVolumeChange={handleVolumeChange}
+        onRemoveStream={handleRemoveStream}
+        totalMonthlyRevenue={totalMonthlyRevenue}
+      />
+
+      <BudgetTableScroll>
         <table className="w-full min-w-[900px]">
           <thead>
             <tr className="text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 bg-gradient-to-r from-gray-50 to-gray-100/60 border-b border-gray-200/60">
@@ -199,7 +218,7 @@ const RevenueTable: React.FC<RevenueTableProps> = ({
             </tr>
           </tfoot>
         </table>
-      </div>
+      </BudgetTableScroll>
       <div className="mt-4 flex justify-end">
         <Button onClick={() => onAddLineItem('revenue')} size="sm" className="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white shadow-sm flex items-center gap-1.5"><FaPlus className="w-3 h-3" /> Add Revenue Stream</Button>
       </div>

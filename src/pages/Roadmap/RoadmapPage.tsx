@@ -212,10 +212,6 @@ const RoadmapPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="mb-6 rounded-lg border border-indigo-100 bg-white/80 px-4 py-3 text-center text-sm text-gray-700 shadow-sm">
-              Created using government, academic and industry resources.
-            </div>
-
             {/* Stages */}
             <div className="space-y-8">
               {stages.map((stage, stageIdx) => (

@@ -2,26 +2,38 @@ import React, { useState } from 'react';
 import { toast } from 'react-toastify';
 import { generatePDF, generateDOCX } from '../utils/documentGenerator';
 
+type ExportFormat = 'pdf' | 'docx' | 'xlsx';
+
 interface DocumentExportModalProps {
   isOpen: boolean;
   onClose: () => void;
   documentTitle: string;
-  documentContent: string; // Markdown content
-  documentType: 'business-plan' | 'roadmap';
+  /** Markdown or HTML for business-plan / roadmap exports */
+  documentContent?: string;
+  documentType: 'business-plan' | 'roadmap' | 'budget';
   /** When false, success toasts are omitted (e.g. Business Plan view uses its own UX). */
   showSuccessToast?: boolean;
+  /** Budget setup: format-specific handlers from the live dashboard */
+  onExportPdf?: () => Promise<void>;
+  onExportExcel?: () => void | Promise<void>;
+  onExportDocx?: () => Promise<void>;
 }
 
 const DocumentExportModal: React.FC<DocumentExportModalProps> = ({
   isOpen,
   onClose,
   documentTitle,
-  documentContent,
+  documentContent = '',
   documentType,
   showSuccessToast = true,
+  onExportPdf,
+  onExportExcel,
+  onExportDocx,
 }) => {
-  const [selectedFormat, setSelectedFormat] = useState<'pdf' | 'docx' | null>(null);
+  const [selectedFormat, setSelectedFormat] = useState<ExportFormat | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+
+  const isBudgetExport = documentType === 'budget';
 
   const handleExport = async () => {
     if (!selectedFormat) {
@@ -32,6 +44,30 @@ const DocumentExportModal: React.FC<DocumentExportModalProps> = ({
     setIsExporting(true);
 
     try {
+      if (isBudgetExport) {
+        if (selectedFormat === 'pdf' && onExportPdf) {
+          await onExportPdf();
+        } else if (selectedFormat === 'xlsx' && onExportExcel) {
+          await onExportExcel();
+        } else if (selectedFormat === 'docx' && onExportDocx) {
+          await onExportDocx();
+        } else {
+          toast.error('Export is not available for this format');
+          return;
+        }
+        if (showSuccessToast) {
+          toast.success(
+            selectedFormat === 'xlsx'
+              ? 'Excel downloaded successfully!'
+              : selectedFormat === 'pdf'
+                ? 'PDF downloaded successfully!'
+                : 'DOCX downloaded successfully!',
+          );
+        }
+        onClose();
+        return;
+      }
+
       const timestamp = new Date().toISOString().split('T')[0];
       const filename = `${documentType}-${timestamp}.${selectedFormat === 'pdf' ? 'pdf' : 'docx'}`;
       
@@ -192,8 +228,8 @@ const DocumentExportModal: React.FC<DocumentExportModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[99999] p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-[99999] p-0 sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl max-w-md w-full max-h-[min(92vh,100dvh)] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-teal-500 to-blue-500 p-6 text-white rounded-t-2xl">
           <div className="flex items-center justify-between">
@@ -214,9 +250,15 @@ const DocumentExportModal: React.FC<DocumentExportModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 overscroll-contain">
           <p className="text-gray-700 mb-4">
-            Select the format you'd like to download your {documentType === 'business-plan' ? 'Business Plan' : 'Roadmap'} in:
+            Select the format you&apos;d like to download your{' '}
+            {documentType === 'business-plan'
+              ? 'Business Plan'
+              : documentType === 'budget'
+                ? 'Budget'
+                : 'Roadmap'}{' '}
+            in:
           </p>
 
           {/* Format Options */}
@@ -252,6 +294,51 @@ const DocumentExportModal: React.FC<DocumentExportModalProps> = ({
                 )}
               </div>
             </button>
+
+            {isBudgetExport && (
+              <button
+                onClick={() => setSelectedFormat('xlsx')}
+                disabled={isExporting}
+                className={`w-full p-4 rounded-xl border-2 transition-all duration-200 ${
+                  selectedFormat === 'xlsx'
+                    ? 'border-emerald-500 bg-emerald-50 shadow-md'
+                    : 'border-gray-200 hover:border-emerald-300 hover:bg-gray-50'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                <div className="flex items-center gap-4">
+                  <div
+                    className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                      selectedFormat === 'xlsx' ? 'bg-emerald-500' : 'bg-gray-200'
+                    }`}
+                  >
+                    <svg
+                      className={`w-6 h-6 ${selectedFormat === 'xlsx' ? 'text-white' : 'text-gray-600'}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
+                    </svg>
+                  </div>
+                  <div className="flex-1 text-left">
+                    <h3 className="font-bold text-gray-900 mb-1">Excel Format</h3>
+                    <p className="text-sm text-gray-600">
+                      Spreadsheet with summary, startup costs, revenue, and expenses
+                    </p>
+                  </div>
+                  {selectedFormat === 'xlsx' && (
+                    <svg className="w-6 h-6 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+              </button>
+            )}
 
             {/* DOCX Option */}
             <button

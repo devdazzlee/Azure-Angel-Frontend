@@ -7,6 +7,9 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import type { BudgetItem } from '@/types/apiTypes';
 import { formatMoney } from '@/lib/formatters'; // Import from new formatters
 import CurrencyInput from '../ui/CurrencyInput'; // Import CurrencyInput
+import BudgetTableScroll from './BudgetTableScroll';
+import BudgetExpenseMobileCards from './BudgetExpenseMobileCards';
+import { getBudgetVarianceDisplay } from './budgetVariance';
 
 export type COGSDefaults = {
   items: BudgetItem[];
@@ -150,14 +153,12 @@ const COGSTable: React.FC<COGSTableProps> = ({
     onChange(next);
   };
 
-  const getVarianceDisplay = (item: BudgetItem): { valueText: string; className: string } => {
-    const budget = Number(item.estimated_amount) || 0;
-    const actualNum = Number(item.actual_amount) || 0;
-    const variance = budget - actualNum;
+  const getVarianceDisplay = (item: BudgetItem) => getBudgetVarianceDisplay(item, currency);
 
-    if (variance > 0) return { valueText: formatMoney(variance, currency), className: 'text-green-600 font-semibold' };
-    if (variance < 0) return { valueText: formatMoney(variance, currency), className: 'text-red-600 font-semibold' };
-    return { valueText: formatMoney(0, currency), className: 'text-gray-500' };
+  const handleRemoveItem = (item: BudgetItem) => {
+    if (onRemoveItem) {
+      onRemoveItem(item.id, item.name);
+    }
   };
 
   const getSmartStep = useCallback((currentValue: number): number => {
@@ -183,7 +184,21 @@ const COGSTable: React.FC<COGSTableProps> = ({
         </div>
       ) : (
         <>
-          <div className="w-full overflow-x-auto rounded-xl border border-gray-200/60">
+          <BudgetExpenseMobileCards
+            items={items}
+            currency={currency}
+            selectedItemIds={selectedItemIds}
+            onToggleItemSelection={onToggleItemSelection}
+            onToggleAllSelection={onToggleAllSelection}
+            onUpdateItem={handleUpdateItem}
+            onRemoveItem={handleRemoveItem}
+            getSmartStep={getSmartStep}
+            totalsLabel="Total Direct Costs"
+            budgetTotal={totals.budgetTotal}
+            actualTotal={totals.actualTotal}
+          />
+
+          <BudgetTableScroll>
             <table className="w-full min-w-[980px]">
               <thead>
                 <tr className="text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 bg-gradient-to-r from-gray-50 to-gray-100/60 border-b border-gray-200/60">
@@ -247,7 +262,7 @@ const COGSTable: React.FC<COGSTableProps> = ({
                 </tr>
               </tbody>
             </table>
-          </div>
+          </BudgetTableScroll>
 
           <div className="mt-4 flex justify-end">
             <Button onClick={() => onAddLineItem('cogs')} size="sm" className="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white shadow-sm flex items-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Add Line Item</Button>

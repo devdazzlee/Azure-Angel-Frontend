@@ -1011,12 +1011,6 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
 
       {/* Content */}
       <div className="max-w-6xl mx-auto px-4 py-4 sm:py-8">
-        {/* Compact source attribution — replaces the previous research-sources banner +
-            verification promise + planning-champion / table-format blocks. */}
-        <div className="mb-6 sm:mb-8 rounded-lg border border-indigo-100 bg-white/70 px-4 py-3 text-center text-sm text-gray-700 shadow-sm">
-          Created using government, academic and industry resources.
-        </div>
-
         {/* Roadmap Content */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-4 sm:p-6 md:p-8" ref={contentRef} id="roadmap-content">

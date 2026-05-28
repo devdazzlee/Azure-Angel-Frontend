@@ -10,6 +10,35 @@ export const formatCurrency = (amount: number | null | undefined, currencySymbol
   })}`;
 };
 
+/** Numeric amount only — use with a leading currency icon in inputs. */
+export const formatAmountForInput = (amount: number | null | undefined): string => {
+  if (amount === null || amount === undefined || isNaN(amount)) {
+    return '0.00';
+  }
+  return amount.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+
+export const formatTypingAmount = (value: string): string => {
+  const cleaned = value.replace(/[^0-9.]/g, '');
+  const parts = cleaned.split('.');
+  let integerPart = parts[0] || '0';
+  let decimalPart = parts[1];
+
+  integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+  if (decimalPart !== undefined) {
+    decimalPart = decimalPart.substring(0, 2);
+    return `${integerPart}.${decimalPart}`;
+  }
+  if (value.includes('.')) {
+    return `${integerPart}.`;
+  }
+  return integerPart;
+};
+
 export const parseCurrency = (currencyString: string): number => {
   if (!currencyString) {
     return 0;
