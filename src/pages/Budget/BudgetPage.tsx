@@ -24,7 +24,8 @@ import { exportBudgetToExcel } from '@/utils/excelExport';
 import httpClient from '@/api/httpClient';
 import BudgetDashboard from '@/components/Budget/BudgetDashboard';
 
-import type { APIResponse, Budget, BudgetItem, BusinessContextPayload, RevenueStream } from '@/types/apiTypes';
+import type { Budget, BudgetItem, RevenueStream } from '@/types/apiTypes';
+import { useBusinessContext } from '@/hooks/useBusinessContext';
 
 /** Stable IDs so duplicate effect runs (e.g. React Strict Mode) do not stack the same toast. */
 const TOAST_BUDGET_ANALYZING = 'budget-prepop-analyzing-from-plan';
@@ -75,32 +76,15 @@ const BudgetPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
-  const [businessName, setBusinessName] = useState<string | undefined>(undefined);
-  const [businessType, setBusinessType] = useState<string>('Startup'); // Default to 'Startup'
+  const { context: businessContext } = useBusinessContext(id);
+  const businessName = businessContext.business_name || undefined;
+  const businessType = businessContext.business_type;
 
   useEffect(() => {
     if (id) {
       fetchBudget();
-      fetchBusinessContext(id); // Fetch business context when component mounts
     }
   }, [id]);
-
-  const fetchBusinessContext = async (sessionId: string) => {
-    try {
-      const response = await httpClient.get<APIResponse<{ business_context: BusinessContextPayload }>>(`/angel/sessions/${sessionId}/business-context`);
-      if (response.data.success && response.data.result?.business_context?.business_type) {
-        setBusinessType(response.data.result.business_context.business_type);
-        if (response.data.result.business_context.business_name) {
-          setBusinessName(response.data.result.business_context.business_name);
-        }
-      } else {
-        console.warn("Could not fetch business type, defaulting to 'Startup'");
-      }
-    } catch (error) {
-      console.error("Error fetching business context:", error);
-      setBusinessType('Startup'); // Fallback in case of error
-    }
-  };
 
   const fetchBudget = async () => {
     try {

@@ -13,3 +13,5 @@ export interface CoachMarkContextValue {
   endTour: () => void;
   isActive: boolean;
 }
+
+export type CoachTourEndHandler = (tourId: string) => void;

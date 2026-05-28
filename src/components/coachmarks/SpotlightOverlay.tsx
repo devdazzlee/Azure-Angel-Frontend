@@ -30,6 +30,7 @@ export default function SpotlightOverlay({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.25 }}
+      data-angel-coach-tour
       className="pointer-events-none fixed inset-0 z-[60] h-full w-full"
       aria-hidden
     >

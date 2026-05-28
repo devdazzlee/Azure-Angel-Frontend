@@ -216,7 +216,7 @@ export const handleExportExcel = async (
     XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
     
     // Generate filename
-    const businessName = businessContext?.business_name || 'Business';
+    const businessName = businessContext?.business_name?.trim() || 'export';
     const filename = `${businessName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_budget_${new Date().toISOString().split('T')[0]}.xlsx`;
     
     // Save file

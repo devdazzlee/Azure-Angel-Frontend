@@ -6,7 +6,6 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   fetchBusinessPlan,
-  fetchBusinessContext,
   fetchQuestion,
   fetchRoadmapPlan,
   fetchSessionHistory,
@@ -44,6 +43,20 @@ import {
   normalizeAngelMarkdown,
   normalizeSectionSummaryMarkdown,
 } from "../../utils/angelMessageKind";
+import {
+  consumePendingImportAfterTour,
+  hasPendingImportAfterTour,
+  isBusinessPlanImportOfferActive,
+  markPendingImportAfterTour,
+  persistImportPromptDismissed,
+  persistPlanImported,
+  readImportPromptDismissed,
+  readPlanImported,
+  resolveBusinessPlanAnsweredCount,
+  shouldAutoOpenImportModal,
+} from "../../utils/businessPlanImportPrompt";
+import { useBusinessContext } from "../../hooks/useBusinessContext";
+import { normalizeBusinessContext } from "../../types/businessContext";
 import ReactMarkdown from "react-markdown";
 import type { Budget, BudgetItem, APIResponse } from "../../types/apiTypes";
 import BusinessPlanningInstructions from "../../components/BusinessPlanningInstructions";
@@ -55,6 +68,7 @@ import {
   BUSINESS_PLAN_TOUR_ID,
   businessPlanQuickActionSteps,
 } from "../../components/coachmarks";
+import { isCoachTourSeen } from "../../constants/ventureOnboarding";
 
 interface ConversationPair {
   question: string;
@@ -145,20 +159,6 @@ interface ProgressState {
   };
 }
 
-interface BusinessContextInfo {
-  business_name?: string;
-  industry?: string;
-  location?: string;
-  business_type?: string;
-}
-
-const DISPLAY_FALLBACK_CONTEXT: Required<BusinessContextInfo> = {
-  business_name: "Your Business",
-  industry: "General Business",
-  location: "United States",
-  business_type: "Startup"
-};
-
 // Updated to include PLAN_TO_ROADMAP_TRANSITION phase
 
 const QUESTION_COUNTS = {
@@ -168,26 +168,21 @@ const QUESTION_COUNTS = {
   IMPLEMENTATION: 10,
 };
 
-const cleanContextValue = (value?: string | null) =>
-  typeof value === "string" ? value.trim() : "";
-
-const deriveContextFromSession = (session?: Record<string, any>): BusinessContextInfo => {
-  if (!session) {
-    return {};
-  }
-
+/** Seed hook from session list row before /business-context round-trip completes. */
+function businessContextSeedFromSession(session?: Record<string, unknown>) {
+  if (!session) return null;
   const rawContext =
     session.business_context && typeof session.business_context === "object"
-      ? session.business_context
+      ? (session.business_context as Record<string, unknown>)
       : {};
-
-  return {
-    business_name: cleanContextValue(rawContext.business_name ?? session.business_name),
-    industry: cleanContextValue(rawContext.industry ?? session.industry),
-    location: cleanContextValue(rawContext.location ?? session.location),
-    business_type: cleanContextValue(rawContext.business_type ?? session.business_type),
-  };
-};
+  return normalizeBusinessContext({
+    business_name: rawContext.business_name ?? session.business_name,
+    industry: rawContext.industry ?? session.industry,
+    location: rawContext.location ?? session.location,
+    business_type: rawContext.business_type ?? session.business_type,
+    uploaded_plan_mode: rawContext.uploaded_plan_mode,
+  });
+}
 
 const parseQuestionNumberFromTag = (tag?: string | null): number | null => {
   if (!tag) return null;
@@ -407,13 +402,19 @@ function buildHistoryPairs(
  * time the user crosses into that phase. The provider itself short-circuits
  * if the tour has already been seen for this session.
  */
-function BusinessPlanTourTrigger({ phase }: { phase: string }) {
+function BusinessPlanTourTrigger({
+  phase,
+  uploadModalOpen,
+}: {
+  phase: string;
+  uploadModalOpen: boolean;
+}) {
   const { startTour } = useCoachMarks();
   useEffect(() => {
-    if (phase === "BUSINESS_PLAN") {
-      startTour(BUSINESS_PLAN_TOUR_ID, businessPlanQuickActionSteps);
-    }
-  }, [phase, startTour]);
+    if (phase !== "BUSINESS_PLAN") return;
+    if (uploadModalOpen) return;
+    startTour(BUSINESS_PLAN_TOUR_ID, businessPlanQuickActionSteps);
+  }, [phase, uploadModalOpen, startTour]);
   return null;
 }
 
@@ -428,7 +429,12 @@ export default function ChatPage() {
   const isInitialIntroShown = useRef(false);
   /** Raw last Angel reply before a command turn — used so Draft/Support rows show full question context. */
   const lastFullAssistantReplyRef = useRef<string>("");
-  const [sessionBusinessContext, setSessionBusinessContext] = useState<BusinessContextInfo>({});
+  const {
+    context: businessContext,
+    refresh: refreshBusinessContext,
+    seed: seedBusinessContext,
+    hasImportedPlan: hasImportedPlanFromDb,
+  } = useBusinessContext(sessionId);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [subscriptionDetails, setSubscriptionDetails] = useState<any>(null);
@@ -513,191 +519,7 @@ export default function ChatPage() {
     }
   };
 
-  const loadBusinessContext = useCallback(async () => {
-    if (!sessionId) return;
-    try {
-      const response = await fetchBusinessContext(sessionId);
-      if (response?.result?.business_context) {
-        setSessionBusinessContext(response.result.business_context);
-      }
-    } catch (error) {
-      console.error("Failed to fetch business context:", error);
-    }
-  }, [sessionId]);
-
-  useEffect(() => {
-    setSessionBusinessContext({});
-  }, [sessionId]);
-
-  useEffect(() => {
-    loadBusinessContext();
-  }, [loadBusinessContext]);
-
-  // Function to extract business information from conversation history
-  const extractBusinessInfo = () => {
-    const businessInfo = {
-      business_name: "",
-      industry: "",
-      location: "",
-      business_type: ""
-    };
-
-    // PRIORITY 1: Check for domain-like business names in ALL answers (highest confidence)
-    history.forEach(pair => {
-      const answer = pair.answer.trim();
-      const answerLower = answer.toLowerCase();
-      
-      // Skip command responses
-      if (['support', 'draft', 'scrapping', 'scraping', 'accept', 'modify'].includes(answerLower) || answer.length > 500) {
-        return;
-      }
-      
-      // Look for domain names ANYWHERE in history
-      if ((answer.includes('.com') || answer.includes('.net') || answer.includes('.org') || answer.includes('.co')) &&
-          answer.length < 100) {
-        businessInfo.business_name = answer.trim();
-        console.log(`📊 HIGH PRIORITY: Found domain business name: ${businessInfo.business_name}`);
-      }
-    });
-
-    // PRIORITY 2: Extract other fields from conversation
-    history.forEach((pair, index) => {
-      const question = pair.question.toLowerCase();
-      const answer = pair.answer;
-      const answerLower = answer.toLowerCase().trim();
-      
-      // Skip command responses
-      if (['support', 'draft', 'scrapping', 'scraping', 'accept', 'modify'].includes(answerLower) || answer.length > 500) {
-        return;
-      }
-      
-      // Extract location from Business Plan location questions
-      if ((question.includes('where are you located') || question.includes('what city') || 
-           question.includes('where will your business be located')) &&
-          answerLower !== 'yes' && answerLower !== 'no' && answer.length > 2 && answer.length < 100) {
-        // Extract city name (first part before comma)
-        const cityName = answer.split(',')[0].trim();
-        businessInfo.location = cityName.charAt(0).toUpperCase() + cityName.slice(1).toLowerCase();
-        console.log(`📊 Extracted location: ${businessInfo.location}`);
-      }
-      
-      // Extract business structure from GKY (LLC, Corporation, etc.)
-      if (question.includes('legal business structure') || 
-          (question.includes('register') && question.includes('business'))) {
-        const structureTypes = ['llc', 'corporation', 'partnership', 'sole proprietorship', 'private limited', 'limited company'];
-        if (structureTypes.some(type => answerLower.includes(type))) {
-          // Extract just the structure type
-          for (const type of structureTypes) {
-            if (answerLower.includes(type)) {
-              businessInfo.business_type = type.toUpperCase();
-              console.log(`📊 Extracted business type: ${businessInfo.business_type}`);
-              break;
-            }
-          }
-        }
-      }
-      
-      // 🔥 PRIORITY 1: Extract industry/business type from multiple sources (HIGHEST WEIGHT)
-      // This is CRITICAL - check EVERY answer for industry indicators
-      if (!businessInfo.industry || businessInfo.industry === 'General Business') {
-        // EXPANDED industry keywords including service trades, retail, and all major sectors
-        const industryKeywords = {
-          // Service Trades (NEW - CRITICAL for plumbing, HVAC, etc.)
-          'Plumbing Services': ['plumbing', 'plumber', 'plumbers', 'pipe', 'pipes', 'drain', 'drains', 'water heater', 'faucet', 'toilet', 'sewer', 'leak repair'],
-          'HVAC Services': ['hvac', 'heating', 'cooling', 'air conditioning', 'furnace', 'ac repair', 'ventilation'],
-          'Electrical Services': ['electrical', 'electrician', 'wiring', 'circuit', 'lighting installation'],
-          'Construction': ['construction', 'contractor', 'building', 'renovation', 'remodeling', 'carpentry'],
-          'Auto Repair': ['auto repair', 'mechanic', 'car repair', 'automotive service', 'brake', 'engine repair'],
-          'Landscaping': ['landscaping', 'lawn care', 'gardening', 'yard maintenance', 'tree service'],
-          'Cleaning Services': ['cleaning', 'janitorial', 'maid service', 'house cleaning', 'commercial cleaning'],
-          
-          // Food & Beverage
-          'Beverage': ['beverage', 'drink', 'juice', 'soft drink', 'refreshing', 'coke', 'cola', 'soda', 'tea', 'coffee'],
-          'Food & Restaurant': ['food', 'restaurant', 'cafe', 'culinary', 'catering', 'bakery', 'dining', 'food service'],
-          
-          // Technology
-          'Technology & Software': ['technology', 'software', 'app', 'tech', 'ai', 'development', 'digital platform', 'online platform', 'saas', 'web app', 'mobile app'],
-          
-          // Retail & E-commerce
-          'Retail': ['retail', 'store', 'shop', 'boutique', 'merchandise', 'storefront'],
-          'E-commerce': ['ecommerce', 'e-commerce', 'marketplace', 'online marketplace', 'online store', 'online shop', 'dropshipping'],
-          
-          // Healthcare
-          'Healthcare': ['health', 'medical', 'clinic', 'wellness', 'pharmacy', 'healthcare', 'dental', 'therapy'],
-          
-          // Education & Training
-          'Education': ['education', 'learning', 'training', 'course', 'teaching', 'tutoring', 'school', 'academy'],
-          
-          // Professional Services
-          'Consulting': ['consulting', 'consultant', 'advisory', 'business consulting', 'management consulting'],
-          'Legal Services': ['legal', 'law firm', 'attorney', 'lawyer', 'legal services'],
-          'Accounting': ['accounting', 'bookkeeping', 'cpa', 'tax services', 'financial services'],
-          'Marketing': ['marketing', 'advertising', 'digital marketing', 'social media marketing', 'seo', 'marketing agency'],
-          
-          // Real Estate
-          'Real Estate': ['real estate', 'property', 'realtor', 'real estate agent', 'property management'],
-          
-          // Transportation
-          'Transportation': ['transportation', 'logistics', 'delivery', 'shipping', 'freight', 'courier'],
-          
-          // Entertainment & Media
-          'Entertainment': ['entertainment', 'event', 'events', 'party planning', 'wedding planning'],
-          'Media': ['media', 'production', 'video production', 'photography', 'content creation'],
-          
-          // Manufacturing
-          'Manufacturing': ['manufacturing', 'production', 'factory', 'assembly', 'fabrication'],
-          
-          // Hospitality
-          'Hospitality': ['hospitality', 'hotel', 'lodging', 'accommodation', 'bed and breakfast', 'inn'],
-          
-          // Fitness & Wellness
-          'Fitness': ['fitness', 'gym', 'personal training', 'yoga', 'wellness center', 'sports'],
-          
-          // Pet Services
-          'Pet Services': ['pet', 'pets', 'grooming', 'veterinary', 'pet care', 'dog walking'],
-        };
-        
-        // Check ALL answers for industry keywords (not just one)
-        for (const [industry, keywords] of Object.entries(industryKeywords)) {
-          if (keywords.some(keyword => answerLower.includes(keyword))) {
-            businessInfo.industry = industry;
-            console.log(`📊 🔥 HIGH PRIORITY: Extracted industry from keyword match: ${businessInfo.industry}`);
-            break;
-          }
-        }
-        
-        // Also check the QUESTION text for explicit industry mentions
-        if (question.includes('what industry') || question.includes('what type of business') || question.includes('business idea')) {
-          // This answer is likely the industry/business type - capture it directly if not matched above
-          if (businessInfo.industry === 'General Business' && answer.length < 100) {
-            businessInfo.industry = answer.trim();
-            console.log(`📊 🔥 DIRECT ANSWER: Captured industry from direct question: ${businessInfo.industry}`);
-          }
-        }
-      }
-    });
-
-    console.log('📊 Final extracted business info:', businessInfo);
-    return businessInfo;
-  };
-
   const [history, setHistory] = useState<ConversationPair[]>([]);
-  const historyDerivedBusinessInfo = useMemo(() => extractBusinessInfo(), [history]);
-  const mergedBusinessContext = useMemo(() => {
-    const backendContext = {
-      business_name: sessionBusinessContext.business_name?.trim() || "",
-      industry: sessionBusinessContext.industry?.trim() || "",
-      location: sessionBusinessContext.location?.trim() || "",
-      business_type: sessionBusinessContext.business_type?.trim() || "",
-    };
-
-    return {
-      business_name: backendContext.business_name || historyDerivedBusinessInfo.business_name || DISPLAY_FALLBACK_CONTEXT.business_name,
-      industry: backendContext.industry || historyDerivedBusinessInfo.industry || DISPLAY_FALLBACK_CONTEXT.industry,
-      location: backendContext.location || historyDerivedBusinessInfo.location || DISPLAY_FALLBACK_CONTEXT.location,
-      business_type: backendContext.business_type || historyDerivedBusinessInfo.business_type || DISPLAY_FALLBACK_CONTEXT.business_type,
-    };
-  }, [sessionBusinessContext, historyDerivedBusinessInfo]);
   const renderGkySummaryContent = (summary: string) => {
     if (!summary) return null;
 
@@ -990,7 +812,6 @@ export default function ChatPage() {
       business_type?: string;
     };
   } | null>(null);
-  const [gkyTransitionCompleted, setGkyTransitionCompleted] = useState(false); // Track if user completed GKY transition
   const [modifyModal, setModifyModal] = useState<{
     isOpen: boolean;
     assistantSnapshot: string;
@@ -1015,8 +836,10 @@ export default function ChatPage() {
   });
   const [uploadPlanModal, setUploadPlanModal] = useState<{
     isOpen: boolean;
+    guidedEntrance?: boolean;
   }>({
-    isOpen: false
+    isOpen: false,
+    guidedEntrance: false,
   });
   const [uploadAnalysis, setUploadAnalysis] = useState<{
     missingQuestions: Array<{ question_number: number; question_text: string; category: string; priority: string }>;
@@ -1025,6 +848,8 @@ export default function ChatPage() {
   const [hasSeenUploadPrompt, setHasSeenUploadPrompt] = useState(false);
   const [hasUploadedPlan, setHasUploadedPlan] = useState(false);
   const [uploadPromptInitialized, setUploadPromptInitialized] = useState(false);
+  /** Quick-actions coach tour must finish before auto-opening the import modal. */
+  const [quickActionsTourComplete, setQuickActionsTourComplete] = useState(false);
   const [budgetSetupModal, setBudgetSetupModal] = useState<{
     isOpen: boolean;
     businessPlanCompleted: boolean;
@@ -1036,39 +861,26 @@ export default function ChatPage() {
   // Modal state removed — GKY→BP transition is now fully inline
 
   const markUploadPromptAsSeen = useCallback(() => {
-    if (hasSeenUploadPrompt) {
-      return;
-    }
-    if (typeof window === "undefined" || !sessionId) {
-      setHasSeenUploadPrompt(true);
-      return;
-    }
-    window.localStorage.setItem(`angel_upload_prompt_${sessionId}_seen`, "true");
+    if (hasSeenUploadPrompt) return;
+    if (sessionId) persistImportPromptDismissed(sessionId);
     setHasSeenUploadPrompt(true);
   }, [hasSeenUploadPrompt, sessionId]);
 
   const markUploadPlanAsUploaded = useCallback(() => {
-    if (typeof window === "undefined" || !sessionId) {
-      setHasUploadedPlan(true);
-      if (!hasSeenUploadPrompt) {
-        setHasSeenUploadPrompt(true);
-      }
-      return;
-    }
-    window.localStorage.setItem(`angel_upload_prompt_${sessionId}_uploaded`, "true");
+    if (sessionId) persistPlanImported(sessionId);
     setHasUploadedPlan(true);
-    if (!hasSeenUploadPrompt) {
-      window.localStorage.setItem(`angel_upload_prompt_${sessionId}_seen`, "true");
-      setHasSeenUploadPrompt(true);
-    }
-  }, [hasSeenUploadPrompt, sessionId]);
+    setHasSeenUploadPrompt(true);
+  }, [sessionId]);
 
-  const openUploadPlanModal = useCallback(() => {
-    setUploadPlanModal({ isOpen: true });
+  const openUploadPlanModal = useCallback((options?: { guidedEntrance?: boolean }) => {
+    setUploadPlanModal({
+      isOpen: true,
+      guidedEntrance: options?.guidedEntrance ?? false,
+    });
   }, []);
 
   const handleUploadModalClose = useCallback(() => {
-    setUploadPlanModal({ isOpen: false });
+    setUploadPlanModal({ isOpen: false, guidedEntrance: false });
     markUploadPromptAsSeen();
   }, [markUploadPromptAsSeen]);
 
@@ -1127,62 +939,164 @@ export default function ChatPage() {
       return;
     }
 
-    const seen = window.localStorage.getItem(`angel_upload_prompt_${sessionId}_seen`) === "true";
-    const uploaded = window.localStorage.getItem(`angel_upload_prompt_${sessionId}_uploaded`) === "true";
-
-    setHasSeenUploadPrompt(seen || uploaded);
-    setHasUploadedPlan(uploaded);
+    setHasSeenUploadPrompt(readImportPromptDismissed(sessionId));
+    setHasUploadedPlan(readPlanImported(sessionId));
     setUploadPromptInitialized(true);
   }, [sessionId]);
 
   useEffect(() => {
-    if (!uploadPromptInitialized || !sessionId) {
-      return;
+    if (hasImportedPlanFromDb) {
+      setHasUploadedPlan(true);
+      setHasSeenUploadPrompt(true);
     }
-    if (hasSeenUploadPrompt || hasUploadedPlan || uploadPlanModal.isOpen) {
-      return;
-    }
-    // CRITICAL: Don't show upload modal automatically if user just completed GKY transition
-    // The upload modal will be shown by handleStartBusinessPlanning after user clicks Continue
-    if (!gkyTransitionCompleted && progress.phase === "BUSINESS_PLAN") {
-      // If we're in BUSINESS_PLAN but transition wasn't completed via Continue button,
-      // it means user might have navigated directly or refreshed - allow upload modal
-      // But if transition was just completed, wait for handleStartBusinessPlanning to show it
-      const answeredCount =
-        typeof progress.phase_answered === "number"
-          ? progress.phase_answered
-          : backendTotals.answered;
-      
-      if ((answeredCount ?? 0) === 0) {
-        // Only show if we're truly at the start (not from a fresh transition)
-        // This handles cases where user refreshes or navigates directly to business planning
-        return; // Don't show automatically - let handleStartBusinessPlanning handle it
+  }, [hasImportedPlanFromDb]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    setQuickActionsTourComplete(isCoachTourSeen(BUSINESS_PLAN_TOUR_ID, sessionId));
+  }, [sessionId]);
+
+  const importAutoOpenRef = useRef({
+    sessionId: sessionId as string | undefined,
+    uploadPromptInitialized: false,
+    phase: progress.phase,
+    phaseAnswered: progress.phase_answered,
+    hasSeenUploadPrompt: false,
+    hasUploadedPlan: false,
+    hasImportedPlanFromDb: false,
+    uploadModalOpen: false,
+    history,
+    backendAnswered: backendTotals.answered,
+    currentQuestionNumber: currentQuestionNumber as number | null,
+  });
+
+  useEffect(() => {
+    importAutoOpenRef.current = {
+      sessionId,
+      uploadPromptInitialized,
+      phase: progress.phase,
+      phaseAnswered: progress.phase_answered,
+      hasSeenUploadPrompt,
+      hasUploadedPlan,
+      hasImportedPlanFromDb,
+      uploadModalOpen: uploadPlanModal.isOpen,
+      history,
+      backendAnswered: backendTotals.answered,
+      currentQuestionNumber,
+    };
+  });
+
+  const tryOpenImportModalIfEligible = useCallback(
+    (options?: { afterTour?: boolean }) => {
+      const r = importAutoOpenRef.current;
+      if (!r.sessionId || !r.uploadPromptInitialized || r.phase !== "BUSINESS_PLAN") {
+        return false;
       }
-    }
-    if (progress.phase !== "BUSINESS_PLAN") {
+      if (r.hasUploadedPlan || r.hasImportedPlanFromDb || r.uploadModalOpen) {
+        return false;
+      }
+      // After tour, always offer import once (user may have a stale localStorage "seen").
+      if (!options?.afterTour && r.hasSeenUploadPrompt) {
+        return false;
+      }
+
+      const bpAnswered = resolveBusinessPlanAnsweredCount({
+        phaseAnswered: r.phaseAnswered,
+        backendAnswered: r.backendAnswered,
+        bpHistoryPairs: r.history,
+        bpTotal: QUESTION_COUNTS.BUSINESS_PLAN,
+      });
+      const offerActive = isBusinessPlanImportOfferActive({
+        phase: r.phase,
+        bpAnswered,
+        currentQuestionNumber: r.currentQuestionNumber,
+        hasImportedPlan: r.hasUploadedPlan || r.hasImportedPlanFromDb,
+      });
+
+      if (offerActive) {
+        openUploadPlanModal({ guidedEntrance: options?.afterTour ?? false });
+        if (r.sessionId) consumePendingImportAfterTour(r.sessionId);
+        return true;
+      }
+      return false;
+    },
+    [openUploadPlanModal],
+  );
+
+  const handleBpQuickTourEnded = useCallback(
+    (tourId: string) => {
+      if (tourId !== BUSINESS_PLAN_TOUR_ID) return;
+      setQuickActionsTourComplete(true);
+      if (sessionId) markPendingImportAfterTour(sessionId);
+      // Brief pause so the coach tour can finish exiting before this step appears.
+      window.setTimeout(() => {
+        tryOpenImportModalIfEligible({ afterTour: true });
+      }, 420);
+    },
+    [sessionId, tryOpenImportModalIfEligible],
+  );
+
+  useEffect(() => {
+    if (!uploadPromptInitialized || !sessionId || progress.phase !== "BUSINESS_PLAN") {
       return;
     }
 
-    const answeredCount =
-      typeof progress.phase_answered === "number"
-        ? progress.phase_answered
-        : backendTotals.answered;
+    const bpAnswered = resolveBusinessPlanAnsweredCount({
+      phaseAnswered: progress.phase_answered,
+      backendAnswered: backendTotals.answered,
+      bpHistoryPairs: history,
+      bpTotal: QUESTION_COUNTS.BUSINESS_PLAN,
+    });
 
-    if ((answeredCount ?? 0) > 0) {
+    const hasImportedPlan = hasUploadedPlan || hasImportedPlanFromDb;
+
+    const offerActive = isBusinessPlanImportOfferActive({
+      phase: progress.phase,
+      bpAnswered,
+      currentQuestionNumber,
+      hasImportedPlan,
+    });
+
+    if (!offerActive) {
+      if (
+        !hasSeenUploadPrompt &&
+        (bpAnswered > 0 ||
+          (typeof currentQuestionNumber === "number" && currentQuestionNumber > 1))
+      ) {
+        persistImportPromptDismissed(sessionId);
+        setHasSeenUploadPrompt(true);
+      }
       return;
     }
 
-    // Only show upload modal if we're NOT in the middle of GKY transition
-    // This prevents modal collision - upload will be shown after user clicks Continue
-    openUploadPlanModal();
+    const pendingAfterTour = hasPendingImportAfterTour(sessionId);
+
+    const openWithGuidedEntrance =
+      pendingAfterTour || (quickActionsTourComplete && !hasSeenUploadPrompt);
+
+    if (
+      shouldAutoOpenImportModal({
+        offerActive,
+        promptDismissed: hasSeenUploadPrompt && !pendingAfterTour,
+        modalIsOpen: uploadPlanModal.isOpen,
+        quickActionsTourComplete,
+      }) ||
+      (pendingAfterTour && quickActionsTourComplete && !uploadPlanModal.isOpen)
+    ) {
+      openUploadPlanModal({ guidedEntrance: openWithGuidedEntrance });
+      consumePendingImportAfterTour(sessionId);
+    }
   }, [
     backendTotals.answered,
+    currentQuestionNumber,
     hasSeenUploadPrompt,
     hasUploadedPlan,
-    gkyTransitionCompleted,
+    history,
     openUploadPlanModal,
     progress.phase,
     progress.phase_answered,
+    hasImportedPlanFromDb,
+    quickActionsTourComplete,
     sessionId,
     uploadPlanModal.isOpen,
     uploadPromptInitialized,
@@ -1640,22 +1554,6 @@ export default function ChatPage() {
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
       
       toast.success("Welcome to the Business Planning phase!");
-      
-      // Mark that GKY transition is completed (user clicked Continue)
-      setGkyTransitionCompleted(true);
-      
-      // Show upload modal after transition message is displayed
-      // Small delay to let the BP Q1 render first
-      setTimeout(() => {
-        // Only show upload modal if user hasn't already uploaded and we're at the start of business planning
-        const progressWithPhaseAnswered = progress as ProgressState & { phase_answered?: number };
-        const answeredCount = progressWithPhaseAnswered.phase_answered ?? 0;
-        
-        if (!hasUploadedPlan && answeredCount === 0) {
-          console.log("📄 Showing upload plan modal after GKY completion");
-          openUploadPlanModal();
-        }
-      }, 300);
       
       // Smooth scroll to bottom after phase transition - increased delay to override other scroll effects
       setTimeout(() => {
@@ -3064,7 +2962,15 @@ export default function ChatPage() {
           return;
         }
 
-        setSessionBusinessContext(deriveContextFromSession(sessionMeta));
+        const sessionContext = businessContextSeedFromSession(sessionMeta);
+        if (sessionContext) {
+          seedBusinessContext(sessionContext);
+        }
+        if (sessionContext?.uploaded_plan_mode && sessionId) {
+          persistPlanImported(sessionId);
+          setHasUploadedPlan(true);
+          setHasSeenUploadPrompt(true);
+        }
 
         const reconstructed = buildConversationFromHistory(historyResponse || []);
         
@@ -3654,7 +3560,7 @@ export default function ChatPage() {
       });
       
       applyProgressUpdate(progress);
-      await loadBusinessContext();
+      await refreshBusinessContext();
       
       // Handle transition phases - return early (no history add for modal transitions)
       if (transition_phase === "PLAN_TO_SUMMARY") {
@@ -4371,8 +4277,20 @@ export default function ChatPage() {
         (!p.phase && typeof p.questionNumber === "number" && p.questionNumber <= 5))
   );
   const bpPairs = history.filter(
-    (p) => p.phase === "BUSINESS_PLAN" && !p.isCommand
+    (p) => p.phase === "BUSINESS_PLAN" && !p.isCommand,
   );
+  const businessPlanImportOfferActive = isBusinessPlanImportOfferActive({
+    phase: progress.phase,
+    bpAnswered: resolveBusinessPlanAnsweredCount({
+      phaseAnswered: progress.phase_answered,
+      backendAnswered: backendTotals.answered,
+      bpHistoryPairs: history,
+      bpTotal,
+    }),
+    currentQuestionNumber,
+    hasImportedPlan:
+      hasUploadedPlan || hasImportedPlanFromDb,
+  });
   const historyPhaseAnswered = isGKY
     ? Math.min(gkyPairs.length, gkyTotal)
     : Math.min(bpPairs.length, bpTotal);
@@ -4503,9 +4421,9 @@ export default function ChatPage() {
       <RoadmapToImplementationTransition
         isOpen={true}
         onBeginImplementation={handleActualStartImplementation}
-        businessName={mergedBusinessContext.business_name}
-        industry={mergedBusinessContext.industry}
-        location={mergedBusinessContext.location}
+        businessName={businessContext.business_name}
+        industry={businessContext.industry}
+        location={businessContext.location}
       />
     );
   }
@@ -4513,19 +4431,10 @@ export default function ChatPage() {
   // Show implementation phase
   if (progress.phase === "IMPLEMENTATION") {
     console.log("✅ Rendering Implementation component - phase is IMPLEMENTATION");
-    const sessionData = {
-      sessionId: sessionId!,
-      currentPhase: progress.phase,
-      business_name: mergedBusinessContext.business_name,
-      industry: mergedBusinessContext.industry,
-      location: mergedBusinessContext.location,
-      business_type: mergedBusinessContext.business_type
-    };
 
     return (
       <Implementation
         sessionId={sessionId!}
-        sessionData={sessionData}
         onPhaseChange={(phase) => {
           // Handle phase changes if needed
           console.log('Phase changed to:', phase);
@@ -4586,8 +4495,11 @@ export default function ChatPage() {
   const chatContentMaxWidth = progress.phase === "GKY" ? "max-w-5xl" : "max-w-4xl";
 
   return (
-    <CoachMarkProvider sessionId={sessionId}>
-      <BusinessPlanTourTrigger phase={progress.phase} />
+    <CoachMarkProvider sessionId={sessionId} onTourEnd={handleBpQuickTourEnded}>
+      <BusinessPlanTourTrigger
+        phase={progress.phase}
+        uploadModalOpen={uploadPlanModal.isOpen}
+      />
       <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-teal-50 text-sm lg:flex-row">
       {/* Left Sidebar - Quick Actions (Support, Draft, Scrapping, Previous Question) */}
       {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
@@ -4657,7 +4569,8 @@ export default function ChatPage() {
             </button>
           )}
 
-          {progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) && (
+          {progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) &&
+            businessPlanImportOfferActive && (
             <button
               type="button"
               onClick={() => openUploadPlanModal()}
@@ -4906,7 +4819,7 @@ export default function ChatPage() {
                   >
                     <div className="flex items-center justify-center sm:justify-start gap-2">
                       <span className="text-base">🗺️</span>
-                      <span>Roadmap Plan</span>
+                      <span>Launch Roadmap</span>
                     </div>
                     <div className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                   </button>
@@ -5502,7 +5415,8 @@ export default function ChatPage() {
             {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
               progress.phase === ("BUSINESS_PLAN" as ProgressState['phase'])) && (
               <div className="mt-4 lg:hidden">
-                {progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) && (
+                {progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) &&
+                  businessPlanImportOfferActive && (
                   <div className="mb-3">
                     <button
                       type="button"
@@ -5620,8 +5534,10 @@ export default function ChatPage() {
 
       {/* Right Navigation Panel - Desktop (hidden during GKY — sidebar has no useful content) */}
       {showProgressSidebar && (
-      <div className="hidden h-screen w-80 flex-shrink-0 overflow-y-auto overflow-x-hidden border-l border-gray-200 lg:sticky lg:top-0 lg:block">
+      <div className="hidden h-screen w-80 flex-shrink-0 overflow-hidden border-l border-gray-200 bg-gradient-to-b from-white via-slate-50/80 to-teal-50/60 lg:sticky lg:top-0 lg:flex lg:flex-col">
+        <div className="flex min-h-0 flex-1 flex-col p-4">
         <QuestionNavigator
+          className="flex-1 min-h-0"
           questions={questions}
           currentPhase={progress.phase}
           onQuestionSelect={handleQuestionSelect}
@@ -5646,20 +5562,8 @@ export default function ChatPage() {
           currentQuestionNumber={currentQuestionNumber}
           showStepPercent={false}
           onEditPlan={progress.phase === "BUSINESS_PLAN" ? handleEditPlan : undefined}
-          /*
-           * The right-pane "Already have a business plan?" panel only shows
-           * BEFORE the user has engaged with the initial upload prompt
-           * (modal auto-opens at start of BP) — once they dismiss or upload,
-           * the panel hides to reclaim visual real estate. They can still
-           * trigger upload from the left-sidebar Import-plan quick action,
-           * so no functionality is lost.
-           */
-          onUploadPlan={
-            progress.phase === "BUSINESS_PLAN" && !hasSeenUploadPrompt && !hasUploadedPlan
-              ? openUploadPlanModal
-              : undefined
-          }
         />
+        </div>
       </div>
       )}
 
@@ -5828,6 +5732,7 @@ export default function ChatPage() {
       {/* Upload Plan Modal */}
       <UploadPlanModal
         isOpen={uploadPlanModal.isOpen}
+        guidedEntrance={uploadPlanModal.guidedEntrance}
         onClose={handleUploadModalClose}
         onUploadSuccess={handleUploadPlanSuccess}
         sessionId={sessionId}
@@ -6007,7 +5912,7 @@ export default function ChatPage() {
         isOpen={budgetSetupModal.isOpen}
         onClose={() => setBudgetSetupModal({ isOpen: false, businessPlanCompleted: false })}
         onComplete={handleBudgetSetupComplete}
-        businessContext={mergedBusinessContext}
+        businessContext={businessContext}
       /> */}
 
       {/* GKY-to-Business-Plan modal removed — transition happens inline in chat */}

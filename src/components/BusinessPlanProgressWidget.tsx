@@ -35,7 +35,7 @@ interface BusinessPlanProgressWidgetProps {
   className?: string;
 }
 
-const SECTIONS: BusinessPlanSection[] = [
+export const BUSINESS_PLAN_SECTIONS: BusinessPlanSection[] = [
   {
     id: 'product-service',
     title: 'Product/Service Details',
@@ -139,17 +139,17 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
 
   const { currentSection, currentIdx } = useMemo(() => {
     const idx =
-      SECTIONS.findIndex((s) => q >= s.startQuestion && q <= s.endQuestion) ??
+      BUSINESS_PLAN_SECTIONS.findIndex((s) => q >= s.startQuestion && q <= s.endQuestion) ??
       -1;
     const safeIdx =
       idx >= 0
         ? idx
         : Math.max(
             0,
-            SECTIONS.findIndex((s) => q < s.startQuestion),
+            BUSINESS_PLAN_SECTIONS.findIndex((s) => q < s.startQuestion),
           );
-    const finalIdx = safeIdx === -1 ? SECTIONS.length - 1 : safeIdx;
-    return { currentSection: SECTIONS[finalIdx], currentIdx: finalIdx };
+    const finalIdx = safeIdx === -1 ? BUSINESS_PLAN_SECTIONS.length - 1 : safeIdx;
+    return { currentSection: BUSINESS_PLAN_SECTIONS[finalIdx], currentIdx: finalIdx };
   }, [q]);
 
   /**
@@ -166,9 +166,9 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
    */
   const windowedSections = useMemo(() => {
     return [
-      currentIdx > 0 ? SECTIONS[currentIdx - 1] : null,
-      SECTIONS[currentIdx],
-      currentIdx < SECTIONS.length - 1 ? SECTIONS[currentIdx + 1] : null,
+      currentIdx > 0 ? BUSINESS_PLAN_SECTIONS[currentIdx - 1] : null,
+      BUSINESS_PLAN_SECTIONS[currentIdx],
+      currentIdx < BUSINESS_PLAN_SECTIONS.length - 1 ? BUSINESS_PLAN_SECTIONS[currentIdx + 1] : null,
     ];
   }, [currentIdx]);
 
@@ -261,7 +261,7 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
               Sections
             </h4>
             <span className="text-[9px] sm:text-[10px] text-gray-400 shrink-0 tabular-nums">
-              Step {currentIdx + 1} of {SECTIONS.length}
+              Step {currentIdx + 1} of {BUSINESS_PLAN_SECTIONS.length}
             </span>
           </div>
 
@@ -289,7 +289,7 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
           <AnimatePresence mode="popLayout" initial={false}>
             <motion.div
               key={`window-${currentSection.id}`}
-              className="grid grid-cols-3 gap-1.5 sm:gap-2 items-stretch"
+              className="grid grid-cols-3 gap-2 items-stretch min-w-0"
               initial={reduceMotion ? false : { opacity: 0, x: 12 }}
               animate={reduceMotion ? undefined : { opacity: 1, x: 0 }}
               exit={reduceMotion ? undefined : { opacity: 0, x: -12 }}
@@ -301,32 +301,32 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
                 const isComplete = position === 0;
 
                 if (!section) {
-                  // Edge stub: shown when current is the first or last section.
-                  // Keeps the 3-column grid balanced visually.
                   const isStart = position === 0;
                   return (
                     <div
                       key={`stub-${position}`}
-                      className="rounded-lg sm:rounded-xl border border-dashed border-gray-200 bg-gray-50/40 flex flex-col items-center justify-center text-center px-1.5 py-2 sm:px-2.5 sm:py-3 min-h-[4.5rem] sm:min-h-[5rem]"
+                      className="min-w-0 rounded-xl border border-dashed border-gray-200 bg-gray-50/40 flex items-center justify-center px-1 py-3 min-h-[5.25rem]"
                       aria-hidden
                     >
-                      <span className="text-[8px] sm:text-[9px] uppercase tracking-wider text-gray-400 font-semibold">
+                      <span className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold">
                         {isStart ? 'Start' : 'Finish'}
                       </span>
                     </div>
                   );
                 }
 
+                const stepperLabel = section.compactTitle ?? section.shortTitle;
+
                 return (
                   <motion.div
                     key={section.id}
                     title={section.title}
                     className={[
-                      'rounded-lg sm:rounded-xl flex flex-col items-center justify-center text-center px-1.5 py-2 sm:px-2.5 sm:py-3 border transition-shadow min-h-[4.5rem] sm:min-h-[5rem]',
+                      'min-w-0 w-full rounded-xl flex flex-col items-center justify-center gap-0.5 text-center px-1 py-2 border transition-shadow min-h-[5.25rem]',
                       isComplete &&
                         'border-emerald-200/90 bg-gradient-to-b from-emerald-50/90 to-emerald-50/40 text-emerald-900',
                       isCurrent &&
-                        'border-violet-500 bg-gradient-to-b from-violet-50 to-white text-gray-900 shadow-md shadow-violet-500/10 ring-2 ring-violet-200/80 z-10',
+                        'border-violet-500 bg-gradient-to-b from-violet-50 to-white text-gray-900 shadow-md shadow-violet-500/10 ring-2 ring-violet-200/80',
                       !isComplete &&
                         !isCurrent &&
                         'border-gray-200/80 bg-gray-50/50 text-gray-500 border-dashed',
@@ -338,44 +338,33 @@ const BusinessPlanProgressWidget: React.FC<BusinessPlanProgressWidgetProps> = ({
                       reduceMotion
                         ? undefined
                         : isCurrent
-                          ? { scale: 1.04, y: -2 }
-                          : { scale: 1, y: 0 }
+                          ? { y: -2 }
+                          : { y: 0 }
                     }
                     transition={spring}
                   >
                     {isComplete && (
-                      <motion.span
-                        className="mb-1 flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full bg-emerald-500 text-white"
-                        initial={reduceMotion ? false : { scale: 0 }}
-                        animate={reduceMotion ? undefined : { scale: 1 }}
-                        transition={{ ...spring, delay: 0.02 }}
-                      >
-                        <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5" strokeWidth={2.5} />
-                      </motion.span>
+                      <Check
+                        className="h-4 w-4 text-emerald-600 shrink-0"
+                        strokeWidth={2.5}
+                        aria-hidden
+                      />
                     )}
                     {isCurrent && (
-                      <span className="mb-1 inline-flex rounded-full bg-violet-600 px-1.5 py-px sm:px-2 sm:py-0.5 text-[7px] sm:text-[9px] font-bold uppercase tracking-wide text-white shadow-sm">
-                        <span className="sm:hidden">Now</span>
-                        <span className="hidden sm:inline">Current</span>
+                      <span className="shrink-0 rounded-full bg-violet-600 px-1.5 py-px text-[8px] font-bold uppercase tracking-wide text-white">
+                        Current
                       </span>
                     )}
                     {!isComplete && !isCurrent && (
-                      <span className="mb-1 text-[7px] sm:text-[9px] font-bold uppercase tracking-wider text-gray-400">
+                      <span className="shrink-0 text-[8px] font-bold uppercase tracking-wider text-gray-400">
                         Next
                       </span>
                     )}
-                    <span className="text-[9px] sm:text-[11px] md:text-xs font-semibold leading-[1.2] text-balance px-0.5 line-clamp-2">
-                      {section.compactTitle ? (
-                        <>
-                          <span className="sm:hidden">{section.compactTitle}</span>
-                          <span className="hidden sm:inline">{section.shortTitle}</span>
-                        </>
-                      ) : (
-                        section.shortTitle
-                      )}
+                    <span className="w-full text-[10px] font-semibold leading-snug break-words hyphens-auto px-0.5">
+                      {stepperLabel}
                     </span>
-                    <span className="mt-0.5 sm:mt-1 text-[8px] sm:text-[9px] tabular-nums text-gray-500 opacity-90">
-                      Q{section.startQuestion}-{section.endQuestion}
+                    <span className="shrink-0 text-[9px] tabular-nums text-gray-500">
+                      Q{section.startQuestion}–{section.endQuestion}
                     </span>
                   </motion.div>
                 );

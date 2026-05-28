@@ -12,7 +12,7 @@ import { AnimatePresence } from "framer-motion";
 import { isCoachTourSeen, markCoachTourSeen } from "@/constants/ventureOnboarding";
 import CoachMark from "./CoachMark";
 import SpotlightOverlay from "./SpotlightOverlay";
-import type { CoachMarkContextValue, CoachStep } from "./types";
+import type { CoachMarkContextValue, CoachStep, CoachTourEndHandler } from "./types";
 
 const CoachMarkContext = createContext<CoachMarkContextValue | null>(null);
 
@@ -31,16 +31,18 @@ function findVisibleTarget(selector: string): HTMLElement | null {
 
 interface CoachMarkProviderProps {
   sessionId?: string;
+  onTourEnd?: CoachTourEndHandler;
   children: ReactNode;
 }
 
-export function CoachMarkProvider({ sessionId, children }: CoachMarkProviderProps) {
+export function CoachMarkProvider({ sessionId, onTourEnd, children }: CoachMarkProviderProps) {
   const [activeTour, setActiveTour] = useState<{ id: string; steps: CoachStep[] } | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const waitingForTargetRef = useRef(false);
 
   const endTour = useCallback(() => {
+    const endedTourId = activeTour?.id;
     if (activeTour) {
       markCoachTourSeen(activeTour.id, sessionId);
     }
@@ -48,7 +50,10 @@ export function CoachMarkProvider({ sessionId, children }: CoachMarkProviderProp
     setStepIndex(0);
     setRect(null);
     waitingForTargetRef.current = false;
-  }, [activeTour, sessionId]);
+    if (endedTourId) {
+      onTourEnd?.(endedTourId);
+    }
+  }, [activeTour, sessionId, onTourEnd]);
 
   const startTour = useCallback(
     (tourId: string, steps: CoachStep[]) => {

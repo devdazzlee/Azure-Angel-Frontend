@@ -566,9 +566,14 @@ const PlanToBudgetTransition: React.FC<PlanToBudgetTransitionProps> = ({
               <div className="px-6 py-5">
                 <p className="text-gray-600 mb-4 text-sm">
                   I've analyzed your business plan and prepared estimated expenses tailored to your{' '}
-                  <span className="font-semibold text-teal-700">{businessContext.industry || 'industry'}</span>{' '}
+                  <span className="font-semibold text-teal-700">{businessContext.industry}</span>{' '}
                   business in{' '}
-                  <span className="font-semibold text-teal-700">{businessContext.location || 'your location'}</span>.
+                  {businessContext.location ? (
+                    <span className="font-semibold text-teal-700">{businessContext.location}</span>
+                  ) : (
+                    <span className="text-gray-500">your area</span>
+                  )}
+                  .
                 </p>
                 <div className="bg-gradient-to-br from-rose-50/80 to-orange-50/60 rounded-xl p-5 border border-rose-100">
                   <div className="text-gray-700 prose prose-sm max-w-none">

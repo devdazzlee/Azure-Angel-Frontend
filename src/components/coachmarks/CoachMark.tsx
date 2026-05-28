@@ -100,6 +100,7 @@ export default function CoachMark({
       exit={{ opacity: 0, scale: 0.96, y: 8 }}
       transition={{ duration: 0.25, delay: 0.15 }}
       style={{ top, left, width: POPOVER_WIDTH, transform: `translateY(${translateY})` }}
+      data-angel-coach-tour
       className="fixed z-[70] rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-slate-900/10"
     >
       <div className="flex items-center justify-between gap-3">

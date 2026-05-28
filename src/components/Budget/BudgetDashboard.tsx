@@ -755,7 +755,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         heightLeft -= pageHeight;
       }
 
-      const businessName = businessContext?.business_name || 'Business';
+      const businessName = businessContext?.business_name?.trim() || 'budget';
       const filename = `${businessName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_budget_${new Date().toISOString().split('T')[0]}.pdf`;
       
       pdf.save(filename);
@@ -925,7 +925,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       XLSX.utils.book_append_sheet(wb, operatingSheet, 'Operating');
       
       // Generate filename
-      const businessName = businessContext?.business_name || 'Business';
+      const businessName = businessContext?.business_name?.trim() || 'budget';
       const filename = `${businessName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_budget_${new Date().toISOString().split('T')[0]}.xlsx`;
       
       // Save file

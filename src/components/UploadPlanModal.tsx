@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'react-toastify';
 import PlanAnalysisModal from './PlanAnalysisModal';
 import {
@@ -19,6 +20,8 @@ interface UploadPlanModalProps {
   sessionId?: string;
   initialMode?: UploadMode;
   onStartAnswering?: (analysis?: PlanAnalysis, businessInfo?: any, perQuestionAnswers?: Record<string, string | null> | null) => void;
+  /** Staggered spring entrance after the quick-actions coach tour */
+  guidedEntrance?: boolean;
 }
 
 const MIN_PASTE_CHARS = 80;
@@ -129,6 +132,7 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
   sessionId,
   initialMode = 'upload',
   onStartAnswering,
+  guidedEntrance = false,
 }) => {
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -149,6 +153,13 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
   // Handle click outside to close
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest('[data-angel-coach-tour]')
+      ) {
+        return;
+      }
       if (
         isOpen &&
         modalContentRef.current &&
@@ -408,8 +419,6 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <>
       {/* Analysis Modal */}
@@ -424,19 +433,71 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
       )}
 
       {/* Upload Modal - Hide when analysis is shown */}
-      {!showAnalysis && (
-      <div 
-        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-        onClick={onClose}
-      >
-      <div 
-        ref={modalContentRef}
-        className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <AnimatePresence>
+        {isOpen && !showAnalysis && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.button
+              type="button"
+              aria-label="Close upload dialog"
+              className="absolute inset-0 bg-slate-900/50 backdrop-blur-[2px]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{
+                duration: guidedEntrance ? 0.45 : 0.22,
+                ease: 'easeOut',
+              }}
+              onClick={onClose}
+            />
+            <motion.div
+              ref={modalContentRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="upload-plan-modal-title"
+              className="relative z-10 bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto ring-1 ring-slate-900/5"
+              initial={{
+                opacity: 0,
+                y: guidedEntrance ? 32 : 16,
+                scale: guidedEntrance ? 0.94 : 0.98,
+              }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.98 }}
+              transition={
+                guidedEntrance
+                  ? {
+                      type: 'spring',
+                      stiffness: 340,
+                      damping: 30,
+                      mass: 0.85,
+                      delay: 0.12,
+                    }
+                  : { duration: 0.22, ease: [0.22, 1, 0.36, 1] }
+              }
+              onClick={(e) => e.stopPropagation()}
+            >
+              {guidedEntrance && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.38, duration: 0.35, ease: 'easeOut' }}
+                  className="mx-6 mt-5 flex items-center gap-2 rounded-full border border-teal-200/80 bg-gradient-to-r from-teal-50 to-cyan-50 px-4 py-2 text-sm text-teal-900 shadow-sm"
+                >
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-600 text-xs font-bold text-white">
+                    ✓
+                  </span>
+                  <span>
+                    <span className="font-semibold">Tour complete.</span>{' '}
+                    Optional next step — import an existing plan or close to answer questions one by one.
+                  </span>
+                </motion.div>
+              )}
+
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
-          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <h2
+            id="upload-plan-modal-title"
+            className="text-2xl font-bold text-gray-900 flex items-center gap-2"
+          >
             📄 Upload Business Plan
           </h2>
           <button
@@ -702,9 +763,10 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
               </div>
             </div>
         </div>
-      </div>
-      </div>
-      )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </>
   );
 };

@@ -11,6 +11,7 @@ import RoadmapDisplay from '../../components/RoadmapDisplay';
 import ImplementationCompletionModal from '../../components/ImplementationCompletionModal';
 import httpClient from '../../api/httpClient';
 import { fetchRoadmapPlan } from '../../services/authService';
+import { useBusinessContext } from '../../hooks/useBusinessContext';
 import { IMPLEMENTATION_RETURN_KEY } from '../ErrorBoundaryPage';
 import { BudgetDashboard } from '../../components/Budget';
 import { budgetService } from '../../services/budgetService';
@@ -85,15 +86,19 @@ interface ImplementationProgress {
 
 interface ImplementationProps {
   sessionId: string;
-  sessionData: any;
   onPhaseChange: (phase: string) => void;
 }
 
 const Implementation: React.FC<ImplementationProps> = ({
   sessionId,
-  sessionData,
   onPhaseChange
 }) => {
+  const {
+    context: dbBusinessContext,
+    loading: businessContextLoading,
+    refresh: refreshBusinessContext,
+    isReady: businessContextReady,
+  } = useBusinessContext(sessionId);
   const navigate = useNavigate();
   const [currentTask, setCurrentTask] = useState<ImplementationTask | null>(null);
   const [completedTasks, setCompletedTasks] = useState<string[]>([]);
@@ -117,9 +122,8 @@ const Implementation: React.FC<ImplementationProps> = ({
   const [budgetLoading, setBudgetLoading] = useState(false);
   
   // Local business context that can be updated independently
-  const [localBusinessContext, setLocalBusinessContext] = useState<any>(null);
+  const [localBusinessContext, setLocalBusinessContext] = useState<typeof dbBusinessContext | null>(null);
   const [extractionAttempted, setExtractionAttempted] = useState(false);
-  const [businessContextLoading, setBusinessContextLoading] = useState(false);
   
   // Cache for ComprehensiveSupport API responses
   const [agentsCache, setAgentsCache] = useState<any>(null);
@@ -199,12 +203,12 @@ const Implementation: React.FC<ImplementationProps> = ({
     };
   }, [sessionId]);
   
-  // Separate effect for business context extraction (runs once)
+  // When DB context is still empty, run server-side extraction once.
   useEffect(() => {
-    if (!extractionAttempted && sessionData) {
+    if (!extractionAttempted && !businessContextReady && !businessContextLoading) {
       extractBusinessContextIfNeeded();
     }
-  }, [sessionData, extractionAttempted]);
+  }, [businessContextReady, businessContextLoading, extractionAttempted]);
 
   const extractBusinessContextIfNeeded = async () => {
     // Mark as attempted to prevent infinite loop
@@ -223,8 +227,6 @@ const Implementation: React.FC<ImplementationProps> = ({
       console.log('🔍 Business name is invalid:', currentBusinessName);
       console.log('   Extracting/generating from chat history...');
       
-      setBusinessContextLoading(true);
-      
       const { data } = await httpClient.post<any>(
         `/business-context/sessions/${sessionId}/extract-business-context`
       );
@@ -236,14 +238,13 @@ const Implementation: React.FC<ImplementationProps> = ({
         console.log('   New:', extractedContext.business_name);
 
         setLocalBusinessContext(extractedContext);
+        await refreshBusinessContext();
 
         await new Promise((resolve) => setTimeout(resolve, 500));
         await loadImplementationData();
       }
     } catch (error) {
         console.error('Error extracting business context:', error);
-      } finally {
-        setBusinessContextLoading(false);
       }
   };
 
@@ -459,13 +460,7 @@ const Implementation: React.FC<ImplementationProps> = ({
     }
   };
 
-  // Use localBusinessContext if available (from extraction), otherwise use sessionData
-  const businessContext = localBusinessContext || sessionData || {
-    business_name: "Your Business",
-    industry: "General Business", 
-    location: "United States",
-    business_type: "Startup"
-  };
+  const businessContext = localBusinessContext ?? dbBusinessContext;
 
   // Computed progress fallback to ensure percent tracks completed tasks
   const totalTasks = (progress as any)?.total ?? 25;

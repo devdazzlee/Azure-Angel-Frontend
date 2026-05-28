@@ -1,5 +1,6 @@
 import React from 'react';
 import BusinessPlanProgressWidget from './BusinessPlanProgressWidget';
+import BusinessPlanSidebarTrail from './BusinessPlanSidebarTrail';
 
 interface Question {
   id: string;
@@ -41,8 +42,8 @@ interface QuestionNavigatorProps {
   };
   currentQuestionNumber?: number | null; // Add current question number prop
   onEditPlan?: () => void;
-  onUploadPlan?: () => void;
   showStepPercent?: boolean;
+  className?: string;
 }
 
 const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
@@ -52,8 +53,8 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
   currentProgress,
   currentQuestionNumber,
   onEditPlan: _onEditPlan,
-  onUploadPlan,
   showStepPercent: _showStepPercent = true,
+  className = '',
 }) => {
   const bpTotal = 45;
   
@@ -61,7 +62,8 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
   const bpCurrentQuestionNumber = Math.min(Math.max(currentQuestionNumber ?? 1, 1), bpTotal);
 
   return (
-    <div className="w-full max-w-80 space-y-4 overflow-hidden">
+    <div className={`flex flex-col min-h-0 w-full max-w-80 ${className}`}>
+      <div className="shrink-0 space-y-4 overflow-hidden">
       {/* Overall Progress Overview - Hidden during GKY phase (no progress bars in GKY) */}
       {currentPhase !== 'GKY' && (
         <div className="bg-white shadow-xl rounded-xl overflow-hidden border border-gray-100 hover:shadow-2xl transition-all duration-300">
@@ -125,21 +127,13 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
           className="shadow-xl"
         />
       )}
+      </div>
 
-      {currentPhase === 'BUSINESS_PLAN' && onUploadPlan && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 shadow-sm">
-          <p className="text-sm font-medium text-emerald-900 mb-2">Already have a business plan?</p>
-          <p className="text-xs text-emerald-800/90 mb-3">
-            Upload PDF, Word, or text—or paste your plan. Angel maps it to Founderport&rsquo;s questionnaire and focuses on gaps.
-          </p>
-          <button
-            type="button"
-            onClick={onUploadPlan}
-            className="w-full rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white shadow hover:bg-emerald-700 transition-colors"
-          >
-            Import existing plan
-          </button>
-        </div>
+      {currentPhase === 'BUSINESS_PLAN' && (
+        <BusinessPlanSidebarTrail
+          currentQuestionNumber={bpCurrentQuestionNumber}
+          className="mt-4 flex-1 min-h-[10rem]"
+        />
       )}
     </div>
   );
