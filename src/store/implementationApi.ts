@@ -1,5 +1,6 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 import type { Budget, IGeneratedBP } from '../types/apiTypes';
+import type { ImplementationCatalogPhase } from '../types/implementationNavigation';
 import type { ServiceProviderRow } from '../utils/serviceProvider';
 import { axiosBaseQuery } from './axiosBaseQuery';
 
@@ -15,7 +16,20 @@ export interface ImplementationTasksResponse {
   message?: string;
   current_task?: Record<string, unknown> | null;
   completed_tasks?: string[];
+  next_task_id?: string | null;
+  task_catalog?: ImplementationCatalogPhase[];
   progress?: Record<string, unknown>;
+}
+
+export interface ImplementationTaskDetailArgs {
+  sessionId: string;
+  taskId: string;
+}
+
+export interface ImplementationTaskDetailResponse {
+  success: boolean;
+  task?: Record<string, unknown>;
+  message?: string;
 }
 
 export interface ServiceProvidersQueryArgs {
@@ -67,6 +81,21 @@ export const implementationApi = createApi({
       }),
       providesTags: (_result, _error, sessionId) => [
         { type: 'ImplementationTasks', id: sessionId },
+      ],
+      keepUnusedDataFor: 300,
+    }),
+
+    getImplementationTaskDetail: builder.query<
+      ImplementationTaskDetailResponse,
+      ImplementationTaskDetailArgs
+    >({
+      query: ({ sessionId, taskId }) => ({
+        url: `/implementation/sessions/${sessionId}/tasks/${taskId}`,
+        method: 'GET',
+      }),
+      providesTags: (_result, _error, { sessionId, taskId }) => [
+        { type: 'ImplementationTasks', id: sessionId },
+        { type: 'ImplementationTasks', id: `${sessionId}:${taskId}` },
       ],
       keepUnusedDataFor: 300,
     }),
@@ -137,6 +166,8 @@ export const implementationApi = createApi({
 
 export const {
   useGetImplementationTasksQuery,
+  useGetImplementationTaskDetailQuery,
+  useLazyGetImplementationTaskDetailQuery,
   useGetServiceProvidersQuery,
   useGetTaskHelpQuery,
   useLazyGetContactProvidersQuery,

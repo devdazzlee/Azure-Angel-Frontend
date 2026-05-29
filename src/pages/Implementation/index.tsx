@@ -8,7 +8,9 @@ import ServiceProviderModal from '../../components/ServiceProviderModal';
 import HelpModal from '../../components/HelpModal';
 import FloatingComprehensiveSupport from '../../components/FloatingComprehensiveSupport';
 import RoadmapDisplay from '../../components/RoadmapDisplay';
+import ImplementationRoadmapNavigator from '../../components/ImplementationRoadmapNavigator';
 import ImplementationCompletionModal from '../../components/ImplementationCompletionModal';
+import type { ImplementationCatalogPhase } from '../../types/implementationNavigation';
 import httpClient from '../../api/httpClient';
 import { useBusinessContext } from '../../hooks/useBusinessContext';
 import { useAppDispatch } from '../../store';
@@ -17,6 +19,7 @@ import {
   implementationCachePolicy,
   useGetBudgetQuery,
   useGetImplementationTasksQuery,
+  useLazyGetImplementationTaskDetailQuery,
   useGetRoadmapPlanQuery,
   useGetTaskHelpQuery,
   useLazyGetContactProvidersQuery,
@@ -160,9 +163,16 @@ const Implementation: React.FC<ImplementationProps> = ({
   const loading = tasksLoading;
   const isRefreshingTask = tasksFetching && !tasksLoading;
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'task' | 'roadmap' | 'budget'>('task');
-  const [mountedTabs, setMountedTabs] = useState<Record<string, boolean>>({ task: true });
+  const [activeTab, setActiveTab] = useState<'implementation' | 'budget'>('implementation');
+  const [mountedTabs, setMountedTabs] = useState<Record<string, boolean>>({ implementation: true });
   const [roadmapContent, setRoadmapContent] = useState<string>('');
+  const [taskCatalog, setTaskCatalog] = useState<ImplementationCatalogPhase[]>([]);
+  const [nextTaskId, setNextTaskId] = useState<string | null>(null);
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [panelTask, setPanelTask] = useState<ImplementationTask | null>(null);
+  const [loadingPanelTaskId, setLoadingPanelTaskId] = useState<string | null>(null);
+  const [showRoadmapDocument, setShowRoadmapDocument] = useState(false);
+  const autoExpandQueuedRef = useRef(false);
   const budgetLoadedRef = useRef(false);
   
   // Budget state
@@ -183,11 +193,15 @@ const Implementation: React.FC<ImplementationProps> = ({
   const [fetchContactProviders, { isLoading: contactProvidersLoading }] =
     useLazyGetContactProvidersQuery();
 
+  const activeSupportTask = panelTask ?? currentTask;
+
+  const [fetchTaskDetail] = useLazyGetImplementationTaskDetailQuery();
+
   const { data: helpPayload, isLoading: helpLoading, isFetching: helpFetching } =
     useGetTaskHelpQuery(
-      { sessionId, taskId: currentTask?.id ?? '' },
+      { sessionId, taskId: activeSupportTask?.id ?? '' },
       {
-        skip: !sessionId || !currentTask?.id,
+        skip: !sessionId || !activeSupportTask?.id,
         ...implementationCachePolicy.taskHelp,
       },
     );
@@ -195,7 +209,7 @@ const Implementation: React.FC<ImplementationProps> = ({
 
   const { data: roadmapPayload, isLoading: roadmapLoading, refetch: refetchRoadmap } =
     useGetRoadmapPlanQuery(sessionId, {
-      skip: activeTab !== 'roadmap' || !mountedTabs.roadmap || !sessionId,
+      skip: !sessionId,
       ...implementationCachePolicy.roadmap,
     });
 
@@ -234,6 +248,7 @@ const Implementation: React.FC<ImplementationProps> = ({
       ];
       if (taskId) {
         tags.push(
+          { type: 'ImplementationTasks', id: `${sessionId}:${taskId}` },
           { type: 'ServiceProviders', id: `${sessionId}:${taskId}` },
           { type: 'ServiceProviders', id: `${sessionId}:${taskId}:contact` },
           { type: 'TaskHelp', id: `${sessionId}:${taskId}` },
@@ -268,6 +283,10 @@ const Implementation: React.FC<ImplementationProps> = ({
           return next;
         });
         setCompletedTasks(tasksPayload.completed_tasks ?? []);
+        if (Array.isArray(tasksPayload.task_catalog)) {
+          setTaskCatalog(tasksPayload.task_catalog);
+        }
+        setNextTaskId(tasksPayload.next_task_id ?? null);
         if (tasksPayload.progress) {
           setProgress((prev) => ({ ...prev, ...tasksPayload.progress } as ImplementationProgress));
         }
@@ -298,9 +317,64 @@ const Implementation: React.FC<ImplementationProps> = ({
     }
   }, [budgetPayload]);
 
+  const loadPanelTask = useCallback(
+    async (taskId: string) => {
+      if (currentTask?.id === taskId) {
+        setPanelTask(currentTask);
+        return;
+      }
+      setLoadingPanelTaskId(taskId);
+      try {
+        const data = await fetchTaskDetail({ sessionId, taskId }).unwrap();
+        if (data.success && data.task) {
+          setPanelTask(data.task as unknown as ImplementationTask);
+        } else {
+          throw new Error(data.message || 'Task not found');
+        }
+      } catch (err) {
+        console.error('Failed to load task detail:', err);
+        toast.error('Could not load this task. Please try again.');
+        setExpandedTaskId(null);
+        setPanelTask(null);
+      } finally {
+        setLoadingPanelTaskId(null);
+      }
+    },
+    [sessionId, fetchTaskDetail, currentTask],
+  );
+
+  const handleSelectTask = useCallback(
+    (taskId: string) => {
+      if (expandedTaskId === taskId) {
+        setExpandedTaskId(null);
+        setPanelTask(null);
+        setLoadingPanelTaskId(null);
+        return;
+      }
+      setExpandedTaskId(taskId);
+      void loadPanelTask(taskId);
+    },
+    [expandedTaskId, loadPanelTask],
+  );
+
   useEffect(() => {
-    setMountedTabs({ task: true });
+    if (autoExpandQueuedRef.current || !nextTaskId || expandedTaskId) return;
+    autoExpandQueuedRef.current = true;
+    setExpandedTaskId(nextTaskId);
+    void loadPanelTask(nextTaskId);
+  }, [nextTaskId, expandedTaskId, loadPanelTask]);
+
+  useEffect(() => {
+    if (!expandedTaskId || !currentTask || currentTask.id !== expandedTaskId) return;
+    setPanelTask((prev) => (prev?.id === expandedTaskId ? currentTask : prev));
+  }, [currentTask, expandedTaskId]);
+
+  useEffect(() => {
+    setMountedTabs({ implementation: true });
     setRoadmapContent('');
+    setExpandedTaskId(null);
+    setPanelTask(null);
+    autoExpandQueuedRef.current = false;
     setExtractionAttempted(false);
     setLocalBusinessContext(null);
 
@@ -372,7 +446,7 @@ const Implementation: React.FC<ImplementationProps> = ({
       }
   };
 
-  const handleTabChange = (tab: 'task' | 'roadmap' | 'budget') => {
+  const handleTabChange = (tab: 'implementation' | 'budget') => {
     setActiveTab(tab);
     setMountedTabs((prev) => (prev[tab] ? prev : { ...prev, [tab]: true }));
   };
@@ -516,7 +590,7 @@ const Implementation: React.FC<ImplementationProps> = ({
 
     const note = data.result?.notes?.trim() ?? '';
 
-    setCurrentTask((taskPrev) => {
+    const applyToTask = (taskPrev: ImplementationTask | null) => {
       if (!taskPrev) return taskPrev;
 
       const substepId = `${taskPrev.id}_substep_${substepNumber}`;
@@ -537,7 +611,10 @@ const Implementation: React.FC<ImplementationProps> = ({
       });
 
       return applySubstepCompletionToTask(taskPrev, substepNumber, note, completedIds);
-    });
+    };
+
+    setCurrentTask(applyToTask);
+    setPanelTask((prev) => (prev ? applyToTask(prev) : prev));
   };
 
   const handleTaskCompletion = async (completionData: any) => {
@@ -577,20 +654,24 @@ const Implementation: React.FC<ImplementationProps> = ({
     if (completionData?.success) {
       applyCompletionFromResponse(completionData);
     }
-    if (currentTask?.id) {
-      invalidateTaskScopedCache(currentTask.id);
+    const taskId = expandedTaskId ?? currentTask?.id;
+    if (taskId) {
+      invalidateTaskScopedCache(taskId);
     }
     await loadImplementationData({ silent: true });
+    if (expandedTaskId) {
+      await loadPanelTask(expandedTaskId);
+    }
     await refreshCompletedRoadmapStepKeys();
   };
 
   const handleGetServiceProviders = async () => {
-    if (!currentTask || contactProvidersLoading) return;
+    if (!activeSupportTask || contactProvidersLoading) return;
 
     try {
       const data = await fetchContactProviders({
         sessionId,
-        taskId: currentTask.id,
+        taskId: activeSupportTask.id,
       }).unwrap();
 
       if (data.success) {
@@ -608,7 +689,7 @@ const Implementation: React.FC<ImplementationProps> = ({
   const [pendingHelpModal, setPendingHelpModal] = useState(false);
 
   const handleGetHelp = () => {
-    if (!currentTask) return;
+    if (!activeSupportTask) return;
     if (helpContent) {
       setShowHelpModal(true);
       return;
@@ -624,14 +705,14 @@ const Implementation: React.FC<ImplementationProps> = ({
   }, [pendingHelpModal, helpContent]);
 
   const handleUploadDocument = async (file: File) => {
-    if (!currentTask) return;
+    if (!activeSupportTask) return;
 
     try {
       const formData = new FormData();
       formData.append('file', file);
 
       const { data } = await httpClient.post<any>(
-        `/implementation/sessions/${sessionId}/tasks/${currentTask.id}/upload-document`,
+        `/implementation/sessions/${sessionId}/tasks/${activeSupportTask.id}/upload-document`,
         formData
       );
       
@@ -902,9 +983,9 @@ const Implementation: React.FC<ImplementationProps> = ({
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="-mb-px flex gap-1 overflow-x-auto overscroll-x-contain">
             <motion.button
-              onClick={() => handleTabChange('task')}
+              onClick={() => handleTabChange('implementation')}
               className={`relative py-4 px-6 font-semibold text-sm rounded-t-xl transition-all duration-300 ${
-                activeTab === 'task'
+                activeTab === 'implementation'
                   ? 'text-teal-700 bg-gradient-to-b from-teal-50/50 to-white'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50/50'
               }`}
@@ -912,37 +993,12 @@ const Implementation: React.FC<ImplementationProps> = ({
               whileTap={{ scale: 0.98 }}
             >
               <div className="flex items-center gap-2">
-                <div className={`p-1.5 rounded-lg ${activeTab === 'task' ? 'bg-teal-100' : 'bg-gray-100'}`}>
-                <Target className={`h-4 w-4 ${activeTab === 'task' ? 'text-teal-600' : 'text-gray-500'}`} />
+                <div className={`p-1.5 rounded-lg ${activeTab === 'implementation' ? 'bg-teal-100' : 'bg-gray-100'}`}>
+                <Rocket className={`h-4 w-4 ${activeTab === 'implementation' ? 'text-teal-600' : 'text-gray-500'}`} />
                 </div>
-                <span>Current Task</span>
+                <span>Implementation</span>
               </div>
-              {activeTab === 'task' && (
-                <motion.div
-                  className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-500 via-blue-500 to-teal-500 rounded-t-full"
-                  layoutId="activeTab"
-                  initial={false}
-                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                />
-              )}
-            </motion.button>
-            <motion.button
-              onClick={() => handleTabChange('roadmap')}
-              className={`relative py-4 px-6 font-semibold text-sm rounded-t-xl transition-all duration-300 ${
-                activeTab === 'roadmap'
-                  ? 'text-teal-700 bg-gradient-to-b from-teal-50/50 to-white'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50/50'
-              }`}
-              whileHover={{ scale: 1.02, y: -1 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <div className="flex items-center gap-2">
-                <div className={`p-1.5 rounded-lg ${activeTab === 'roadmap' ? 'bg-teal-100' : 'bg-gray-100'}`}>
-                <FileText className={`h-4 w-4 ${activeTab === 'roadmap' ? 'text-teal-600' : 'text-gray-500'}`} />
-                </div>
-                <span>Full Roadmap</span>
-              </div>
-              {activeTab === 'roadmap' && (
+              {activeTab === 'implementation' && (
                 <motion.div
                   className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-500 via-blue-500 to-teal-500 rounded-t-full"
                   layoutId="activeTab"
@@ -982,86 +1038,122 @@ const Implementation: React.FC<ImplementationProps> = ({
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <AnimatePresence mode="wait">
-          {activeTab === 'task' && (
+          {activeTab === 'implementation' && mountedTabs.implementation && (
             <motion.div
-              key="task"
+              key="implementation"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
-              className="w-full"
+              className="w-full space-y-6"
             >
-              <TaskCard
-                task={currentTask}
-                onComplete={handleSubstepCompletion}
-                onSubstepFocus={(stepNumber) =>
-                  setCurrentTask((prev) =>
-                    prev ? { ...prev, current_substep: stepNumber } : prev,
-                  )
-                }
-                isRefreshing={isRefreshingTask}
-                onGetServiceProviders={handleGetServiceProviders}
-                onGetHelp={handleGetHelp}
-                onUploadDocument={handleUploadDocument}
-                sessionId={sessionId}
-                helpContent={helpContent}
-                helpLoading={helpLoading || helpFetching}
-              />
+              {loading && !taskCatalog.length ? (
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-200/80 bg-white py-16 shadow-sm">
+                  <div className="h-12 w-12 animate-spin rounded-full border-4 border-teal-200 border-t-teal-600" />
+                  <span className="mt-4 text-base font-semibold text-gray-700">Loading implementation roadmap…</span>
+                </div>
+              ) : taskCatalog.length > 0 ? (
+                <>
+                  <ImplementationRoadmapNavigator
+                    phases={taskCatalog}
+                    expandedTaskId={expandedTaskId}
+                    nextTaskId={nextTaskId}
+                    loadingTaskId={loadingPanelTaskId}
+                    onSelectTask={handleSelectTask}
+                    expandedPanel={
+                      loadingPanelTaskId && !panelTask ? (
+                        <div className="flex items-center justify-center gap-2 py-12 text-gray-600">
+                          <div className="h-8 w-8 animate-spin rounded-full border-4 border-teal-200 border-t-teal-600" />
+                          <span className="text-sm font-medium">Loading task details…</span>
+                        </div>
+                      ) : panelTask ? (
+                        <TaskCard
+                          task={panelTask}
+                          onComplete={handleSubstepCompletion}
+                          onSubstepFocus={(stepNumber) => {
+                            const patch = (prev: ImplementationTask | null) =>
+                              prev ? { ...prev, current_substep: stepNumber } : prev;
+                            setPanelTask(patch);
+                            if (currentTask?.id === panelTask.id) {
+                              setCurrentTask(patch);
+                            }
+                          }}
+                          isRefreshing={isRefreshingTask && currentTask?.id === panelTask.id}
+                          onGetServiceProviders={handleGetServiceProviders}
+                          onGetHelp={handleGetHelp}
+                          onUploadDocument={handleUploadDocument}
+                          sessionId={sessionId}
+                          helpContent={helpContent}
+                          helpLoading={helpLoading || helpFetching}
+                        />
+                      ) : (
+                        <p className="py-8 text-center text-sm text-gray-500">
+                          Select a task above to view and complete substeps.
+                        </p>
+                      )
+                    }
+                  />
+
+                  <div className="rounded-xl border border-gray-200/80 bg-white shadow-sm overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setShowRoadmapDocument((v) => !v)}
+                      className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left hover:bg-gray-50/80 sm:px-5"
+                    >
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-5 w-5 text-teal-600 shrink-0" />
+                        <span className="text-sm font-semibold text-gray-900">
+                          Detailed launch roadmap document
+                        </span>
+                      </div>
+                      <span className="text-xs font-medium text-teal-700">
+                        {showRoadmapDocument ? 'Hide' : 'Show'}
+                      </span>
+                    </button>
+                    {showRoadmapDocument ? (
+                      <div className="border-t border-gray-100 px-2 pb-4 sm:px-4">
+                        {roadmapLoading ? (
+                          <div className="flex justify-center py-12">
+                            <div className="h-10 w-10 animate-spin rounded-full border-4 border-teal-200 border-t-teal-600" />
+                          </div>
+                        ) : roadmapContent ? (
+                          <RoadmapDisplay
+                            embedded
+                            businessName={displayBusinessName}
+                            roadmapContent={roadmapContent}
+                            onStartImplementation={() => {}}
+                            onEditRoadmap={(modified) => setRoadmapContent(modified)}
+                            loading={false}
+                            sessionId={sessionId}
+                            hideStartButton
+                            completedRoadmapStepKeys={completedRoadmapStepKeys}
+                          />
+                        ) : (
+                          <div className="py-8 text-center">
+                            <p className="mb-3 text-sm text-gray-600">Roadmap document not loaded yet.</p>
+                            <button
+                              type="button"
+                              onClick={() => void refetchRoadmap()}
+                              className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
+                            >
+                              Load document
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-2xl border border-gray-200/80 bg-white py-12 text-center shadow-sm">
+                  <p className="text-gray-600">No implementation tasks available yet.</p>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
 
         <AnimatePresence mode="wait">
-          {activeTab === 'roadmap' && mountedTabs.roadmap && (
-            <motion.div
-              key="roadmap"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-              className="w-full"
-            >
-            {roadmapLoading ? (
-              <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-200/80 bg-white/95 py-16 shadow-lg backdrop-blur-xl">
-                <div className="relative">
-                  <div className="h-12 w-12 animate-spin rounded-full border-4 border-teal-200 border-t-teal-600" />
-                </div>
-                <span className="mt-4 text-base font-semibold text-gray-700">Loading roadmap…</span>
-              </div>
-            ) : roadmapContent ? (
-              <RoadmapDisplay
-                embedded
-                businessName={displayBusinessName}
-                roadmapContent={roadmapContent}
-                onStartImplementation={() => {}}
-                onEditRoadmap={(modified) => {
-                  setRoadmapContent(modified);
-                }}
-                loading={false}
-                sessionId={sessionId}
-                hideStartButton={true}
-                completedRoadmapStepKeys={completedRoadmapStepKeys}
-              />
-            ) : (
-              <div className="rounded-2xl border border-gray-200/80 bg-white/95 py-12 text-center shadow-lg backdrop-blur-xl">
-                <div className="mb-4 inline-flex rounded-xl bg-gradient-to-br from-teal-100 to-blue-100 p-3">
-                  <FileText className="h-10 w-10 text-teal-600" />
-                </div>
-                <p className="mb-2 text-lg font-semibold text-gray-700">Roadmap not loaded</p>
-                <p className="mb-5 text-sm text-gray-500">View your full launch plan with all stages and tasks</p>
-                <motion.button
-                  onClick={() => void refetchRoadmap()}
-                  className="rounded-lg bg-gradient-to-r from-teal-500 to-blue-600 px-6 py-2.5 font-semibold text-white shadow-md transition-all hover:from-teal-600 hover:to-blue-700 hover:shadow-lg"
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                >
-                  Load Roadmap
-                </motion.button>
-              </div>
-            )}
-            </motion.div>
-          )}
-          
           {activeTab === 'budget' && mountedTabs.budget && (
             <motion.div
               key="budget"
@@ -1117,7 +1209,7 @@ const Implementation: React.FC<ImplementationProps> = ({
       <TaskCompletionModal
         isOpen={showCompletionModal}
         onClose={() => setShowCompletionModal(false)}
-        task={currentTask}
+        task={panelTask ?? currentTask}
         onComplete={handleTaskCompletion}
       />
 
@@ -1125,14 +1217,14 @@ const Implementation: React.FC<ImplementationProps> = ({
         isOpen={showServiceProviderModal}
         onClose={() => setShowServiceProviderModal(false)}
         providers={serviceProviders}
-        task={currentTask}
+        task={activeSupportTask}
       />
 
             <HelpModal
               isOpen={showHelpModal}
               onClose={() => setShowHelpModal(false)}
               helpContent={helpContent}
-              task={currentTask}
+              task={activeSupportTask}
             />
 
             {/* Implementation Completion Modal */}
@@ -1147,13 +1239,15 @@ const Implementation: React.FC<ImplementationProps> = ({
             />
 
       {/* Floating Comprehensive Support - Only show in business phases, not GKY */}
-      {currentTask && currentTask.phase_name && !currentTask.phase_name.toLowerCase().includes('gky') && (
+      {activeSupportTask &&
+        activeSupportTask.phase_name &&
+        !activeSupportTask.phase_name.toLowerCase().includes('gky') && (
         <FloatingComprehensiveSupport
-          taskContext={currentTask?.title || 'general business support'}
+          taskContext={activeSupportTask.title || 'general business support'}
           businessContext={businessContext}
-          angelCanHelp={currentTask?.angel_actions || []}
+          angelCanHelp={activeSupportTask.angel_actions || []}
           sessionId={sessionId}
-          currentTask={currentTask}
+          currentTask={activeSupportTask}
         />
       )}
       
