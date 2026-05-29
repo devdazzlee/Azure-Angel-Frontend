@@ -50,12 +50,14 @@ const HELP_ITEMS = [
   },
 ] as const;
 
-const JOURNEY_STEPS = [
+type JourneyStep = { text: string; done?: boolean; current?: boolean };
+
+const JOURNEY_STEPS: JourneyStep[] = [
   { text: 'You started with an idea', done: true },
   { text: "You've built a comprehensive plan", done: true },
   { text: "You've created a detailed roadmap", done: true },
   { text: "Now we'll bring it all to life, step by step", current: true },
-] as const;
+];
 
 interface RoadmapToImplementationTransitionProps {
   businessName: string;

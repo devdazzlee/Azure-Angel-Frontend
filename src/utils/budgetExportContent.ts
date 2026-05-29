@@ -16,7 +16,9 @@ function itemsTable(title: string, items: { name: string; estimated_amount: numb
 /** Structured markdown for PDF/DOCX export when HTML snapshot is not used. */
 export function buildBudgetMarkdownForExport(budget: Budget, businessName?: string): string {
   const name = businessName?.trim() || 'Business Budget';
-  const startup = budget.items.filter((i) => i.category === 'startup' || i.id.startsWith('startup_'));
+  const startup = budget.items.filter(
+    (i) => i.subcategory === 'startup_cost' || i.id.startsWith('startup_'),
+  );
   const revenue = budget.items.filter((i) => i.category === 'revenue');
   const expense = budget.items.filter(
     (i) =>
