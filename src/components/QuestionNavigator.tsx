@@ -62,8 +62,8 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
   const bpCurrentQuestionNumber = Math.min(Math.max(currentQuestionNumber ?? 1, 1), bpTotal);
 
   return (
-    <div className={`flex flex-col min-h-0 w-full max-w-80 ${className}`}>
-      <div className="shrink-0 space-y-4 overflow-hidden">
+    <div className={`flex w-full max-w-80 flex-col ${className}`}>
+      <div className="space-y-4">
       {/* Overall Progress Overview - Hidden during GKY phase (no progress bars in GKY) */}
       {currentPhase !== 'GKY' && (
         <div className="bg-white shadow-xl rounded-xl overflow-hidden border border-gray-100 hover:shadow-2xl transition-all duration-300">
@@ -129,12 +129,12 @@ const QuestionNavigator: React.FC<QuestionNavigatorProps> = ({
       )}
       </div>
 
-      {currentPhase === 'BUSINESS_PLAN' && (
+      {/* {currentPhase === 'BUSINESS_PLAN' && (
         <BusinessPlanSidebarTrail
           currentQuestionNumber={bpCurrentQuestionNumber}
-          className="mt-4 flex-1 min-h-[10rem]"
+          className="mt-4"
         />
-      )}
+      )} */}
     </div>
   );
 };

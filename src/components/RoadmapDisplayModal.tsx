@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { toast } from "react-toastify";
 import { parseRoadmapMarkdown } from "../utils/roadmapParse";
+import DocumentExportModal from "./DocumentExportModal";
 import {
-  downloadRoadmapExcel,
-  downloadRoadmapWord,
-} from "../utils/roadmapExport";
+  roadmapFooterActionsRow,
+  roadmapFooterBtnDownload,
+  roadmapFooterBtnProceed,
+} from "./roadmapFooterButtons";
 
 interface RoadmapDisplayModalProps {
   open: boolean;
@@ -23,7 +24,7 @@ const RoadmapDisplayModal: React.FC<RoadmapDisplayModalProps> = ({
   error,
   onProceedToImplementation,
 }) => {
-  const [exporting, setExporting] = useState<"excel" | "word" | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   if (!open) return null;
 
@@ -42,30 +43,6 @@ const RoadmapDisplayModal: React.FC<RoadmapDisplayModalProps> = ({
       }
     }
   }, [roadmapContent, stages.length]);
-
-  const handleExportExcel = () => {
-    setExporting("excel");
-    try {
-      downloadRoadmapExcel(stages, roadmapContent);
-      toast.success("Roadmap saved as Excel (.xlsx).");
-    } catch {
-      toast.error("Failed to export roadmap to Excel.");
-    } finally {
-      setExporting(null);
-    }
-  };
-
-  const handleExportWord = async () => {
-    setExporting("word");
-    try {
-      await downloadRoadmapWord(stages, roadmapContent);
-      toast.success("Roadmap saved as Word (.docx).");
-    } catch {
-      toast.error("Failed to export roadmap to Word.");
-    } finally {
-      setExporting(null);
-    }
-  };
 
   const getStatusIcon = (status: string) => {
     const statusText = status.trim().toLowerCase();
@@ -247,59 +224,23 @@ const RoadmapDisplayModal: React.FC<RoadmapDisplayModalProps> = ({
 
           {/* Footer Actions */}
           {!loading && !error && roadmapContent.trim() && (
-            <div className="mt-8 flex flex-wrap gap-3 justify-center border-t border-gray-200 pt-6">
+            <div className={`${roadmapFooterActionsRow} mt-8 pt-6`}>
               <button
                 type="button"
-                onClick={handleExportExcel}
-                disabled={exporting !== null}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg shadow-sm flex items-center gap-2 transition-colors font-medium"
+                onClick={() => setShowExportModal(true)}
+                className={roadmapFooterBtnDownload}
               >
-                {exporting === "excel" ? (
-                  <>
-                    <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Exporting…
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Download Excel
-                  </>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleExportWord()}
-                disabled={exporting !== null}
-                className="bg-slate-700 hover:bg-slate-800 disabled:bg-slate-400 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg shadow-sm flex items-center gap-2 transition-colors font-medium"
-              >
-                {exporting === "word" ? (
-                  <>
-                    <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Exporting…
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Download Word
-                  </>
-                )}
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Download
               </button>
               {onProceedToImplementation && (
                 <button
+                  type="button"
                   onClick={onProceedToImplementation}
-                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-8 py-3 rounded-lg shadow-lg flex items-center gap-2 transition-all font-semibold transform hover:scale-105"
+                  className={roadmapFooterBtnProceed}
                 >
-                  <span className="text-xl">🚀</span>
                   Proceed to Implementation
                 </button>
               )}
@@ -307,6 +248,14 @@ const RoadmapDisplayModal: React.FC<RoadmapDisplayModalProps> = ({
           )}
         </div>
       </div>
+
+      <DocumentExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        documentTitle="Launch Roadmap"
+        documentContent={roadmapContent}
+        documentType="roadmap"
+      />
     </div>
   );
 };

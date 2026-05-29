@@ -8,8 +8,8 @@ interface BusinessPlanSidebarTrailProps {
 }
 
 /**
- * Supplementary sidebar panel — fills space below the approved Progress Overview
- * and Business plan journey cards. Does not modify those components.
+ * Scrollable list of all 9 BP sections (below Progress Overview + journey stepper).
+ * Parent sidebar scrolls so this panel is never clipped at the viewport bottom.
  */
 const BusinessPlanSidebarTrail: React.FC<BusinessPlanSidebarTrailProps> = ({
   currentQuestionNumber,
@@ -29,19 +29,19 @@ const BusinessPlanSidebarTrail: React.FC<BusinessPlanSidebarTrailProps> = ({
 
   return (
     <div
-      className={`flex flex-col min-h-0 rounded-xl border border-gray-100/90 bg-white/90 shadow-sm backdrop-blur-sm ${className}`}
-      aria-label="Full business plan section map"
+      className={`rounded-xl border border-gray-100/90 bg-white/90 shadow-sm backdrop-blur-sm ${className}`}
+      aria-label="All business plan sections"
     >
-      <div className="shrink-0 border-b border-gray-100 px-4 py-3 bg-gradient-to-r from-slate-50/90 to-teal-50/50">
+      <div className="border-b border-gray-100 px-4 py-3 bg-gradient-to-r from-slate-50/90 to-teal-50/50">
         <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-          Full section map
+          All sections
         </h4>
         <p className="mt-0.5 text-[11px] text-gray-500 leading-snug">
           {completedCount} of {BUSINESS_PLAN_SECTIONS.length} sections complete
         </p>
       </div>
 
-      <ol className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-3 space-y-1.5">
+      <ol className="px-3 py-3 space-y-1.5">
         {rows.map(({ section, idx, isCurrent, isComplete }) => (
           <li
             key={section.id}
@@ -90,7 +90,7 @@ const BusinessPlanSidebarTrail: React.FC<BusinessPlanSidebarTrailProps> = ({
         ))}
       </ol>
 
-      <div className="shrink-0 border-t border-teal-100/80 bg-gradient-to-t from-teal-50/80 to-transparent px-4 py-3">
+      <div className="border-t border-teal-100/80 bg-gradient-to-t from-teal-50/80 to-transparent px-4 py-3">
         <p className="text-[10px] leading-relaxed text-teal-800/90 text-center">
           Your launch roadmap unlocks when all 45 questions are complete.
         </p>

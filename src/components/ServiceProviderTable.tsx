@@ -5,6 +5,7 @@ import { Loader2, MapPin, Globe, Building2, DollarSign, Star, CheckCircle, Alert
 import httpClient from '../api/httpClient';
 import ServiceProviderDetailModal from './ServiceProviderDetailModal';
 import BusinessContextDisplay from './BusinessContextDisplay';
+import { normalizeSpecialties } from '../utils/serviceProvider';
 
 interface ServiceProvider {
   name: string;
@@ -14,7 +15,7 @@ interface ServiceProvider {
   key_considerations: string;
   estimated_cost: string;
   contact_method: string;
-  specialties: string;
+  specialties?: string | string[];
   category: string;
 }
 
@@ -282,13 +283,18 @@ const ServiceProviderTable: React.FC<ServiceProviderTableProps> = ({
                 </div>
 
                 {/* Specialties */}
-                {provider.specialties && (
+                {normalizeSpecialties(provider.specialties).length > 0 && (
                   <div className="mb-3">
                     <div className="text-xs font-medium text-gray-600 mb-1">Specialties:</div>
                     <div className="flex flex-wrap gap-1">
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        {provider.specialties}
-                      </span>
+                      {normalizeSpecialties(provider.specialties).map((specialty) => (
+                        <span
+                          key={specialty}
+                          className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                        >
+                          {specialty}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 )}

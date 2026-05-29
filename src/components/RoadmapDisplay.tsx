@@ -5,6 +5,7 @@ import PaymentForm from './PaymentForm';
 import { PRICING } from '../config/pricing';
 import { checkIsFreeIntroPeriod } from '../utils/freeIntroPeriod';
 import { isRoadmapStepCompleted } from '../utils/roadmapMatching';
+import { isRoadmapStageHeaderLine, stripInlineMarkdown } from '../utils/roadmapParse';
 import httpClient from '../api/httpClient';
 
 // Feature flag: the "Why This Roadmap Works" stats are hidden until we have
@@ -24,6 +25,9 @@ interface RoadmapDisplayProps {
   // instead of relying on the LLM-generated Status column (which is just
   // a guess at generation time).
   completedRoadmapStepKeys?: string[];
+  /** Compact layout for Implementation tab (no duplicate chrome or marketing blocks). */
+  embedded?: boolean;
+  businessName?: string;
 }
 
 interface EditSection {
@@ -41,14 +45,15 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
   loading = false,
   sessionId,
   hideStartButton = false,
-  completedRoadmapStepKeys = []
+  completedRoadmapStepKeys = [],
+  embedded = false,
+  businessName,
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editSections, setEditSections] = useState<EditSection[]>([]);
-  const [editingSection, setEditingSection] = useState<EditSection | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [hasPaid, setHasPaid] = useState(false); // Track payment status
 
@@ -110,6 +115,50 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
       .replace(/<br>/g, '<br/>')
       .replace(/\n/g, '<br/>');
 
+  // Format non-table content (bold, italics, lists, etc.)
+  const formatNonTableContent = (text: string, forExport = false): string => {
+    const headingClass = (tag: 'h1' | 'h2' | 'h3') => {
+      if (forExport) return '';
+      if (tag === 'h1') return ' class="text-3xl font-bold text-gray-900 mb-4 mt-6 border-b-2 border-blue-500 pb-2"';
+      if (tag === 'h2') return ' class="text-2xl font-bold text-gray-800 mb-3 mt-5 border-l-4 border-indigo-500 pl-3"';
+      return ' class="text-xl font-semibold text-gray-700 mb-2 mt-4"';
+    };
+
+    const styled = text
+      .replace(/\*\*(.*?)\*\*/g, `<strong${forExport ? '' : ' class="font-bold text-gray-900"'}>$1</strong>`)
+      .replace(/\*(.*?)\*/g, `<em${forExport ? '' : ' class="italic text-gray-700"'}>$1</em>`)
+      .replace(/^# (.*$)/gim, (_, title) => `<h1${headingClass('h1')}>${stripInlineMarkdown(title)}</h1>`)
+      .replace(/^## (.*$)/gim, (_, title) => `<h2${headingClass('h2')}>${stripInlineMarkdown(title)}</h2>`)
+      .replace(/^### (.*$)/gim, (_, title) => `<h3${headingClass('h3')}>${stripInlineMarkdown(title)}</h3>`)
+      .replace(/^---$/gim, '<hr class="my-6 border-gray-300"/>')
+      .replace(/^• (.*$)/gim, '<li class="ml-4">$1</li>')
+      .replace(/^- (.*$)/gim, '<li class="ml-4">$1</li>')
+      .replace(/\*\*/g, '');
+
+    return styled
+      .replace(/\n\n/g, '<br/><br/>')
+      .replace(/\n/g, '<br/>');
+  };
+
+  const isMarkdownTableSeparatorRow = (line: string): boolean =>
+    /^\|[\s\-:|]+\|?$/.test(line.trim());
+
+  const isSkippableNonTableLine = (trimmed: string): boolean => {
+    if (!trimmed) return true;
+    if (/^---+$/.test(trimmed)) return true;
+    if (/^[*_~`>#-]+$/.test(trimmed)) return true;
+    if (embedded) {
+      if (/^(your journey|why execution|ready to begin|research-backed|actionable tasks)/i.test(trimmed)) {
+        return true;
+      }
+      if (/^🚀/.test(trimmed)) return true;
+    }
+    return false;
+  };
+
+  const hasRenderableNonTableText = (lines: string[]): boolean =>
+    lines.some((line) => !isSkippableNonTableLine(line.trim()));
+
   // Helper function to render markdown tables as HTML tables
   const renderMarkdownTable = (content: string): React.ReactNode => {
     // Split content by lines
@@ -121,28 +170,43 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
     let currentPhaseTitle = '';
 
     const flushNonTableContent = (key: string) => {
-      if (nonTableContent.length > 0) {
-        const formattedText = formatNonTableContent(nonTableContent.join('\n'));
-        elements.push(
-          <div key={key} className="mb-6" dangerouslySetInnerHTML={{ __html: formattedText }} />
-        );
+      if (!hasRenderableNonTableText(nonTableContent)) {
         nonTableContent = [];
+        return;
       }
+      const formattedText = formatNonTableContent(nonTableContent.join('\n'));
+      const plain = formattedText.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
+      if (!plain) {
+        nonTableContent = [];
+        return;
+      }
+      elements.push(
+        <div
+          key={key}
+          className={embedded ? 'mb-3 text-sm text-gray-600' : 'mb-6'}
+          dangerouslySetInnerHTML={{ __html: formattedText }}
+        />
+      );
+      nonTableContent = [];
     };
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const trimmedLine = line.trim();
 
-      if (trimmedLine.startsWith('###')) {
-        currentPhaseTitle = trimmedLine.replace(/^###\s*/, '').trim();
-      } else if (/^\*\*Roadmap Steps -/i.test(trimmedLine)) {
-        currentPhaseTitle = trimmedLine.replace(/\*\*/g, '').replace(/:$/, '').trim();
+      if (isRoadmapStageHeaderLine(trimmedLine)) {
+        currentPhaseTitle = stripInlineMarkdown(trimmedLine);
         continue;
-      } else if (/^\*\*Service Providers/i.test(trimmedLine)) {
-        currentPhaseTitle = trimmedLine.replace(/\*\*/g, '').replace(/:$/, '').trim();
       }
-      
+      if (/^\*\*Roadmap Steps -/i.test(trimmedLine)) {
+        currentPhaseTitle = stripInlineMarkdown(trimmedLine.replace(/:$/, ''));
+        continue;
+      }
+      if (/^\*\*Service Providers/i.test(trimmedLine)) {
+        currentPhaseTitle = stripInlineMarkdown(trimmedLine.replace(/:$/, ''));
+        continue;
+      }
+
       // Check if line is a table row (starts with |)
       if (trimmedLine.startsWith('|')) {
         if (!inTable) {
@@ -157,7 +221,9 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
           tableLines = [];
           inTable = false;
         }
-        nonTableContent.push(line);
+        if (!isSkippableNonTableLine(trimmedLine)) {
+          nonTableContent.push(line);
+        }
       }
     }
 
@@ -167,24 +233,11 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
     }
     flushNonTableContent('text-final');
 
-    return <>{elements}</>;
-  };
-
-  // Format non-table content (bold, italics, lists, etc.)
-  const formatNonTableContent = (text: string, forExport = false): string => {
-    const styled = text
-      .replace(/\*\*(.*?)\*\*/g, `<strong${forExport ? '' : ' class="font-bold text-gray-900"'}>$1</strong>`)
-      .replace(/\*(.*?)\*/g, `<em${forExport ? '' : ' class="italic text-gray-700"'}>$1</em>`)
-      .replace(/^# (.*$)/gim, `<h1${forExport ? '' : ' class="text-3xl font-bold text-gray-900 mb-4 mt-6 border-b-2 border-blue-500 pb-2"'}>$1</h1>`)
-      .replace(/^## (.*$)/gim, `<h2${forExport ? '' : ' class="text-2xl font-bold text-gray-800 mb-3 mt-5 border-l-4 border-indigo-500 pl-3"'}>$1</h2>`)
-      .replace(/^### (.*$)/gim, `<h3${forExport ? '' : ' class="text-xl font-semibold text-gray-700 mb-2 mt-4"'}>$1</h3>`)
-      .replace(/^---$/gim, '<hr class="my-6 border-gray-300"/>')
-      .replace(/^• (.*$)/gim, '<li class="ml-4">$1</li>')
-      .replace(/^- (.*$)/gim, '<li class="ml-4">$1</li>');
-
-    return styled
-      .replace(/\n\n/g, '<br/><br/>')
-      .replace(/\n/g, '<br/>');
+    return (
+      <div className={embedded ? 'space-y-4' : undefined}>
+        {elements}
+      </div>
+    );
   };
 
   // Render a markdown table as an HTML table
@@ -197,15 +250,23 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
       .filter(cell => cell.trim())
       .map(cell => cell.trim());
 
+    const taskIdx = headerCells.findIndex((h) => h.toLowerCase().includes('task'));
+
     // Skip separator line (lines[1])
     // Parse data rows
-    const dataRows = lines.slice(2)
-      .filter(line => line.trim())
-      .map(line => 
-        line.split('|')
-          .filter(cell => cell.trim())
-          .map(cell => cell.trim())
-      );
+    const dataRows = lines
+      .slice(2)
+      .filter((line) => line.trim() && !isMarkdownTableSeparatorRow(line))
+      .map((line) =>
+        line
+          .split('|')
+          .filter((cell) => cell.trim())
+          .map((cell) => cell.trim())
+      )
+      .filter((row) => {
+        const taskCell = taskIdx >= 0 ? row[taskIdx] : row[0];
+        return Boolean(taskCell?.replace(/[—\-⏳🔜\s|]/g, '').trim());
+      });
 
     // Check if this is a research source table (has "Research Source" or "Key Findings" column)
     const isResearchTable = headerCells.some(h => 
@@ -237,26 +298,26 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
     // overlaid from real Implementation completions instead of using the
     // LLM-generated value.
     if (isRoadmapTable) {
-      const taskIdx = headerCells.findIndex(h => h.toLowerCase().includes('task'));
       const descIdx = headerCells.findIndex(h => h.toLowerCase().includes('description'));
       const angelIdx = headerCells.findIndex(h => h.toLowerCase().includes("angel"));
 
+      const stageTableShell = embedded
+        ? 'rounded-xl border border-indigo-200 shadow-sm overflow-hidden'
+        : 'mb-6 sm:mb-8 md:mb-10 rounded-xl sm:rounded-2xl md:rounded-3xl border border-indigo-200 shadow-[0_10px_30px_rgba(79,70,229,0.12)] overflow-hidden';
+
       return (
-        <div
-          key={key}
-          className="mb-6 sm:mb-8 md:mb-10 rounded-xl sm:rounded-2xl md:rounded-3xl border border-indigo-200 shadow-[0_10px_30px_rgba(79,70,229,0.12)] overflow-hidden"
-        >
+        <div key={key} className={stageTableShell}>
           <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-sky-500 px-4 sm:px-5 md:px-6 py-3 sm:py-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <h4 className="text-white text-base sm:text-lg font-semibold tracking-wide">
-                {contextTitle || 'Roadmap Tasks'}
+                {stripInlineMarkdown(contextTitle || '') || 'Roadmap Tasks'}
               </h4>
               <span className="text-indigo-100 text-[10px] sm:text-xs uppercase tracking-wider sm:tracking-[0.2em]">
                 Sequential Execution
               </span>
             </div>
           </div>
-          <div className="overflow-x-auto bg-gradient-to-br from-white via-white to-indigo-50/20">
+          <div className="overflow-x-auto bg-white">
             <table className="min-w-full border-separate border-spacing-0">
               <thead>
                 <tr className="bg-white">
@@ -341,14 +402,14 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
           <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-sky-500 px-4 sm:px-5 md:px-6 py-3 sm:py-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <h4 className="text-white text-base sm:text-lg font-semibold tracking-wide">
-                {contextTitle || 'Roadmap Steps'}
+                {stripInlineMarkdown(contextTitle || '') || 'Roadmap Steps'}
               </h4>
               <span className="text-indigo-100 text-[10px] sm:text-xs uppercase tracking-wider sm:tracking-[0.2em]">
                 Sequential Execution
               </span>
             </div>
           </div>
-          <div className="overflow-x-auto bg-gradient-to-br from-white via-white to-indigo-50/20">
+          <div className="overflow-x-auto bg-white">
             <table className="min-w-full border-separate border-spacing-0">
               <thead>
                 <tr className="bg-white">
@@ -518,7 +579,7 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
           <div style="background:linear-gradient(90deg,#4f46e5 0%, #7c3aed 50%, #0ea5e9 100%); padding:16px 24px;">
             <table style="width:100%; color:#fff;">
               <tr>
-                <td style="font-size:18px; font-weight:600;">${contextTitle || 'Roadmap Steps'}</td>
+                <td style="font-size:18px; font-weight:600;">${stripInlineMarkdown(contextTitle || '') || 'Roadmap Steps'}</td>
                 <td style="text-align:right; font-size:10px; letter-spacing:0.3em; text-transform:uppercase; color:rgba(255,255,255,0.75);">Sequential Execution</td>
               </tr>
             </table>
@@ -604,13 +665,17 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
       const line = lines[i];
       const trimmedLine = line.trim();
 
-      if (trimmedLine.startsWith('###')) {
-        currentPhaseTitle = trimmedLine.replace(/^###\s*/, '').trim();
-      } else if (/^\*\*Roadmap Steps -/i.test(trimmedLine)) {
-        currentPhaseTitle = trimmedLine.replace(/\*\*/g, '').replace(/:$/, '').trim();
+      if (isRoadmapStageHeaderLine(trimmedLine)) {
+        currentPhaseTitle = stripInlineMarkdown(trimmedLine);
         continue;
-      } else if (/^\*\*Service Providers/i.test(trimmedLine)) {
-        currentPhaseTitle = trimmedLine.replace(/\*\*/g, '').replace(/:$/, '').trim();
+      }
+      if (/^\*\*Roadmap Steps -/i.test(trimmedLine)) {
+        currentPhaseTitle = stripInlineMarkdown(trimmedLine.replace(/:$/, ''));
+        continue;
+      }
+      if (/^\*\*Service Providers/i.test(trimmedLine)) {
+        currentPhaseTitle = stripInlineMarkdown(trimmedLine.replace(/:$/, ''));
+        continue;
       }
 
       if (trimmedLine.startsWith('|')) {
@@ -665,76 +730,83 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
 </html>`;
   };
 
-  // Parse roadmap content into editable sections
+  // Parse roadmap content into editable sections (Founderport Stage format + legacy Phase format)
   const parseRoadmapSections = (content: string): EditSection[] => {
     const sections: EditSection[] = [];
     const lines = content.split('\n');
     let currentSection: EditSection | null = null;
     let sectionContent: string[] = [];
+    let preamble: string[] = [];
+
+    const flushSection = () => {
+      if (currentSection) {
+        sections.push({
+          ...currentSection,
+          content: sectionContent.join('\n'),
+        });
+      }
+      currentSection = null;
+      sectionContent = [];
+    };
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      
-      // Check for phase headers (### 5. Phase X:)
-      if (line.match(/^### \d+\. Phase \d+/)) {
-        if (currentSection) {
-          sections.push({
-            ...currentSection,
-            content: sectionContent.join('\n')
-          });
-        }
+      const trimmed = line.trim();
+
+      if (isRoadmapStageHeaderLine(trimmed)) {
+        flushSection();
+        currentSection = {
+          id: `stage-${sections.length + 1}`,
+          title: stripInlineMarkdown(trimmed),
+          content: '',
+          type: 'phase',
+          phase: trimmed.match(/Stage\s+\d+/i)?.[0],
+        };
+        sectionContent = [line];
+      } else if (line.match(/^### \d+\. Phase \d+/)) {
+        flushSection();
         currentSection = {
           id: `phase-${sections.length + 1}`,
           title: line.replace(/^### \d+\. /, ''),
           content: '',
           type: 'phase',
-          phase: line.match(/Phase \d+/)?.[0]
+          phase: line.match(/Phase \d+/i)?.[0],
         };
         sectionContent = [line];
-      }
-      // Check for task headers (#### Task X.X:)
-      else if (line.match(/^#### Task \d+\.\d+/)) {
-        if (currentSection) {
-          sections.push({
-            ...currentSection,
-            content: sectionContent.join('\n')
-          });
-        }
+      } else if (line.match(/^#### Task \d+\.\d+/)) {
+        flushSection();
         currentSection = {
           id: `task-${sections.length + 1}`,
           title: line.replace(/^#### /, ''),
           content: '',
           type: 'task',
-          phase: sections[sections.length - 1]?.phase
+          phase: sections[sections.length - 1]?.phase,
         };
         sectionContent = [line];
-      }
-      // Check for summary sections (### X. Section)
-      else if (line.match(/^### \d+\. [^P]/)) {
-        if (currentSection) {
-          sections.push({
-            ...currentSection,
-            content: sectionContent.join('\n')
-          });
-        }
+      } else if (line.match(/^### \d+\. [^P]/)) {
+        flushSection();
         currentSection = {
           id: `summary-${sections.length + 1}`,
           title: line.replace(/^### \d+\. /, ''),
           content: '',
-          type: 'summary'
+          type: 'summary',
         };
         sectionContent = [line];
-      }
-      else {
+      } else if (!currentSection) {
+        preamble.push(line);
+      } else {
         sectionContent.push(line);
       }
     }
 
-    // Add the last section
-    if (currentSection) {
-      sections.push({
-        ...currentSection,
-        content: sectionContent.join('\n')
+    flushSection();
+
+    if (preamble.join('\n').trim()) {
+      sections.unshift({
+        id: 'intro',
+        title: 'Introduction',
+        content: preamble.join('\n'),
+        type: 'summary',
       });
     }
 
@@ -765,47 +837,34 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
   const handleSaveEdits = async () => {
     setIsSaving(true);
     try {
-      // Reconstruct the roadmap with edited sections properly
-      let modifiedContent = '';
-      
-      editSections.forEach((section, index) => {
-        if (section.type === 'phase') {
-          modifiedContent += `### ${index + 1}. ${section.title}\n\n`;
-        } else if (section.type === 'task') {
-          modifiedContent += `#### ${section.title}\n\n`;
-        } else {
-          modifiedContent += `### ${index + 1}. ${section.title}\n\n`;
-        }
-        
-        modifiedContent += section.content;
-        
-        if (index < editSections.length - 1) {
-          modifiedContent += '\n\n';
-        }
-      });
+      const modifiedContent = editSections
+        .map((section) => section.content.trim())
+        .filter(Boolean)
+        .join('\n\n');
 
-      console.log("RoadmapDisplay: Saving modified content:", modifiedContent);
-
-      if (onEditRoadmap) {
-        await onEditRoadmap(modifiedContent);
-        toast.success('Roadmap updated successfully!');
-        setShowEditModal(false);
-      } else if (sessionId) {
-        // If no onEditRoadmap callback, save directly to backend
-        const { data } = await httpClient.post<any>(
+      if (sessionId) {
+        const { data } = await httpClient.post<{ success?: boolean; message?: string }>(
           `/angel/sessions/${sessionId}/modify-roadmap`,
           { modified_content: modifiedContent }
         );
 
-        if (data.success) {
-          toast.success('Roadmap updated successfully!');
-          setShowEditModal(false);
-        } else {
+        if (!data.success) {
           throw new Error(data.message || 'Failed to save roadmap');
         }
       }
-    } catch {
-      toast.error('Failed to save roadmap changes');
+
+      if (onEditRoadmap) {
+        onEditRoadmap(modifiedContent);
+      }
+
+      toast.success('Roadmap updated successfully!');
+      setShowEditModal(false);
+    } catch (err: unknown) {
+      const apiMessage =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      const message =
+        apiMessage || (err instanceof Error ? err.message : '') || 'Failed to save roadmap changes';
+      toast.error(message);
     } finally {
       setIsSaving(false);
     }
@@ -889,8 +948,136 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
     }, 2000);
   };
 
+  const completedCount = completedRoadmapStepKeys.length;
+
+  const toolbarActions = (
+    <div className="flex shrink-0 flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onClick={handleEditRoadmap}
+        disabled={loading}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        </svg>
+        Edit
+      </button>
+      <button
+        type="button"
+        onClick={handleExport}
+        disabled={loading}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-teal-500 to-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-teal-600 hover:to-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        Export
+      </button>
+    </div>
+  );
+
+  const roadmapBody = (
+    <div
+      className={
+        embedded
+          ? 'overflow-hidden rounded-xl border border-gray-200 bg-white'
+          : 'overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm'
+      }
+    >
+      <div
+        className={embedded ? 'px-4 pt-4 pb-2 sm:px-5 sm:pt-5 sm:pb-3' : 'p-4 sm:p-6 md:p-8'}
+        ref={contentRef}
+        id="roadmap-content"
+      >
+        <div
+          className={
+            embedded
+              ? 'max-w-none roadmap-content roadmap-content--embedded'
+              : 'prose prose-sm sm:prose-base max-w-none roadmap-content'
+          }
+        >
+          {renderMarkdownTable(roadmapContent)}
+        </div>
+      </div>
+
+      {!embedded && (
+        <>
+          <div className="bg-gradient-to-r from-green-50 to-blue-50 border-t border-green-200 px-4 sm:px-6 md:px-8 py-4 sm:py-6">
+            <div className="mb-6">
+              <h3 className="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+                <span className="text-2xl">🚀</span>
+                Your Journey to Success
+              </h3>
+              <p className="text-gray-700 mb-4">
+                This roadmap represents more than just tasks—it's your pathway to entrepreneurial success. Every element has been carefully researched and validated to help you build the business of your dreams.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-white/50 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-900 mb-2">Why Execution Matters:</h4>
+                  <ul className="text-sm text-gray-700 space-y-1">
+                    <li>• <strong>Consistency:</strong> Don't miss critical steps</li>
+                    <li>• <strong>Efficiency:</strong> Sequential approach prevents rework</li>
+                    <li>• <strong>Confidence:</strong> Each phase builds momentum</li>
+                    <li>• <strong>Success:</strong> 3x higher success rate with structured plans</li>
+                  </ul>
+                </div>
+                <div className="bg-white/50 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-900 mb-2">Your Success Commitment:</h4>
+                  <ul className="text-sm text-gray-700 space-y-1">
+                    <li>• Dedicate time daily to roadmap tasks</li>
+                    <li>• Use Angel's support whenever needed</li>
+                    <li>• Stay flexible but maintain core sequence</li>
+                    <li>• Celebrate milestones along the way</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 px-8 py-6 border-t border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                <p className="font-medium text-gray-900">Ready to begin your launch journey?</p>
+                <p>Your roadmap is complete, researched, and ready for execution.</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  This roadmap is tailored specifically to your business, industry, and location.
+                </p>
+              </div>
+
+              {!hideStartButton && (
+                <button
+                  onClick={onStartImplementation}
+                  disabled={loading}
+                  className="px-8 py-3 bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
+                >
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Starting...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      Start Implementation
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+    <div className={embedded ? 'w-full' : 'min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50'}>
       <style>{`
         .roadmap-content h1 {
           font-size: 2rem;
@@ -932,6 +1119,21 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
           margin: 2rem 0;
           border-color: #e5e7eb;
         }
+        .roadmap-content--embedded h2,
+        .roadmap-content--embedded h3 {
+          margin-top: 0.75rem;
+          margin-bottom: 0.5rem;
+        }
+        .roadmap-content--embedded table {
+          margin: 0;
+          box-shadow: none;
+        }
+        .roadmap-content--embedded hr {
+          display: none;
+        }
+        .roadmap-content--embedded > div:last-child {
+          margin-bottom: 0 !important;
+        }
         .research-badge {
           display: inline-flex;
           align-items: center;
@@ -955,208 +1157,157 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
           color: #92400e;
         }
       `}</style>
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      {embedded ? (
+        <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white/95 shadow-lg backdrop-blur-xl">
+          <div className="flex flex-col gap-3 border-b border-gray-100 bg-gradient-to-r from-teal-50/70 via-white to-blue-50/50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white shadow-sm">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                 </svg>
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Launch Roadmap</h1>
-                <p className="text-gray-600">Your comprehensive business launch guide</p>
-              </div>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
-              <button
-                onClick={handleEditRoadmap}
-                disabled={loading}
-                className="px-4 py-2 bg-purple-100 hover:bg-purple-200 disabled:bg-gray-50 disabled:cursor-not-allowed text-purple-700 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-                Edit Roadmap
-              </button>
-              <button
-                onClick={handleExport}
-                disabled={loading}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 disabled:cursor-not-allowed text-gray-700 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Exporting...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Export
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="max-w-6xl mx-auto px-4 py-4 sm:py-8">
-        {/* Roadmap Content */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="p-4 sm:p-6 md:p-8" ref={contentRef} id="roadmap-content">
-            <div className="prose prose-sm sm:prose-base md:prose-lg max-w-none roadmap-content">
-              {renderMarkdownTable(roadmapContent)}
-            </div>
-          </div>
-
-          {/* Execution Excellence Section */}
-          <div className="bg-gradient-to-r from-green-50 to-blue-50 border-t border-green-200 px-4 sm:px-6 md:px-8 py-4 sm:py-6">
-            <div className="mb-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
-                <span className="text-2xl">🚀</span>
-                Your Journey to Success
-              </h3>
-              <p className="text-gray-700 mb-4">
-                This roadmap represents more than just tasks—it's your pathway to entrepreneurial success. Every element has been carefully researched and validated to help you build the business of your dreams.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white/50 rounded-lg p-4">
-                  <h4 className="font-semibold text-gray-900 mb-2">Why Execution Matters:</h4>
-                  <ul className="text-sm text-gray-700 space-y-1">
-                    <li>• <strong>Consistency:</strong> Don't miss critical steps</li>
-                    <li>• <strong>Efficiency:</strong> Sequential approach prevents rework</li>
-                    <li>• <strong>Confidence:</strong> Each phase builds momentum</li>
-                    <li>• <strong>Success:</strong> 3x higher success rate with structured plans</li>
-                  </ul>
-                </div>
-                <div className="bg-white/50 rounded-lg p-4">
-                  <h4 className="font-semibold text-gray-900 mb-2">Your Success Commitment:</h4>
-                  <ul className="text-sm text-gray-700 space-y-1">
-                    <li>• Dedicate time daily to roadmap tasks</li>
-                    <li>• Use Angel's support whenever needed</li>
-                    <li>• Stay flexible but maintain core sequence</li>
-                    <li>• Celebrate milestones along the way</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="bg-gray-50 px-8 py-6 border-t border-gray-200">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-600">
-                <p className="font-medium text-gray-900">Ready to begin your launch journey?</p>
-                <p>Your roadmap is complete, researched, and ready for execution.</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  This roadmap is tailored specifically to your business, industry, and location.
+              <div className="min-w-0">
+                <h2 className="truncate text-lg font-bold text-gray-900">Launch Roadmap</h2>
+                <p className="truncate text-sm text-gray-500">
+                  {businessName ? (
+                    <>
+                      <span className="font-medium text-gray-700">{businessName}</span>
+                      <span className="mx-1.5 text-gray-300">·</span>
+                    </>
+                  ) : null}
+                  8 stages · checkmarks reflect tasks you complete in Implementation
+                  {completedCount > 0 ? (
+                    <span className="ml-1 font-medium text-teal-700">({completedCount} done)</span>
+                  ) : null}
                 </p>
               </div>
-              
-              {!hideStartButton && (
-                <button
-                  onClick={onStartImplementation}
-                  disabled={loading}
-                  className="px-8 py-3 bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
-                >
-                  {loading ? (
-                    <>
-                      <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Starting...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      Start Implementation
-                    </>
-                  )}
-                </button>
-              )}
             </div>
+            {toolbarActions}
           </div>
+          {roadmapBody}
         </div>
-
-        {/* Enhanced Features Section */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-6 shadow-sm border border-green-200">
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Research-Backed</h3>
-            <p className="text-gray-600 text-sm">Built on authoritative sources including government agencies, academic institutions, and industry reports.</p>
-          </div>
-
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-6 shadow-sm border border-blue-200">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Actionable Tasks</h3>
-            <p className="text-gray-600 text-sm">Each phase contains specific, executable tasks with clear timelines and decision points.</p>
-          </div>
-
-          <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-6 shadow-sm border border-purple-200">
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Local Resources</h3>
-            <p className="text-gray-600 text-sm">Provider tables include local service providers marked as "(Local)" for personalized support.</p>
-          </div>
-
-          <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-lg p-6 shadow-sm border border-orange-200">
-            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Execution Focus</h3>
-            <p className="text-gray-600 text-sm">Designed to build the business of your dreams with proven methodologies and success metrics.</p>
-          </div>
-        </div>
-
-        {/* Success Statistics — hidden via SHOW_ROADMAP_STATS feature flag.
-            Kept in the tree so it can be revived once we have real metrics. */}
-        {SHOW_ROADMAP_STATS && (
-          <div className="mt-8 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg p-6 border border-indigo-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 text-center">Why This Roadmap Works</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
-              <div>
-                <div className="text-3xl font-bold text-indigo-600 mb-2">3x</div>
-                <div className="text-sm text-gray-600">Higher success rate with structured launch plans</div>
-              </div>
-              <div>
-                <div className="text-3xl font-bold text-purple-600 mb-2">100%</div>
-                <div className="text-sm text-gray-600">Research-backed recommendations from authoritative sources</div>
-              </div>
-              <div>
-                <div className="text-3xl font-bold text-blue-600 mb-2">12</div>
-                <div className="text-sm text-gray-600">Months of comprehensive guidance from planning to launch</div>
+      ) : (
+        <>
+          <div className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-4 py-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h1 className="text-2xl font-bold text-gray-900">Launch Roadmap</h1>
+                    <p className="text-gray-600">Your comprehensive business launch guide</p>
+                  </div>
+                </div>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                  <button
+                    onClick={handleEditRoadmap}
+                    disabled={loading}
+                    className="px-4 py-2 bg-purple-100 hover:bg-purple-200 disabled:bg-gray-50 disabled:cursor-not-allowed text-purple-700 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit Roadmap
+                  </button>
+                  <button
+                    onClick={handleExport}
+                    disabled={loading}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 disabled:cursor-not-allowed text-gray-700 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2"
+                  >
+                    {loading ? (
+                      <>
+                        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Exporting...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Export
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        )}
-      </div>
+
+          <div className="max-w-6xl mx-auto px-4 py-4 sm:py-8">
+            {roadmapBody}
+
+            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-6 shadow-sm border border-green-200">
+                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Research-Backed</h3>
+                <p className="text-gray-600 text-sm">Built on authoritative sources including government agencies, academic institutions, and industry reports.</p>
+              </div>
+
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-6 shadow-sm border border-blue-200">
+                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Actionable Tasks</h3>
+                <p className="text-gray-600 text-sm">Each phase contains specific, executable tasks with clear timelines and decision points.</p>
+              </div>
+
+              <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-6 shadow-sm border border-purple-200">
+                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Local Resources</h3>
+                <p className="text-gray-600 text-sm">Provider tables include local service providers marked as "(Local)" for personalized support.</p>
+              </div>
+
+              <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-lg p-6 shadow-sm border border-orange-200">
+                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Execution Focus</h3>
+                <p className="text-gray-600 text-sm">Designed to build the business of your dreams with proven methodologies and success metrics.</p>
+              </div>
+            </div>
+
+            {SHOW_ROADMAP_STATS && (
+              <div className="mt-8 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg p-6 border border-indigo-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 text-center">Why This Roadmap Works</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+                  <div>
+                    <div className="text-3xl font-bold text-indigo-600 mb-2">3x</div>
+                    <div className="text-sm text-gray-600">Higher success rate with structured launch plans</div>
+                  </div>
+                  <div>
+                    <div className="text-3xl font-bold text-purple-600 mb-2">100%</div>
+                    <div className="text-sm text-gray-600">Research-backed recommendations from authoritative sources</div>
+                  </div>
+                  <div>
+                    <div className="text-3xl font-bold text-blue-600 mb-2">12</div>
+                    <div className="text-sm text-gray-600">Months of comprehensive guidance from planning to launch</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {/* Edit Roadmap Modal */}
       {showEditModal && (
@@ -1184,77 +1335,40 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
 
             {/* Modal Content */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-              {/* Debug Information */}
-              <div className="bg-yellow-100 border-2 border-yellow-500 rounded-lg p-4 mb-6">
-                <h4 className="font-bold text-yellow-800 mb-2">DEBUG INFO:</h4>
-                <div className="text-sm text-yellow-800 space-y-1">
-                  <p><strong>Edit Sections Count:</strong> {editSections.length}</p>
-                  <p><strong>Roadmap Content Length:</strong> {roadmapContent?.length || 0}</p>
-                  <p><strong>Content Preview:</strong> {roadmapContent?.substring(0, 100) || 'No content'}...</p>
-                </div>
-              </div>
-              
-              <div className="space-y-6">
-                {/* Always show a fallback section if no sections are parsed */}
-                {editSections.length === 0 && (
-                  <div className="bg-red-100 border-2 border-red-500 rounded-lg p-4">
-                    <h4 className="font-bold text-red-800 mb-2">⚠️ NO SECTIONS FOUND</h4>
-                    <p className="text-red-700 mb-4">The roadmap content couldn't be parsed into sections. Showing raw content below:</p>
-                    <textarea
-                      className="w-full h-64 p-3 border border-gray-300 rounded font-mono text-sm"
-                      defaultValue={roadmapContent || 'No roadmap content available'}
-                      onChange={(e) => {
-                        // This allows editing the raw content
-                        console.log('Raw content changed:', e.target.value);
-                      }}
-                    />
-                  </div>
-                )}
-                
+              <p className="mb-4 text-sm text-gray-600">
+                Edit each section below. Markdown tables and <strong>Stage</strong> headings are preserved when you save.
+              </p>
+
+              <div className="space-y-5">
                 {editSections.map((section) => (
-                  <div key={section.id} className="border border-gray-200 rounded-lg overflow-hidden">
-                    {/* Section Header */}
-                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white ${
-                            section.type === 'phase' ? 'bg-blue-500' :
-                            section.type === 'task' ? 'bg-green-500' : 'bg-purple-500'
-                          }`}>
-                            {section.type === 'phase' ? '📋' : section.type === 'task' ? '✅' : '📝'}
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-gray-900">{section.title}</h3>
-                            <p className="text-sm text-gray-600 capitalize">
-                              {section.type} {section.phase && `• ${section.phase}`}
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => setEditingSection(editingSection?.id === section.id ? null : section)}
-                          className="px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg text-sm font-medium transition-colors"
-                        >
-                          {editingSection?.id === section.id ? 'Done' : 'Edit'}
-                        </button>
+                  <div key={section.id} className="overflow-hidden rounded-lg border border-gray-200">
+                    <div className="flex items-center gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3">
+                      <div
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${
+                          section.type === 'phase'
+                            ? 'bg-blue-500'
+                            : section.type === 'task'
+                              ? 'bg-green-500'
+                              : 'bg-purple-500'
+                        }`}
+                      >
+                        {section.type === 'phase' ? '📋' : section.type === 'task' ? '✅' : '📝'}
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="truncate font-semibold text-gray-900">{section.title}</h3>
+                        {section.phase && (
+                          <p className="text-xs text-gray-500">{section.phase}</p>
+                        )}
                       </div>
                     </div>
-
-                    {/* Section Content */}
                     <div className="p-4">
-                      {editingSection?.id === section.id ? (
-                        <textarea
-                          value={section.content}
-                          onChange={(e) => handleSectionEdit(section.id, e.target.value)}
-                          className="w-full h-64 p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          placeholder="Edit this section..."
-                        />
-                      ) : (
-                        <div className="prose prose-sm max-w-none">
-                          <pre className="whitespace-pre-wrap text-gray-800 font-mono text-sm leading-relaxed">
-                            {section.content}
-                          </pre>
-                        </div>
-                      )}
+                      <textarea
+                        value={section.content}
+                        onChange={(e) => handleSectionEdit(section.id, e.target.value)}
+                        className="min-h-[200px] w-full resize-y rounded-lg border border-gray-300 p-3 font-mono text-sm leading-relaxed text-gray-800 focus:border-transparent focus:ring-2 focus:ring-purple-500"
+                        spellCheck={false}
+                        aria-label={`Edit ${section.title}`}
+                      />
                     </div>
                   </div>
                 ))}
@@ -1265,8 +1379,7 @@ const RoadmapDisplay: React.FC<RoadmapDisplayProps> = ({
             <div className="p-3 sm:p-6 border-t border-gray-200 bg-gray-50 flex-shrink-0">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
                 <div className="text-xs sm:text-sm text-gray-600 order-2 sm:order-1">
-                  <p>💡 <strong>Tip:</strong> Click "Edit" on any section to modify its content</p>
-                  <p>Your changes will be saved when you click "Save Changes"</p>
+                  <p>Changes apply to your saved roadmap when you click <strong>Save Changes</strong>.</p>
                 </div>
                 <div className="flex flex-row items-center gap-2 sm:gap-3 w-full sm:w-auto order-1 sm:order-2">
                   <button

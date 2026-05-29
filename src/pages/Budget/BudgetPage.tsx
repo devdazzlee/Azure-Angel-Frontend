@@ -28,6 +28,11 @@ import httpClient from '@/api/httpClient';
 
 import type { Budget, BudgetItem, RevenueStream } from '@/types/apiTypes';
 import { useBusinessContext } from '@/hooks/useBusinessContext';
+import {
+  isBudgetSetupPhase,
+  isRoadmapReadyPhase,
+  resolveSessionPhase,
+} from '@/utils/budgetPageMode';
 
 /** Stable IDs so duplicate effect runs (e.g. React Strict Mode) do not stack the same toast. */
 const TOAST_BUDGET_ANALYZING = 'budget-prepop-analyzing-from-plan';
@@ -73,7 +78,9 @@ const BudgetPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const fromTransition = (location.state as any)?.fromTransition === true;
+  const fromTransitionNav =
+    (location.state as { fromTransition?: boolean } | null)?.fromTransition === true;
+  const [sessionPhase, setSessionPhase] = useState<string | null>(null);
   const [budget, setBudget] = useState<Budget | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -88,6 +95,29 @@ const BudgetPage: React.FC = () => {
       fetchBudget();
     }
   }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await httpClient.get<{ result?: { progress?: { phase?: string }; current_phase?: string } }>(
+          `/angel/sessions/${id}`,
+        );
+        if (cancelled) return;
+        setSessionPhase(resolveSessionPhase(data?.result ?? null));
+      } catch {
+        /* non-fatal: nav state still drives setup mode when present */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  const isBudgetSetupFlow =
+    fromTransitionNav || isBudgetSetupPhase(sessionPhase);
+  const roadmapAlreadyReady = isRoadmapReadyPhase(sessionPhase);
 
   const fetchBudget = async () => {
     try {
@@ -218,6 +248,10 @@ const BudgetPage: React.FC = () => {
       if (budget) {
         await budgetService.saveBudget(id, budget);
       }
+      if (roadmapAlreadyReady) {
+        navigate(`/ventures/${id}/roadmap`);
+        return;
+      }
       const response = await httpClient.post(`/angel/sessions/${id}/transition-decision`, {
         decision: 'approve',
         transition_type: 'budget_to_roadmap',
@@ -305,10 +339,10 @@ const BudgetPage: React.FC = () => {
             </div>
             <div className="mt-2.5 border-t border-gray-100 pt-2.5">
               <h1 className="text-lg font-bold leading-tight tracking-tight text-gray-900">
-                {fromTransition ? 'Budget Setup' : 'Budget Tracking'}
+                {isBudgetSetupFlow ? 'Budget Setup' : 'Budget Tracking'}
               </h1>
               <p className="mt-1 text-xs leading-relaxed text-gray-500">
-                {fromTransition
+                {isBudgetSetupFlow
                   ? 'Set up your startup budget, then continue to your roadmap'
                   : 'Manage your business finances'}
               </p>
@@ -336,10 +370,10 @@ const BudgetPage: React.FC = () => {
               <div className="h-10 w-px shrink-0 bg-gray-200" aria-hidden />
               <div className="min-w-0">
                 <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-                  {fromTransition ? 'Budget Setup' : 'Budget Tracking'}
+                  {isBudgetSetupFlow ? 'Budget Setup' : 'Budget Tracking'}
                 </h1>
                 <p className="mt-0.5 text-sm text-gray-500">
-                  {fromTransition
+                  {isBudgetSetupFlow
                     ? 'Set up your startup budget, then continue to your roadmap'
                     : 'Manage your business finances'}
                 </p>
@@ -361,7 +395,7 @@ const BudgetPage: React.FC = () => {
       {/* Main Content — extra bottom pad only on desktop where footer is fixed */}
       <div
         className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 min-w-0 ${
-          fromTransition ? 'pb-4 md:pb-28' : 'pb-20 md:pb-24'
+          isBudgetSetupFlow ? 'pb-4 md:pb-28' : 'pb-20 md:pb-24'
         }`}
       >
         <BudgetDashboard
@@ -372,14 +406,13 @@ const BudgetPage: React.FC = () => {
           businessType={businessType}
           sessionId={id!}
           businessContext={businessContext}
-          showRoadmapFab={!fromTransition}
-          embeddedInSetup={fromTransition}
+          embeddedInSetup={isBudgetSetupFlow}
           onRegisterExportActions={handleRegisterBudgetExports}
         />
       </div>
 
       {/* Budget setup actions: in page flow on mobile (no overlap); fixed bar on desktop */}
-      {fromTransition && (
+      {isBudgetSetupFlow && (
         <footer
           className="relative z-30 mt-4 border-t border-gray-200 bg-white mb-[max(0.75rem,env(safe-area-inset-bottom,0px))] md:fixed md:bottom-0 md:left-0 md:right-0 md:mt-0 md:mb-0 md:shadow-[0_-4px_24px_rgba(0,0,0,0.08)] md:backdrop-blur-sm md:bg-white/95 md:pb-0"
           aria-label="Budget setup actions"
@@ -455,7 +488,7 @@ const BudgetPage: React.FC = () => {
         </footer>
       )}
 
-      {fromTransition && transitioning && (
+      {isBudgetSetupFlow && transitioning && (
         <div
           className="fixed inset-0 z-[25] bg-slate-900/15 backdrop-blur-[1px] pointer-events-none"
           aria-hidden

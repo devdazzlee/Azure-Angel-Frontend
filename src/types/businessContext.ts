@@ -1,4 +1,5 @@
 import type { BusinessContextPayload } from './apiTypes';
+import { displayBusinessNameFromApi } from '../utils/businessName';
 
 /** Core venture fields persisted on session.business_context in the database. */
 export interface BusinessContext {
@@ -42,7 +43,7 @@ export function normalizeBusinessContext(
     return { ...EMPTY_BUSINESS_CONTEXT };
   }
   return {
-    business_name: cleanField(raw.business_name),
+    business_name: displayBusinessNameFromApi(cleanField(raw.business_name)),
     industry: cleanField(raw.industry),
     location: cleanField(raw.location),
     business_type: cleanField(raw.business_type),

@@ -213,9 +213,9 @@ const SmartInput: React.FC<SmartInputProps> = ({
   }
 
   return (
-    <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-white/50 p-3">
-      <div className="flex items-center gap-2 sm:gap-3">
-        <div className="w-8 h-8 sm:w-9 sm:h-9 bg-gray-300 rounded-full flex items-center justify-center text-xs flex-shrink-0 overflow-hidden">
+    <div className="w-full min-w-0 max-w-full bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-white/50 p-3 sm:p-3">
+      <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-300 text-xs sm:h-9 sm:w-9">
           <img 
             src={FounderportFavicon} 
             alt="User" 
@@ -225,7 +225,7 @@ const SmartInput: React.FC<SmartInputProps> = ({
         <div className="flex-1 min-w-0">
           <textarea
             ref={textareaRef}
-            className="w-full rounded-lg p-2 sm:p-2.5 resize-none text-sm bg-gray-50 text-gray-900 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent focus:bg-white transition-all duration-200 placeholder-gray-500"
+            className="w-full min-w-0 rounded-lg px-3 py-2.5 resize-none text-sm bg-gray-50 text-gray-900 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent focus:bg-white transition-all duration-200 placeholder-gray-500 sm:p-2.5"
             rows={1}
             value={value}
             onChange={handleInputChange}
@@ -237,7 +237,7 @@ const SmartInput: React.FC<SmartInputProps> = ({
         </div>
         <button
           type="button"
-          className="bg-gradient-to-r from-teal-500 to-blue-500 hover:from-teal-600 hover:to-blue-600 text-white p-2 sm:p-2.5 rounded-lg font-medium text-sm disabled:opacity-50 shadow-md transition-all duration-200 flex-shrink-0"
+          className="shrink-0 rounded-lg bg-gradient-to-r from-teal-500 to-blue-500 p-2.5 text-sm font-medium text-white shadow-md transition-all duration-200 hover:from-teal-600 hover:to-blue-600 disabled:opacity-50 sm:p-2.5"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();

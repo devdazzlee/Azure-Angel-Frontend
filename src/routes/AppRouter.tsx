@@ -31,6 +31,7 @@ import BudgetPage from "../pages/Budget/BudgetPage";
 import ForgotPasswordPage from "../pages/ForgotPassword";
 import ResetPasswordPage from "../pages/ResetPassword";
 import RoadmapPage from "../pages/Roadmap/RoadmapPage";
+import RoadmapToImplementationPage from "../pages/Roadmap/RoadmapToImplementationPage";
 import BusinessPlanView from "../pages/BusinessPlan/BusinessPlanView";
 import Layout from "../features/Dashboard";
 import ChatLayout from "../layout/chatLayout";
@@ -121,6 +122,10 @@ const router = createBrowserRouter([
               {
                 path: ":id/roadmap",
                 element: <RoadmapPage />,
+              },
+              {
+                path: ":id/implementation-transition",
+                element: <RoadmapToImplementationPage />,
               },
               {
                 path: ":id/business-plan",

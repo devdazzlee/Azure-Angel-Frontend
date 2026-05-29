@@ -17,6 +17,27 @@ export interface RoadmapStageParsed {
   tasks: RoadmapTaskRow[];
 }
 
+/** Remove inline markdown (bold, italic, code, heading markers) for plain-text display. */
+export function stripInlineMarkdown(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^#{1,6}\s*/, '')
+    .replace(/^\*+|\*+$/g, '')
+    .trim();
+}
+
+/** True when a line is a stage heading (### **Stage N — …** or **Stage N — …**). */
+export function isRoadmapStageHeaderLine(line: string): boolean {
+  const t = line.trim();
+  return (
+    /^#{1,3}\s*\*?\*?Stage\s+\d+/i.test(t) ||
+    /^\*\*Stage\s+\d+[\s—–-]/i.test(t)
+  );
+}
+
 /** Split a markdown table row into cells (content between | ... |). */
 export function splitPipeRow(line: string): string[] {
   const t = line.trim();

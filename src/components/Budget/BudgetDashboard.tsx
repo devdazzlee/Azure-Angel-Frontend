@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
   AlertTriangle, 
@@ -44,12 +43,10 @@ import OperatingExpensesTable from './OperatingExpensesTable';
 import RevenueTable from './RevenueTable';
 import { CurrencyInput } from './CurrencyInput'; 
 import BudgetDashboardHeader from './BudgetDashboardHeader';
-import BudgetContinueToRoadmapCta from './BudgetContinueToRoadmapCta';
 import SelectedItemsBanner from './SelectedItemsBanner';
 import BudgetWarnings from './BudgetWarnings';
 import MetricCard from './MetricCard';
 import BudgetOverview from './BudgetOverview';
-// StickyRoadmapButton removed — Roadmap CTA is now in the header
 import { 
   debounce, 
   formatCurrency, 
@@ -62,7 +59,6 @@ import { buildBudgetMarkdownForExport } from '@/utils/budgetExportContent';
 import type { BudgetExportActions } from './budgetExportActions'; 
 import { budgetService } from '@/services/budgetService';
 import { toast } from 'react-toastify';
-import httpClient from '../../api/httpClient';
 import BudgetChatModal from './BudgetChatModal';
 import AddLineItemModal from './AddLineItemModal'; 
 import RemoveItemModal from './RemoveItemModal'; 
@@ -91,8 +87,6 @@ interface BudgetDashboardProps {
   businessType?: string;
   sessionId?: string;
   businessContext?: any;
-  /** When false, parent renders roadmap CTA (e.g. budget setup sticky footer) */
-  showRoadmapFab?: boolean;
   /** Parent header Download modal — register PDF / Excel / DOCX handlers */
   onRegisterExportActions?: (actions: BudgetExportActions) => void;
   /** Budget Setup flow: compact chrome, extra bottom space for sticky footer */
@@ -125,13 +119,10 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   businessType,
   sessionId,
   businessContext,
-  showRoadmapFab = true,
   onRegisterExportActions,
   embeddedInSetup = false,
 }) => {
-  const navigate = useNavigate();
   // State Management
-  const [isContinuingToRoadmap, setIsContinuingToRoadmap] = useState(false);
   const [viewMode, setViewMode] = useState<'estimated' | 'actual'>('estimated');
   const [dynamicRevenueStreams, setDynamicRevenueStreams] = useState<RevenueStream[]>([]);
   const [loadingRevenueStreams, setLoadingRevenueStreams] = useState<boolean>(true);
@@ -812,44 +803,6 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
     }
   }, [sessionId, budget, startupCostItems, operatingExpenseItems, otherExpenses, onUpdateBudget]);
 
-  // Go to Roadmap — server generates roadmap here (~5–15s); feedback on the CTA, not toast.
-  const handleGoToRoadmap = useCallback(async () => {
-    if (!sessionId || isContinuingToRoadmap) return;
-
-    setIsContinuingToRoadmap(true);
-    try {
-      await handleSaveBudget();
-
-      const response = await httpClient.post(
-        `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}/transition-decision`,
-        {
-          decision: 'approve',
-          transition_type: 'budget_to_roadmap',
-        },
-      );
-
-      const responseData = response.data as APIResponse<{ roadmap?: string }>;
-
-      if (responseData.success) {
-        navigate(`/ventures/${sessionId}/roadmap`);
-        return;
-      }
-
-      if ((responseData as { requires_subscription?: boolean }).requires_subscription) {
-        toast.error(
-          responseData.message || 'Subscription required to proceed to Roadmap phase',
-        );
-      } else {
-        toast.error(responseData.message || 'Failed to proceed to roadmap. Please try again.');
-      }
-    } catch (error) {
-      console.error('Error transitioning to roadmap:', error);
-      toast.error('Failed to proceed to roadmap. Please try again.');
-    } finally {
-      setIsContinuingToRoadmap(false);
-    }
-  }, [sessionId, isContinuingToRoadmap, navigate, handleSaveBudget]);
-
   // No auto-save useEffect here — the parent (Implementation) already
   // debounces a full save to DB whenever handleUpdateBudget is called.
   // Revenue streams are saved separately via saveRevenueStreams API.
@@ -1424,21 +1377,6 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         compact={embeddedInSetup}
         onChatWithAngel={() => setIsChatModalOpen(true)}
       />
-
-      {sessionId && showRoadmapFab && (
-        <BudgetContinueToRoadmapCta
-          variant="fab"
-          onClick={handleGoToRoadmap}
-          isLoading={isContinuingToRoadmap}
-        />
-      )}
-
-      {showRoadmapFab && isContinuingToRoadmap && (
-        <div
-          className="fixed inset-0 z-[55] bg-slate-900/20 backdrop-blur-[1px] pointer-events-none"
-          aria-hidden
-        />
-      )}
 
       {/* Selected Items Banner */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-w-0">

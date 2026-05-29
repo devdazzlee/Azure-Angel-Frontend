@@ -12,6 +12,7 @@ import ImplementationCompletionModal from '../../components/ImplementationComple
 import httpClient from '../../api/httpClient';
 import { fetchRoadmapPlan } from '../../services/authService';
 import { useBusinessContext } from '../../hooks/useBusinessContext';
+import { displayBusinessNameFromApi } from '../../utils/businessName';
 import { IMPLEMENTATION_RETURN_KEY } from '../ErrorBoundaryPage';
 import { BudgetDashboard } from '../../components/Budget';
 import { budgetService } from '../../services/budgetService';
@@ -21,11 +22,9 @@ import {
   Rocket,
   DollarSign,
   FileText,
-  Download,
   Building2,
   MapPin,
   Trophy,
-  Home,
   ArrowLeft,
   Shield,
   Settings,
@@ -728,262 +727,178 @@ const Implementation: React.FC<ImplementationProps> = ({
     );
   }
 
+  const displayBusinessName =
+    displayBusinessNameFromApi(
+      businessContext.business_name || currentTask?.business_context.business_name,
+    ) || 'Your venture';
+  const displayIndustry =
+    businessContext.industry?.trim() || currentTask?.business_context.industry || '';
+  const displayLocation =
+    businessContext.location?.trim() || currentTask?.business_context.location || '';
+  const currentPhaseLabel = currentTask ? getPhaseName(currentTask.phase_name) : '';
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-teal-50/40 pb-20 sm:pb-0">
-      {/* Header - Premium Design */}
-      <div className="relative bg-white/80 backdrop-blur-2xl border-b border-gray-200/60 shadow-lg">
-        {/* Subtle pattern overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-teal-500/5 via-transparent to-blue-500/5 pointer-events-none"></div>
-        
-        <div className="relative max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-6 sm:py-8">
-          {/* Navigation Buttons - Premium Style */}
-          <div className="flex items-center gap-3 mb-8">
-            <motion.button
-              onClick={() => navigate('/')}
-              className="group flex items-center gap-2.5 px-5 py-2.5 bg-white/90 hover:bg-white border border-gray-200/80 rounded-xl text-gray-700 font-semibold transition-all duration-300 hover:shadow-lg hover:border-teal-300/50 hover:-translate-y-0.5"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Home className="h-4 w-4 group-hover:text-teal-600 transition-colors" />
-              <span className="hidden sm:inline text-sm">Home</span>
-            </motion.button>
-            <motion.button
-              onClick={() => navigate(`/ventures/${sessionId}/roadmap`)}
-              className="group flex items-center gap-2.5 px-5 py-2.5 bg-white/90 hover:bg-white border border-gray-200/80 rounded-xl text-gray-700 font-semibold transition-all duration-300 hover:shadow-lg hover:border-teal-300/50 hover:-translate-y-0.5"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <ArrowLeft className="h-4 w-4 group-hover:text-teal-600 transition-colors" />
-              <span className="hidden sm:inline text-sm">Back to Roadmap</span>
-              <span className="sm:hidden text-sm">Back</span>
-            </motion.button>
-          </div>
-          
-          {/* Hero Section - Premium Typography */}
-          <div className="mb-10">
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="flex items-start justify-between flex-wrap gap-6"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="p-2.5 bg-gradient-to-br from-teal-500 to-blue-600 rounded-xl shadow-lg">
-                    <Rocket className="h-6 w-6 text-white" />
-                  </div>
-                  <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 leading-tight">
-                    Implementation Phase
-                  </h1>
+    <div className="min-h-screen min-w-0 overflow-x-hidden bg-gray-50 pb-20 sm:pb-0">
+      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white shadow-sm">
+        <div className="h-1 bg-gradient-to-r from-indigo-600 via-teal-600 to-violet-600" aria-hidden />
+        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-center gap-3 sm:gap-5">
+              <button
+                type="button"
+                onClick={() => navigate(`/ventures/${sessionId}/roadmap`)}
+                className="inline-flex shrink-0 items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-indigo-700"
+              >
+                <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
+                <span className="hidden sm:inline">Back to Roadmap</span>
+                <span className="sm:hidden">Back</span>
+              </button>
+              <div className="hidden h-10 w-px shrink-0 bg-gray-200 sm:block" aria-hidden />
+              <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                <div
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-teal-600 text-white shadow-sm sm:h-12 sm:w-12"
+                  aria-hidden
+                >
+                  <Rocket className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={2} />
                 </div>
-                <p className="text-base text-gray-600 font-medium ml-12 mb-3">
-                  Turning your roadmap into actionable results
-                </p>
-                <div className="flex items-center gap-3 ml-12">
-                  <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-50 to-blue-50 rounded-lg border border-teal-200/50">
-                {getPhaseIcon(currentTask.phase_name)}
-                    <span className="text-sm font-semibold text-gray-700">
-                  {getPhaseName(currentTask.phase_name)}
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-teal-700 sm:text-xs">
+                    Founderport
+                  </p>
+                  <h1 className="truncate text-lg font-bold tracking-tight text-gray-900 sm:text-2xl">
+                    Implementation
+                  </h1>
+                  <p className="mt-0.5 truncate text-xs text-gray-500 sm:text-sm">
+                    Execute your roadmap step by step with Angel
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 lg:max-w-xl lg:justify-end">
+              {currentPhaseLabel && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-900">
+                  {getPhaseIcon(currentTask!.phase_name)}
+                  <span className="max-w-[12rem] truncate sm:max-w-none">{currentPhaseLabel}</span>
+                </span>
+              )}
+              <div className="flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5">
+                <div className="relative h-9 w-9 shrink-0">
+                  <svg className="h-9 w-9 -rotate-90" viewBox="0 0 36 36" aria-hidden>
+                    <circle cx="18" cy="18" r="15" fill="none" className="stroke-teal-100" strokeWidth="3" />
+                    <circle
+                      cx="18"
+                      cy="18"
+                      r="15"
+                      fill="none"
+                      className="stroke-teal-600"
+                      strokeWidth="3"
+                      strokeDasharray={`${progressPercent * 0.94} 100`}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-teal-800">
+                    {progressPercent}%
+                  </span>
+                </div>
+                <span className="text-xs font-medium text-teal-900">
+                  {completedMainTasks} of {totalTasks} tasks
                 </span>
               </div>
             </div>
-              </div>
-            </motion.div>
           </div>
+        </div>
+      </header>
 
-          {/* Premium Cards Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-7xl mx-auto">
-            {/* Business Information Card - Premium Design */}
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.1 }}
-              className="relative group"
-            >
-              <div className="relative h-full bg-white/90 backdrop-blur-xl border border-gray-200/60 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-500 overflow-hidden">
-                {/* Premium gradient overlay */}
-                <div className="absolute inset-0 bg-gradient-to-br from-teal-500/10 via-blue-500/5 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                
-                {/* Decorative corner accent */}
-                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-teal-400/20 to-transparent rounded-bl-full"></div>
-              
-              {/* Content */}
-              <div className="relative z-10">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="p-3 bg-gradient-to-br from-teal-500 via-teal-600 to-blue-600 rounded-xl shadow-md transform group-hover:scale-105 transition-transform duration-300">
-                    <Building2 className="h-5 w-5 text-white" />
-                  </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-gray-900 mb-0.5">
-                    Business Information
-                </h3>
-                      <p className="text-xs text-gray-500 font-medium">Company Details</p>
-                    </div>
-                  </div>
-                
-                {businessContextLoading ? (
-                    <div className="space-y-4 animate-pulse">
-                      {[1, 2, 3].map((i) => (
-                        <div key={i} className="flex items-center gap-4 p-5 bg-gray-50 rounded-2xl">
-                          <div className="h-12 w-12 bg-gray-200 rounded-xl"></div>
-                          <div className="flex-1 space-y-2">
-                            <div className="h-4 bg-gray-200 rounded w-24"></div>
-                            <div className="h-5 bg-gray-300 rounded w-40"></div>
-                      </div>
-                    </div>
-                      ))}
-                  </div>
-                ) : (
-                    <div className="space-y-4">
-                      <motion.div
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.2 }}
-                        className="flex items-center gap-4 p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100"
-                      >
-                        <div className="p-2.5 bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg shadow-sm">
-                        <Building2 className="h-5 w-5 text-white" />
-                      </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Business Name</p>
-                          <p className="text-base font-bold text-gray-900 truncate">{businessContext.business_name || currentTask?.business_context.business_name}</p>
-                      </div>
-                      </motion.div>
-                      
-                      <motion.div
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.3 }}
-                        className="flex items-center gap-4 p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100"
-                      >
-                        <div className="p-2.5 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-sm">
-                        <Target className="h-5 w-5 text-white" />
-                      </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Industry</p>
-                          <p className="text-base font-bold text-gray-900 truncate">{businessContext.industry || currentTask?.business_context.industry}</p>
-                      </div>
-                      </motion.div>
-                      
-                      <motion.div
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.4 }}
-                        className="flex items-center gap-4 p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100"
-                      >
-                        <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg shadow-sm">
-                        <MapPin className="h-5 w-5 text-white" />
-                      </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Location</p>
-                          <p className="text-base font-bold text-gray-900 truncate">{businessContext.location || currentTask?.business_context.location}</p>
-                      </div>
-                      </motion.div>
-                  </div>
-                )}
+      {/* Venture summary strip */}
+      <div className="border-b border-gray-200/80 bg-gradient-to-r from-slate-50 via-white to-teal-50/40">
+        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
+            <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+              <div className="mb-3 flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-teal-600" aria-hidden />
+                <h2 className="text-sm font-bold text-gray-900">Your venture</h2>
               </div>
-            </div>
-            </motion.div>
-
-            {/* Implementation Progress Card - Premium Design */}
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              className="relative group"
-            >
-              <div className="relative h-full bg-white/90 backdrop-blur-xl border border-gray-200/60 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-500 overflow-hidden">
-                {/* Premium gradient overlay */}
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-teal-500/5 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                
-                {/* Decorative corner accent */}
-                <div className="absolute top-0 left-0 w-32 h-32 bg-gradient-to-br from-blue-400/20 to-transparent rounded-br-full"></div>
-              
-              {/* Content */}
-              <div className="relative z-10">
-                  <div className="flex items-start justify-between mb-6 flex-wrap gap-4">
-                  <div className="flex items-center gap-3">
-                      <div className="p-3 bg-gradient-to-br from-blue-500 via-teal-500 to-blue-600 rounded-xl shadow-md transform group-hover:scale-105 transition-transform duration-300">
-                        <Trophy className="h-5 w-5 text-white" />
-                    </div>
-                    <div>
-                        <h3 className="text-xl font-bold text-gray-900 mb-0.5">Progress Tracker</h3>
-                        <p className="text-xs text-gray-500 font-medium">Your implementation journey</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                      <div className="text-4xl sm:text-5xl font-black bg-gradient-to-r from-blue-600 via-teal-600 to-blue-700 bg-clip-text text-transparent leading-none">
-                      {progressPercent}%
-                    </div>
-                      <p className="text-xs font-semibold text-gray-600 mt-1">Complete</p>
-                  </div>
+              {businessContextLoading ? (
+                <div className="grid gap-3 sm:grid-cols-3 animate-pulse">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-14 rounded-lg bg-gray-100" />
+                  ))}
                 </div>
-
-                  {/* Premium Progress Bar */}
-                  <div className="mb-6">
-                    <div className="h-3 bg-gray-100 rounded-full overflow-hidden shadow-inner">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${progressPercent}%` }}
-                        transition={{ duration: 1.5, ease: "easeOut" }}
-                        className="h-full bg-gradient-to-r from-blue-500 via-teal-500 to-blue-600 rounded-full relative overflow-hidden shadow-md"
-                      >
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
-                      </motion.div>
+              ) : (
+                <dl className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg border border-teal-100 bg-teal-50/50 px-3 py-2.5">
+                    <dt className="text-[10px] font-semibold uppercase tracking-wide text-teal-800">Business</dt>
+                    <dd className="mt-0.5 truncate text-sm font-bold text-gray-900">{displayBusinessName}</dd>
                   </div>
+                  {displayIndustry ? (
+                    <div className="rounded-lg border border-blue-100 bg-blue-50/50 px-3 py-2.5">
+                      <dt className="text-[10px] font-semibold uppercase tracking-wide text-blue-800">Industry</dt>
+                      <dd className="mt-0.5 truncate text-sm font-semibold text-gray-900">{displayIndustry}</dd>
+                    </div>
+                  ) : null}
+                  {displayLocation ? (
+                    <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 px-3 py-2.5">
+                      <dt className="text-[10px] font-semibold uppercase tracking-wide text-indigo-800">Location</dt>
+                      <dd className="mt-0.5 truncate text-sm font-semibold text-gray-900">{displayLocation}</dd>
+                    </div>
+                  ) : null}
+                </dl>
+              )}
+            </section>
+
+            <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Trophy className="h-4 w-4 text-indigo-600" aria-hidden />
+                  <h2 className="text-sm font-bold text-gray-900">Progress</h2>
                 </div>
-
-                  {/* Premium Stats Grid */}
-                  <div className="grid grid-cols-2 gap-3 mb-5">
-                    <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100 hover:border-teal-200 hover:shadow-md transition-all duration-300 group/stat">
-                      <div className="text-3xl font-black text-gray-900 mb-1.5 group-hover/stat:scale-105 transition-transform inline-block">
-                      {completedMainTasks}
-                    </div>
-                      <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Tasks Done</div>
-                  </div>
-                    <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all duration-300 group/stat">
-                      <div className="text-3xl font-black text-gray-900 mb-1.5 group-hover/stat:scale-105 transition-transform inline-block">
-                      {(progress as any).substeps_completed ?? completedTasks.filter(t => t.includes('_substep_')).length}
-                    </div>
-                      <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Steps Done</div>
-                  </div>
-                    <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100 hover:border-indigo-200 hover:shadow-md transition-all duration-300 group/stat">
-                      <div className="text-3xl font-black text-gray-900 mb-1.5 group-hover/stat:scale-105 transition-transform inline-block">
-                      {progress.phases_completed ?? 0}
-                    </div>
-                      <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Phases Done</div>
-                  </div>
-                    <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100 hover:border-rose-200 hover:shadow-md transition-all duration-300 group/stat">
-                      <div className="text-3xl font-black text-gray-900 mb-1.5 group-hover/stat:scale-105 transition-transform inline-block">
-                      {Math.max(0, totalTasks - completedMainTasks)}
-                    </div>
-                      <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Remaining</div>
-                  </div>
-                </div>
-
-                  {/* Premium Milestone */}
-                {progress.milestone && (
-                    <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-teal-50 via-blue-50 to-indigo-50 rounded-xl border border-teal-200/50 shadow-sm">
-                      <div className="p-2.5 bg-gradient-to-br from-teal-500 to-blue-600 rounded-lg shadow-md">
-                        <Rocket className="h-5 w-5 text-white" />
-                      </div>
-                    <div className="flex-1">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-0.5">Current Milestone</p>
-                        <p className="text-base font-bold text-gray-900">{progress.milestone}</p>
-                    </div>
-                  </div>
-                )}
+                <span className="text-2xl font-bold text-indigo-700">{progressPercent}%</span>
               </div>
-            </div>
-            </motion.div>
+              <div className="mb-4 h-2.5 overflow-hidden rounded-full bg-gray-100">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progressPercent}%` }}
+                  transition={{ duration: 0.8, ease: 'easeOut' }}
+                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-teal-500 to-teal-600"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+                <div className="rounded-lg bg-gray-50 px-2 py-2">
+                  <p className="text-lg font-bold text-gray-900">{completedMainTasks}</p>
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Tasks done</p>
+                </div>
+                <div className="rounded-lg bg-gray-50 px-2 py-2">
+                  <p className="text-lg font-bold text-gray-900">
+                    {(progress as { substeps_completed?: number }).substeps_completed ??
+                      completedTasks.filter((t) => t.includes('_substep_')).length}
+                  </p>
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Steps done</p>
+                </div>
+                <div className="rounded-lg bg-gray-50 px-2 py-2">
+                  <p className="text-lg font-bold text-gray-900">{progress.phases_completed ?? 0}</p>
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Phases done</p>
+                </div>
+                <div className="rounded-lg bg-gray-50 px-2 py-2">
+                  <p className="text-lg font-bold text-gray-900">
+                    {Math.max(0, totalTasks - completedMainTasks)}
+                  </p>
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Remaining</p>
+                </div>
+              </div>
+              {progress.milestone ? (
+                <p className="mt-3 text-xs text-gray-600">
+                  <span className="font-semibold text-gray-800">Milestone:</span> {progress.milestone}
+                </p>
+              ) : null}
+            </section>
           </div>
         </div>
       </div>
 
-      {/* Premium Tab Navigation */}
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-2xl border-b border-gray-200/60 shadow-lg">
-        <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
-          <div className="flex gap-2">
+      <div className="border-b border-gray-200 bg-white shadow-sm">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="-mb-px flex gap-1 overflow-x-auto overscroll-x-contain">
             <motion.button
               onClick={() => handleTabChange('task')}
               className={`relative py-4 px-6 font-semibold text-sm rounded-t-xl transition-all duration-300 ${
@@ -1063,8 +978,7 @@ const Implementation: React.FC<ImplementationProps> = ({
         </div>
       </div>
 
-      {/* Main Content - Premium Spacing */}
-      <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-6 sm:py-8">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <AnimatePresence mode="wait">
           {activeTab === 'task' && (
             <motion.div
@@ -1099,64 +1013,44 @@ const Implementation: React.FC<ImplementationProps> = ({
               transition={{ duration: 0.3 }}
               className="w-full"
             >
-              <div className="bg-white/95 backdrop-blur-xl border border-gray-200/60 rounded-2xl p-6 shadow-lg">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-1">Full Launch Roadmap</h2>
-                    <p className="text-sm text-gray-600 font-medium">Complete roadmap in table format</p>
-                  </div>
-              {roadmapContent && (
-                    <motion.a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    toast.info('Use the export button in the roadmap view below');
-                  }}
-                      className="flex items-center justify-center gap-2 bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white px-5 py-2.5 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-300 transform hover:-translate-y-0.5 whitespace-nowrap text-sm"
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                >
-                      <Download className="h-5 w-5" />
-                  <span className="hidden sm:inline">Export Available Below</span>
-                  <span className="sm:hidden">Export Below</span>
-                    </motion.a>
-              )}
-            </div>
             {roadmapLoading ? (
-                  <div className="flex flex-col items-center justify-center py-12">
-                    <div className="relative">
-                      <div className="animate-spin rounded-full h-12 w-12 border-4 border-teal-200 border-t-teal-600"></div>
-                      <div className="absolute inset-0 animate-ping rounded-full h-12 w-12 border-4 border-teal-400 opacity-20"></div>
-                    </div>
-                    <span className="mt-4 text-base font-semibold text-gray-700">Loading…</span>
-                  </div>
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-200/80 bg-white/95 py-16 shadow-lg backdrop-blur-xl">
+                <div className="relative">
+                  <div className="h-12 w-12 animate-spin rounded-full border-4 border-teal-200 border-t-teal-600" />
+                </div>
+                <span className="mt-4 text-base font-semibold text-gray-700">Loading roadmap…</span>
+              </div>
             ) : roadmapContent ? (
               <RoadmapDisplay
+                embedded
+                businessName={displayBusinessName}
                 roadmapContent={roadmapContent}
                 onStartImplementation={() => {}}
+                onEditRoadmap={(modified) => {
+                  setRoadmapContent(modified);
+                }}
                 loading={false}
                 sessionId={sessionId}
                 hideStartButton={true}
                 completedRoadmapStepKeys={completedRoadmapStepKeys}
               />
             ) : (
-                  <div className="text-center py-12">
-                    <div className="inline-flex p-3 bg-gradient-to-br from-teal-100 to-blue-100 rounded-xl mb-4">
-                      <FileText className="h-10 w-10 text-teal-600" />
-                    </div>
-                    <p className="text-lg font-semibold text-gray-700 mb-2">No roadmap content available</p>
-                    <p className="text-sm text-gray-500 mb-5">Load your roadmap to view the complete plan</p>
-                    <motion.button
-                      onClick={loadRoadmapContent}
-                      className="bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white px-6 py-2.5 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-300 transform hover:-translate-y-0.5"
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      Load Roadmap
-                    </motion.button>
-                  </div>
-            )}
+              <div className="rounded-2xl border border-gray-200/80 bg-white/95 py-12 text-center shadow-lg backdrop-blur-xl">
+                <div className="mb-4 inline-flex rounded-xl bg-gradient-to-br from-teal-100 to-blue-100 p-3">
+                  <FileText className="h-10 w-10 text-teal-600" />
+                </div>
+                <p className="mb-2 text-lg font-semibold text-gray-700">Roadmap not loaded</p>
+                <p className="mb-5 text-sm text-gray-500">View your full launch plan with all stages and tasks</p>
+                <motion.button
+                  onClick={loadRoadmapContent}
+                  className="rounded-lg bg-gradient-to-r from-teal-500 to-blue-600 px-6 py-2.5 font-semibold text-white shadow-md transition-all hover:from-teal-600 hover:to-blue-700 hover:shadow-lg"
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                >
+                  Load Roadmap
+                </motion.button>
               </div>
+            )}
             </motion.div>
           )}
           

@@ -26,7 +26,6 @@ import PlanToRoadmapTransition from "../../components/PlanToRoadmapTransition";
 
 import ModifyModal from "../../components/ModifyModal";
 import RoadmapDisplay from "../../components/RoadmapDisplay";
-import RoadmapToImplementationTransition from "../../components/RoadmapToImplementationTransition";
 import UploadPlanModal from "../../components/UploadPlanModal";
 import VentureOnboardingTips from "../../components/VentureOnboardingTips";
 import { isVentureOnboardingTipsComplete } from "@/constants/ventureOnboarding";
@@ -659,6 +658,14 @@ export default function ChatPage() {
     overallAnswered: 0,
     overallTotal: 50, // 5 GKY + 45 Business Plan
   });
+
+  useEffect(() => {
+    if (!sessionId) return;
+    if (progress.phase === "ROADMAP_TO_IMPLEMENTATION_TRANSITION") {
+      navigate(`/ventures/${sessionId}/implementation-transition`, { replace: true });
+    }
+  }, [sessionId, progress.phase, navigate]);
+
   const applyProgressUpdate = (progressData: ProgressState) => {
     // DEBUG: Log raw API response to see if phase_breakdown is present
     console.log("🔍 DEBUG - Raw API Response progressData:", progressData);
@@ -822,10 +829,6 @@ export default function ChatPage() {
   const [roadmapData, setRoadmapData] = useState<{
     roadmapContent: string;
     isGenerated: boolean;
-  } | null>(null);
-  const [roadmapToImplementationTransition, setRoadmapToImplementationTransition] = useState<{
-    roadmapContent: string;
-    isActive: boolean;
   } | null>(null);
   const [roadmapEditModal, setRoadmapEditModal] = useState<{
     isOpen: boolean;
@@ -1511,11 +1514,7 @@ export default function ChatPage() {
           applyProgressUpdate(data.result.progress);
         }
         
-        // Set the roadmap to implementation transition
-        setRoadmapToImplementationTransition({
-          roadmapContent: data.result.reply,
-          isActive: true
-        });
+        navigate(`/ventures/${sessionId}/implementation-transition`);
       } else {
         toast.error(data.message || "Failed to prepare implementation transition");
       }
@@ -1573,66 +1572,6 @@ export default function ChatPage() {
     }
   };
 
-  // Handle actual implementation start (from transition screen)
-  const handleActualStartImplementation = async () => {
-    try {
-      setLoading(true);
-      toast.info("Starting implementation phase...");
-      
-      // Use httpClient so expired access tokens trigger the shared refresh-token
-      // interceptor (raw fetch with localStorage bypasses that and yields 401).
-      const { data } = await httpClient.post<{
-        success: boolean;
-        message?: string;
-        requires_subscription?: boolean;
-        result?: {
-          progress?: ProgressState;
-          reply?: string;
-        };
-      }>(`/angel/sessions/${sessionId}/start-implementation`, {});
-      
-      if (data.success) {
-        toast.success("Implementation phase activated!");
-        
-        // CRITICAL: Clear transition state FIRST so it doesn't block the Implementation component
-        setRoadmapToImplementationTransition(null);
-        setRoadmapData(null);
-        setTransitionData(null);
-        
-        // Update progress to IMPLEMENTATION phase - this will trigger the Implementation component to show
-        if (data.result?.progress) {
-          console.log("🔄 Updating progress to IMPLEMENTATION:", data.result.progress);
-          applyProgressUpdate(data.result.progress);
-        } else {
-          // Fallback: manually set progress to IMPLEMENTATION if endpoint doesn't return it
-          console.log("⚠️ No progress in response, manually setting to IMPLEMENTATION");
-          applyProgressUpdate({
-            phase: "IMPLEMENTATION",
-            answered: 0,
-            total: 10,
-            percent: 0
-          });
-        }
-      } else {
-        toast.error(data.message || "Failed to start implementation");
-      }
-    } catch (error: unknown) {
-      console.error("❌ Error starting implementation:", error);
-      const err = error as {
-        response?: { data?: { detail?: string; error?: string; message?: string } };
-        message?: string;
-      };
-      const errorMessage =
-        err?.response?.data?.detail ||
-        err?.response?.data?.error ||
-        err?.response?.data?.message ||
-        err?.message ||
-        "Failed to start implementation. Please try again.";
-      toast.error(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
   const [roadmapState, setRoadmapState] = useState({
     showModal: false,
     loading: false,
@@ -3350,41 +3289,6 @@ export default function ChatPage() {
           }
         }
 
-        // CRITICAL: Check if we're in ROADMAP_TO_IMPLEMENTATION_TRANSITION phase
-        if (phase === "ROADMAP_TO_IMPLEMENTATION_TRANSITION") {
-          console.log("🚀 Detected ROADMAP_TO_IMPLEMENTATION_TRANSITION phase - fetching transition content");
-          
-          // Show loading state
-          setLoading(true);
-          
-          try {
-            const { data } = await httpClient.post<any>(
-              `/angel/sessions/${sessionId}/roadmap-to-implementation-transition`
-            );
-            
-            if (data.success && data.result?.reply) {
-              console.log("✅ Roadmap to Implementation transition content received");
-              setRoadmapToImplementationTransition({
-                roadmapContent: data.result.reply,
-                isActive: true
-              });
-              if (data.result?.progress) {
-                applyProgressUpdate(data.result.progress);
-              }
-              setBackendTotals({ answered: scopedAnswered, total: totalPhase, overallAnswered: scopedAnswered, overallTotal: scopedTotal });
-              setLoading(false);
-              return;
-            } else {
-              console.warn("⚠️ Transition endpoint did not return expected data");
-              setLoading(false);
-            }
-          } catch (transitionError) {
-            console.error("Failed to fetch transition content:", transitionError);
-            setLoading(false);
-            // Continue with normal flow
-          }
-        }
-
         // CRITICAL: Check if we're in ROADMAP phase - automatically load and display roadmap
         const preferVentureChat =
           (location.state as { preferVentureChat?: boolean } | null)?.preferVentureChat === true;
@@ -4406,28 +4310,6 @@ export default function ChatPage() {
     );
   }
 
-  // Show loading screen while fetching roadmap → implementation transition (generic copy; no "roadmap" in loading text)
-  if (progress.phase === "ROADMAP_TO_IMPLEMENTATION_TRANSITION" && !roadmapToImplementationTransition?.isActive) {
-    return (
-      <div className="fixed inset-0 z-50 bg-gradient-to-br from-slate-50 to-teal-50">
-        <VentureLoader title="Loading…" subtitle="Please wait" />
-      </div>
-    );
-  }
-
-  // Show roadmap to implementation transition
-  if (roadmapToImplementationTransition && roadmapToImplementationTransition.isActive) {
-    return (
-      <RoadmapToImplementationTransition
-        isOpen={true}
-        onBeginImplementation={handleActualStartImplementation}
-        businessName={businessContext.business_name}
-        industry={businessContext.industry}
-        location={businessContext.location}
-      />
-    );
-  }
-
   // Show implementation phase
   if (progress.phase === "IMPLEMENTATION") {
     console.log("✅ Rendering Implementation component - phase is IMPLEMENTATION");
@@ -4677,10 +4559,105 @@ export default function ChatPage() {
       {/* Main Content */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {/* Header Section */}
-        <div className="flex-shrink-0 px-3 py-4 lg:px-3 lg:py-4">
+        <div className="flex-shrink-0 px-2 py-2 sm:px-3 sm:py-3 lg:px-3 lg:py-4">
           <div className="max-w-6xl mx-auto">
-            <div className="flex items-center justify-between mb-3">
-              {/* Back to Ventures - Redesigned with better positioning */}
+            {/* Mobile header — single compact row */}
+            <div className="mb-2 flex min-w-0 items-center gap-1 sm:gap-1.5 lg:hidden">
+              <motion.button
+                whileHover={{ scale: 1.02, x: -2 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => navigate("/ventures")}
+                className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-gray-200/50 bg-white/60 px-2 py-1.5 text-[10px] font-medium text-gray-600 shadow-sm transition-all duration-200 hover:border-teal-300/50 hover:bg-white/90 hover:text-teal-600 group sm:px-2.5 sm:text-xs"
+                aria-label="Back to all ventures"
+              >
+                <svg
+                  className="h-3.5 w-3.5 shrink-0 group-hover:-translate-x-0.5 transition-transform sm:h-4 sm:w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 19l-7-7 7-7"
+                  />
+                </svg>
+                <span className="max-[340px]:hidden sm:inline">Ventures</span>
+              </motion.button>
+
+              <div className="flex min-w-0 flex-1 items-center justify-center gap-1 overflow-hidden sm:gap-1.5">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gradient-to-r from-teal-500 to-blue-500 text-white shadow-sm sm:h-8 sm:w-8 sm:rounded-lg">
+                  <img
+                    src={FounderportIcon}
+                    alt="Angel"
+                    className="h-5 w-5 object-contain sm:h-6 sm:w-6"
+                  />
+                </div>
+                <div className="flex min-w-0 max-w-[8.5rem] items-center gap-1 rounded-md border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-1.5 py-1 shadow-sm sm:max-w-none sm:gap-1.5 sm:px-2.5 sm:py-1.5">
+                  <div className="relative shrink-0">
+                    <div className="h-1 w-1 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 animate-pulse sm:h-1.5 sm:w-1.5"></div>
+                    <div className="absolute inset-0 h-1 w-1 rounded-full bg-gradient-to-r from-emerald-400 to-teal-400 animate-ping opacity-60 sm:h-1.5 sm:w-1.5"></div>
+                  </div>
+                  <span className="truncate text-[10px] font-semibold leading-none text-transparent bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text sm:text-xs">
+                    {headerPhaseLabel}
+                  </span>
+                  <span className="shrink-0 text-[10px] font-medium leading-none text-gray-700 sm:text-xs">
+                    {`${headerDisplayAnswered}/${headerDisplayTotal}`}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  onClick={() => {
+                    setShowProfileModal(true);
+                    loadProfileData();
+                  }}
+                  className="rounded-md border border-gray-200 bg-white/80 p-1.5 backdrop-blur-sm transition-colors hover:bg-white sm:rounded-lg sm:p-2"
+                  title="View Profile"
+                >
+                  <svg
+                    className="h-4 w-4 text-gray-600 sm:h-5 sm:w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                    />
+                  </svg>
+                </button>
+
+                {showProgressSidebar && (
+                  <button
+                    onClick={() => setShowMobileNav(!showMobileNav)}
+                    className="rounded-md border border-gray-200 bg-white/80 p-1.5 backdrop-blur-sm transition-colors hover:bg-white sm:rounded-lg sm:p-2"
+                    aria-label="Open progress menu"
+                  >
+                    <svg
+                      className="h-4 w-4 text-gray-600 sm:h-5 sm:w-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 6h16M4 12h16M4 18h16"
+                      />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Desktop header — unchanged layout */}
+            <div className="mb-3 hidden items-center justify-between lg:flex">
               <motion.button
                 whileHover={{ scale: 1.02, x: -2 }}
                 whileTap={{ scale: 0.98 }}
@@ -4704,13 +4681,13 @@ export default function ChatPage() {
               </motion.button>
 
               <div className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-gradient-to-r from-teal-500 to-blue-500 rounded-lg flex items-center justify-center text-white flex-shrink-0 shadow-md">
-                    <img 
-                      src={FounderportIcon} 
-                      alt="Angel" 
-                      className="!w-14 !h-14 object-cover"
-                    />
-                  </div>
+                <div className="w-10 h-10 bg-gradient-to-r from-teal-500 to-blue-500 rounded-lg flex items-center justify-center text-white flex-shrink-0 shadow-md">
+                  <img
+                    src={FounderportIcon}
+                    alt="Angel"
+                    className="!w-14 !h-14 object-cover"
+                  />
+                </div>
                 <div className="hidden sm:block">
                   <div className="flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg border border-emerald-200 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-[1.02]">
                     <div className="relative">
@@ -4727,22 +4704,22 @@ export default function ChatPage() {
                   </div>
                 </div>
                 <div className="sm:hidden">
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-md border border-emerald-200 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-[1.02]">
+                  <div className="flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg border border-emerald-200 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-[1.02]">
                     <div className="relative">
-                      <div className="w-1.5 h-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full animate-pulse"></div>
-                      <div className="absolute inset-0 w-1.5 h-1.5 bg-gradient-to-r from-emerald-400 to-teal-400 rounded-full animate-ping opacity-60"></div>
+                      <div className="w-2 h-2 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full animate-pulse"></div>
+                      <div className="absolute inset-0 w-2 h-2 bg-gradient-to-r from-emerald-400 to-teal-400 rounded-full animate-ping opacity-60"></div>
                     </div>
-                    <span className="text-xs font-semibold text-transparent bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text">
+                    <span className="text-sm font-semibold text-transparent bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text">
                       {headerPhaseLabel}
                     </span>
-                    <span className="text-xs font-medium text-gray-700">
-                      {`${headerDisplayAnswered}/${headerDisplayTotal}`}
+                    <div className="h-4 w-px bg-gradient-to-b from-emerald-300 to-teal-300"></div>
+                    <span className="text-sm font-medium text-gray-700">
+                      {`${headerDisplayAnswered} of ${headerDisplayTotal}`}
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Profile Button */}
               <button
                 onClick={() => {
                   setShowProfileModal(true);
@@ -4766,26 +4743,25 @@ export default function ChatPage() {
                 </svg>
               </button>
 
-              {/* Mobile Navigation Toggle — hidden during GKY (empty sidebar) */}
               {showProgressSidebar && (
-              <button
-                onClick={() => setShowMobileNav(!showMobileNav)}
-                className="lg:hidden p-2 rounded-lg bg-white/80 backdrop-blur-sm border border-gray-200 hover:bg-white transition-colors"
-              >
-                <svg
-                  className="w-5 h-5 text-gray-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+                <button
+                  onClick={() => setShowMobileNav(!showMobileNav)}
+                  className="lg:hidden p-2 rounded-lg bg-white/80 backdrop-blur-sm border border-gray-200 hover:bg-white transition-colors"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 6h16M4 12h16M4 18h16"
-                  />
-                </svg>
-              </button>
+                  <svg
+                    className="w-5 h-5 text-gray-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 6h16M4 12h16M4 18h16"
+                    />
+                  </svg>
+                </button>
               )}
             </div>
 
@@ -5004,10 +4980,10 @@ export default function ChatPage() {
         {/* Single scroll: messages + input + picker */}
         <div
           ref={chatContainerRef}
-          className="chat-container min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pb-4 lg:pb-4"
+          className="chat-container min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pb-8 sm:pb-6 lg:pb-4"
         >
           <div className={`mx-auto flex min-h-full flex-col ${chatContentMaxWidth}`}>
-            <div className="flex-1 space-y-4">
+            <div className="flex-1 space-y-5 pb-3 sm:space-y-4 lg:space-y-4 lg:pb-0">
             {/* Chat History */}
             {history.map((pair, index) => (
               <div
@@ -5346,9 +5322,9 @@ export default function ChatPage() {
               </div>
             )}
 
-            {/* Input + actions — one scroll with chat; mt-auto pins to bottom when content is short */}
-            <div className="mt-4 flex-shrink-0 border-t border-gray-200/70 bg-gradient-to-br from-slate-50 to-teal-50 py-3">
-              <div className="w-full">
+            {/* Input + actions — one scroll with chat; extra vertical rhythm on mobile only */}
+            <div className="mt-6 flex flex-shrink-0 flex-col gap-4 border-t border-gray-200/70 bg-gradient-to-br from-slate-50 to-teal-50 px-3 pb-5 pt-5 sm:mt-5 sm:gap-3 sm:px-3 sm:pb-4 sm:pt-4 lg:mt-4 lg:gap-0 lg:px-0 lg:py-3">
+              <div className="flex w-full min-w-0 max-w-full flex-col gap-4 sm:gap-3 lg:gap-0">
             {/* Web Search Progress Indicator */}
             <WebSearchIndicator 
               isSearching={webSearchStatus.is_searching} 
@@ -5389,7 +5365,7 @@ export default function ChatPage() {
             )}
 
             {progress.phase !== 'GKY' && (
-              <div className="mb-3 flex justify-center">
+              <div className="mb-1 flex justify-center sm:mb-3 lg:mb-3">
                 <button
                   onClick={() => setShowInstructions(true)}
                   className="text-gray-500 hover:text-gray-700 transition-colors"
@@ -5404,7 +5380,7 @@ export default function ChatPage() {
               value={currentInput}
               onChange={setCurrentInput}
               onSubmit={handleNext}
-              placeholder="Type your response... (Enter to send)"
+              placeholder="Type your response..."
               disabled={loading}
               loading={loading}
               currentQuestion={currentQuestion}
@@ -5414,7 +5390,7 @@ export default function ChatPage() {
             {/* Quick Actions Row - Mobile only (desktop shows in left sidebar) */}
             {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
               progress.phase === ("BUSINESS_PLAN" as ProgressState['phase'])) && (
-              <div className="mt-4 lg:hidden">
+              <div className="mt-2 border-t border-gray-200/60 pt-5 sm:mt-4 sm:border-0 sm:pt-0 lg:hidden">
                 {progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) &&
                   businessPlanImportOfferActive && (
                   <div className="mb-3">
@@ -5433,13 +5409,13 @@ export default function ChatPage() {
                   <p className="text-gray-400 text-xs">Choose a tool to help with your response</p>
                 </div>
                 
-                <div className="grid grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3">
                   {/* Support Button */}
                   <button
                     onClick={() => handleNext("Support")}
                     disabled={loading}
                     data-coachmark="support"
-                    className="group relative bg-gradient-to-br from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border border-blue-200 hover:border-blue-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    className="group relative min-h-[4.5rem] bg-gradient-to-br from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border border-blue-200 hover:border-blue-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none sm:min-h-0"
                   >
                     <div className="flex flex-col items-center space-y-1">
                       <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white text-sm group-hover:scale-110 transition-transform duration-300">
@@ -5456,7 +5432,7 @@ export default function ChatPage() {
                     onClick={() => handleNext("Draft")}
                     disabled={loading}
                     data-coachmark="draft"
-                    className="group relative bg-gradient-to-br from-emerald-50 to-green-50 hover:from-emerald-100 hover:to-green-100 border border-emerald-200 hover:border-emerald-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    className="group relative min-h-[4.5rem] bg-gradient-to-br from-emerald-50 to-green-50 hover:from-emerald-100 hover:to-green-100 border border-emerald-200 hover:border-emerald-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none sm:min-h-0"
                   >
                     <div className="flex flex-col items-center space-y-1">
                       <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-green-600 rounded-full flex items-center justify-center text-white text-sm group-hover:scale-110 transition-transform duration-300">
@@ -5473,7 +5449,7 @@ export default function ChatPage() {
                     onClick={() => handleNext(currentInput.trim() ? `Scrapping: ${currentInput}` : "Scrapping")}
                     disabled={loading}
                     data-coachmark="scrapping"
-                    className="group relative bg-gradient-to-br from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 border border-orange-200 hover:border-orange-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    className="group relative min-h-[4.5rem] bg-gradient-to-br from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 border border-orange-200 hover:border-orange-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none sm:min-h-0"
                   >
                     <div className="flex flex-col items-center space-y-1">
                       <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-amber-600 rounded-full flex items-center justify-center text-white text-sm group-hover:scale-110 transition-transform duration-300">
@@ -5504,7 +5480,7 @@ export default function ChatPage() {
                       }
                     }}
                     disabled={loading}
-                    className="group relative bg-gradient-to-br from-violet-50 to-purple-50 hover:from-violet-100 hover:to-purple-100 border border-violet-200 hover:border-violet-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    className="group relative min-h-[4.5rem] bg-gradient-to-br from-violet-50 to-purple-50 hover:from-violet-100 hover:to-purple-100 border border-violet-200 hover:border-violet-300 rounded-xl p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none sm:min-h-0"
                   >
                     <div className="flex flex-col items-center space-y-1">
                       <div className="w-8 h-8 bg-gradient-to-br from-violet-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm group-hover:scale-110 transition-transform duration-300">
@@ -5534,10 +5510,10 @@ export default function ChatPage() {
 
       {/* Right Navigation Panel - Desktop (hidden during GKY — sidebar has no useful content) */}
       {showProgressSidebar && (
-      <div className="hidden h-screen w-80 flex-shrink-0 overflow-hidden border-l border-gray-200 bg-gradient-to-b from-white via-slate-50/80 to-teal-50/60 lg:sticky lg:top-0 lg:flex lg:flex-col">
-        <div className="flex min-h-0 flex-1 flex-col p-4">
+      <div className="hidden h-screen w-80 flex-shrink-0 border-l border-gray-200 bg-gradient-to-b from-white via-slate-50/80 to-teal-50/60 lg:sticky lg:top-0 lg:flex lg:flex-col">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain p-4 pb-6">
         <QuestionNavigator
-          className="flex-1 min-h-0"
+          className="w-full"
           questions={questions}
           currentPhase={progress.phase}
           onQuestionSelect={handleQuestionSelect}

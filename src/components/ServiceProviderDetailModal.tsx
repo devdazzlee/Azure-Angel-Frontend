@@ -11,6 +11,7 @@ import {
   Clock,
   TrendingUp
 } from 'lucide-react';
+import { normalizeSpecialties } from '../utils/serviceProvider';
 
 interface ServiceProvider {
   name: string;
@@ -20,7 +21,7 @@ interface ServiceProvider {
   key_considerations?: string;
   estimated_cost?: string;
   contact_method?: string;
-  specialties?: string;
+  specialties?: string | string[];
   category?: string;
   address?: string;
   rating?: number;
@@ -83,7 +84,15 @@ const ServiceProviderDetailModal: React.FC<ServiceProviderDetailModalProps> = ({
     ? provider.rating_source.trim()
     : 'aggregated public reviews';
 
-  const specialtiesList = provider.specialties ? provider.specialties.split(',').map(s => s.trim()) : [];
+  const specialtiesList = normalizeSpecialties(provider.specialties);
+
+  const ratingValue =
+    typeof provider.rating === 'number'
+      ? provider.rating
+      : provider.rating != null
+        ? Number.parseFloat(String(provider.rating))
+        : NaN;
+  const hasRating = Number.isFinite(ratingValue);
 
   return (
     <div 
@@ -118,14 +127,14 @@ const ServiceProviderDetailModal: React.FC<ServiceProviderDetailModalProps> = ({
               
               <p className="text-white/90 text-lg mb-3">{provider.type}</p>
               
-              {provider.rating && (
+              {hasRating && (
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <div className="flex items-center gap-1">
                     {[...Array(5)].map((_, i) => (
                       <Star
                         key={i}
                         className={`h-5 w-5 ${
-                          i < Math.floor(provider.rating || 0)
+                          i < Math.floor(ratingValue)
                             ? 'fill-yellow-300 text-yellow-300'
                             : 'text-white/30'
                         }`}
@@ -133,7 +142,7 @@ const ServiceProviderDetailModal: React.FC<ServiceProviderDetailModalProps> = ({
                     ))}
                   </div>
                   <span className="text-white/90 font-semibold text-lg">
-                    {provider.rating.toFixed(1)}
+                    {ratingValue.toFixed(1)}
                   </span>
                   <span className="text-white/75 text-xs font-medium">
                     Source: {ratingSourceLabel}
@@ -323,10 +332,10 @@ const ServiceProviderDetailModal: React.FC<ServiceProviderDetailModalProps> = ({
                       <span>Nationwide reach with consistent, standardized processes</span>
                     </li>
                   )}
-                  {provider.rating && provider.rating >= 4.5 && (
+                  {hasRating && ratingValue >= 4.5 && (
                     <li className="flex items-start gap-2">
                       <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
-                      <span>High customer satisfaction rating ({provider.rating}/5.0)</span>
+                      <span>High customer satisfaction rating ({ratingValue.toFixed(1)}/5.0)</span>
                     </li>
                   )}
                   <li className="flex items-start gap-2">

@@ -4,10 +4,14 @@ import { toast } from "react-toastify";
 import { fetchRoadmapPlan } from "../../services/authService";
 import { isRoadmapStepCompleted } from "../../utils/roadmapMatching";
 import { parseRoadmapMarkdown } from "../../utils/roadmapParse";
+import { ArrowLeft, Map } from "lucide-react";
+import DocumentExportModal from "../../components/DocumentExportModal";
+import RoadmapTaskMobileCards from "../../components/RoadmapTaskMobileCards";
 import {
-  downloadRoadmapExcel,
-  downloadRoadmapWord,
-} from "../../utils/roadmapExport";
+  roadmapFooterActionsRow,
+  roadmapFooterBtnDownload,
+  roadmapFooterBtnProceed,
+} from "../../components/roadmapFooterButtons";
 import httpClient from "../../api/httpClient";
 
 const RoadmapPage: React.FC = () => {
@@ -16,7 +20,7 @@ const RoadmapPage: React.FC = () => {
   const [roadmapContent, setRoadmapContent] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
-  const [exporting, setExporting] = useState<"excel" | "word" | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   /** Synchronous guard so rapid double-clicks cannot start two transitions before React re-renders. */
   const implementationTransitionLockRef = useRef(false);
@@ -99,61 +103,55 @@ const RoadmapPage: React.FC = () => {
   const stages = parseRoadmapMarkdown(roadmapContent);
   const totalTasks = stages.reduce((sum, stage) => sum + stage.tasks.length, 0);
 
-  const handleExportExcel = () => {
-    setExporting("excel");
-    try {
-      downloadRoadmapExcel(stages, roadmapContent);
-      toast.success("Roadmap saved as Excel (.xlsx).");
-    } catch {
-      toast.error("Failed to export roadmap to Excel.");
-    } finally {
-      setExporting(null);
-    }
-  };
-
-  const handleExportWord = async () => {
-    setExporting("word");
-    try {
-      await downloadRoadmapWord(stages, roadmapContent);
-      toast.success("Roadmap saved as Word (.docx).");
-    } catch {
-      toast.error("Failed to export roadmap to Word.");
-    } finally {
-      setExporting(null);
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      {/* Beautiful Header */}
-      <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-sky-500 shadow-xl">
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center text-4xl backdrop-blur-sm shadow-lg">
-                🗺️
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold text-white mb-1">Founderport Launch Roadmap</h1>
-                <p className="text-indigo-100 text-sm">Customized directly from your completed business plan</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                disabled={!sessionId}
-                onClick={() => sessionId && navigate(`/ventures/${sessionId}/budget`)}
-                className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-all backdrop-blur-sm font-medium disabled:opacity-50 disabled:pointer-events-none"
+    <div className="min-h-screen min-w-0 overflow-x-hidden bg-gray-50">
+      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white shadow-sm">
+        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-6">
+            <button
+              type="button"
+              disabled={!sessionId}
+              onClick={() =>
+                sessionId &&
+                navigate(`/ventures/${sessionId}/budget`, {
+                  state: { fromTransition: true },
+                })
+              }
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-indigo-700 disabled:pointer-events-none disabled:opacity-50 sm:px-0"
+              aria-label="Back to Budget"
+            >
+              <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
+              <span className="hidden sm:inline">Back to Budget</span>
+              <span className="sm:hidden">Back</span>
+            </button>
+
+            <div className="hidden h-10 w-px shrink-0 bg-gray-200 sm:block" aria-hidden />
+
+            <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
+              <div
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-sm ring-1 ring-indigo-500/20 sm:h-12 sm:w-12"
+                aria-hidden
               >
-                ← Back to Budget
-              </button>
+                <Map className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={2} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-indigo-600 sm:text-xs">
+                  Founderport
+                </p>
+                <h1 className="truncate text-lg font-bold tracking-tight text-gray-900 sm:text-2xl">
+                  Launch Roadmap
+                </h1>
+                <p className="mt-0.5 truncate text-xs text-gray-500 sm:text-sm">
+                  Personalized from your completed business plan
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="mx-auto max-w-7xl min-w-0 px-3 py-5 sm:px-4 sm:py-6 md:px-6 md:py-8 lg:px-8">
         {loading ? (
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-gray-500 space-y-6">
             <div className="text-6xl animate-pulse">🗺️</div>
@@ -191,56 +189,64 @@ const RoadmapPage: React.FC = () => {
         ) : (
           <>
             {/* Roadmap Summary Card */}
-            <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 border border-gray-100">
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Roadmap Overview</h2>
-                  <p className="text-gray-600">
-                    Your personalized launch roadmap is structured into <strong className="text-indigo-600">{stages.length} key stages</strong> with a total of <strong className="text-indigo-600">{totalTasks} actionable tasks</strong>.
+            <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:mb-8 sm:p-6 md:p-8 md:shadow-md">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between md:gap-6">
+                <div className="min-w-0">
+                  <h2 className="mb-2 text-xl font-bold text-gray-900 sm:text-2xl">Roadmap Overview</h2>
+                  <p className="text-sm leading-relaxed text-gray-600 sm:text-base">
+                    Your personalized launch roadmap is structured into{' '}
+                    <strong className="text-indigo-600">{stages.length} key stages</strong> with a total of{' '}
+                    <strong className="text-indigo-600">{totalTasks} actionable tasks</strong>.
                   </p>
                 </div>
-                <div className="flex gap-4">
-                  <div className="text-center bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-4 border border-indigo-200">
-                    <div className="text-3xl font-bold text-indigo-600">{stages.length}</div>
-                    <div className="text-sm text-gray-600 mt-1">Stages</div>
+                <div className="grid w-full grid-cols-2 gap-3 sm:flex sm:w-auto sm:gap-4">
+                  <div className="rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-purple-50 p-3 text-center sm:p-4">
+                    <div className="text-2xl font-bold text-indigo-600 sm:text-3xl">{stages.length}</div>
+                    <div className="mt-1 text-xs text-gray-600 sm:text-sm">Stages</div>
                   </div>
-                  <div className="text-center bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-200">
-                    <div className="text-3xl font-bold text-purple-600">{totalTasks}</div>
-                    <div className="text-sm text-gray-600 mt-1">Tasks</div>
+                  <div className="rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 p-3 text-center sm:p-4">
+                    <div className="text-2xl font-bold text-purple-600 sm:text-3xl">{totalTasks}</div>
+                    <div className="mt-1 text-xs text-gray-600 sm:text-sm">Tasks</div>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Stages */}
-            <div className="space-y-8">
+            <div className="space-y-5 sm:space-y-6 md:space-y-8">
               {stages.map((stage, stageIdx) => (
                 <div
                   key={stageIdx}
-                  className="bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300"
+                  className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-md transition-shadow duration-300 hover:shadow-lg md:shadow-lg"
                 >
                   {/* Stage Header */}
-                  <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-8 py-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-2xl font-bold text-white mb-2">{stage.title}</h3>
+                  <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-4 sm:px-6 sm:py-5 md:px-8 md:py-6">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-lg font-bold leading-snug text-white sm:text-xl md:text-2xl">
+                          {stage.title}
+                        </h3>
                         {stage.goal && (
-                          <p className="text-indigo-100 text-sm leading-relaxed">
-                            <strong>Goal:</strong> {stage.goal}
+                          <p className="mt-2 text-sm leading-relaxed text-indigo-100">
+                            <strong className="font-semibold text-white/95">Goal:</strong> {stage.goal}
                           </p>
                         )}
                       </div>
-                      <div className="text-right">
-                        <div className="text-3xl font-bold text-white/80">{stage.tasks.length}</div>
-                        <div className="text-xs text-indigo-200">Tasks</div>
+                      <div className="flex shrink-0 items-center gap-2 sm:flex-col sm:items-end sm:gap-0 sm:text-right">
+                        <span className="text-2xl font-bold text-white/90 sm:text-3xl">{stage.tasks.length}</span>
+                        <span className="text-xs uppercase tracking-wide text-indigo-200">Tasks</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Tasks Table — Status column shows the user's actual
-                      Implementation completions; the LLM-guessed status and
-                      dependencies columns are intentionally removed. */}
-                  <div className="overflow-x-auto">
+                  {/* Mobile / tablet: task cards */}
+                  <RoadmapTaskMobileCards
+                    tasks={stage.tasks}
+                    completedRoadmapStepKeys={completedRoadmapStepKeys}
+                  />
+
+                  {/* Desktop: table */}
+                  <div className="hidden overflow-x-auto lg:block">
                     <table className="min-w-full border-collapse">
                       <thead className="bg-gray-50">
                         <tr>
@@ -309,54 +315,17 @@ const RoadmapPage: React.FC = () => {
             </div>
 
             {/* Footer Actions */}
-            <div className="mt-12 flex flex-wrap gap-4 justify-center items-center">
+            <div className={roadmapFooterActionsRow}>
               <button
                 type="button"
-                onClick={handleExportExcel}
-                disabled={exporting !== null}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white px-8 py-3 rounded-lg shadow-lg flex items-center gap-2 transition-all font-semibold transform hover:scale-105"
-                title="Best for tables: all tasks in one spreadsheet plus a stage summary"
+                onClick={() => setShowExportModal(true)}
+                disabled={!roadmapContent.trim()}
+                className={roadmapFooterBtnDownload}
               >
-                {exporting === "excel" ? (
-                  <>
-                    <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Exporting…
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Download Excel
-                  </>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleExportWord()}
-                disabled={exporting !== null}
-                className="bg-slate-700 hover:bg-slate-800 disabled:bg-slate-400 disabled:cursor-not-allowed text-white px-8 py-3 rounded-lg shadow-lg flex items-center gap-2 transition-all font-semibold transform hover:scale-105"
-                title="Formatted document with a table per stage"
-              >
-                {exporting === "word" ? (
-                  <>
-                    <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Exporting…
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Download Word
-                  </>
-                )}
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Download
               </button>
               <button
                 type="button"
@@ -387,7 +356,7 @@ const RoadmapPage: React.FC = () => {
 
                     if (data.success) {
                       toast.success("Implementation transition prepared!");
-                      navigate(`/ventures/${sessionId}`);
+                      navigate(`/ventures/${sessionId}/implementation-transition`);
                     } else {
                       if (data.requires_subscription) {
                         toast.error(data.message || "Subscription required to proceed to Implementation phase");
@@ -405,27 +374,32 @@ const RoadmapPage: React.FC = () => {
                   }
                 }}
                 disabled={isTransitioning}
-                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white px-8 py-3 rounded-lg shadow-lg flex items-center gap-2 transition-all font-semibold transform hover:scale-105 disabled:transform-none"
+                className={roadmapFooterBtnProceed}
               >
                 {isTransitioning ? (
                   <>
-                    <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                    <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden>
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Preparing...
+                    Preparing…
                   </>
                 ) : (
-                  <>
-                    <span className="text-xl">🚀</span>
-                    Proceed to Implementation
-                  </>
+                  "Proceed to Implementation"
                 )}
               </button>
             </div>
           </>
         )}
       </div>
+
+      <DocumentExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        documentTitle="Launch Roadmap"
+        documentContent={roadmapContent}
+        documentType="roadmap"
+      />
     </div>
   );
 };
