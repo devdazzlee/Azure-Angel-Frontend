@@ -4451,7 +4451,7 @@ export default function ChatPage() {
             </button>
           )}
 
-          {progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) &&
+          {/* {progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) &&
             businessPlanImportOfferActive && (
             <button
               type="button"
@@ -4469,7 +4469,7 @@ export default function ChatPage() {
               </div>
               <div className="absolute inset-0 bg-gradient-to-br from-teal-500/10 to-cyan-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             </button>
-          )}
+          )} */}
 
           {/* Skip to Q45 — testing only (desktop sidebar) */}
           {progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) && (

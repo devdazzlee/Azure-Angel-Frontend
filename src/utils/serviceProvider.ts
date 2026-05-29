@@ -1,3 +1,16 @@
+export interface ServiceProviderRow {
+  name: string;
+  type?: string;
+  local?: boolean;
+  description?: string;
+  specialties?: string | string[];
+  estimated_cost?: string;
+  contact_method?: string;
+  website?: string;
+  rating?: number | string;
+  [key: string]: unknown;
+}
+
 /** Normalize API specialties (string, array, or other) into a string list. */
 export function normalizeSpecialties(value: unknown): string[] {
   if (value == null || value === '') return [];

@@ -43,6 +43,8 @@ import OperatingExpensesTable from './OperatingExpensesTable';
 import RevenueTable from './RevenueTable';
 import { CurrencyInput } from './CurrencyInput'; 
 import BudgetDashboardHeader from './BudgetDashboardHeader';
+import { BudgetEmbedContext } from './budgetEmbedContext';
+import DocumentExportModal from '@/components/DocumentExportModal';
 import SelectedItemsBanner from './SelectedItemsBanner';
 import BudgetWarnings from './BudgetWarnings';
 import MetricCard from './MetricCard';
@@ -54,17 +56,17 @@ import {
   getSmartStepForInitialInvestment,
   classifyExpenseGroup,
 } from './BudgetUtils';
-import { generateDOCX } from '@/utils/documentGenerator';
-import { buildBudgetMarkdownForExport } from '@/utils/budgetExportContent';
+import { generateDOCX, generatePDF } from '@/utils/documentGenerator';
+import {
+  buildBudgetMarkdownForExport,
+  type BudgetExportData,
+} from '@/utils/budgetExportContent';
 import type { BudgetExportActions } from './budgetExportActions'; 
 import { budgetService } from '@/services/budgetService';
 import { toast } from 'react-toastify';
 import BudgetChatModal from './BudgetChatModal';
 import AddLineItemModal from './AddLineItemModal'; 
 import RemoveItemModal from './RemoveItemModal'; 
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
-
 // Types
 type RevenueStream = {
   id: string;
@@ -91,6 +93,8 @@ interface BudgetDashboardProps {
   onRegisterExportActions?: (actions: BudgetExportActions) => void;
   /** Budget Setup flow: compact chrome, extra bottom space for sticky footer */
   embeddedInSetup?: boolean;
+  /** Embedded in Implementation (or similar): no extra page chrome / nested cards */
+  embeddedInParent?: boolean;
 };
 
 // Modern Color Palette — consistent teal / blue / emerald theme
@@ -121,7 +125,14 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   businessContext,
   onRegisterExportActions,
   embeddedInSetup = false,
+  embeddedInParent = false,
 }) => {
+  const tableSectionClass = embeddedInParent
+    ? 'rounded-xl border border-gray-200 bg-white overflow-hidden'
+    : 'rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden';
+
+  const contentPaddingClass = embeddedInParent ? 'px-0' : 'px-4 sm:px-6 lg:px-8';
+
   // State Management
   const [viewMode, setViewMode] = useState<'estimated' | 'actual'>('estimated');
   const [dynamicRevenueStreams, setDynamicRevenueStreams] = useState<RevenueStream[]>([]);
@@ -129,6 +140,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   const [totalMonthlyRevenue, setTotalMonthlyRevenue] = useState<number>(0);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(() => new Set());
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = window.localStorage.getItem('budgetDashboardTab');
@@ -718,49 +730,74 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
     return allBudgetItems.filter(item => selectedItemIds.has(item.id));
   }, [allBudgetItems, selectedItemIds]);
 
-  // Export PDF
+  const buildBudgetExportPayload = useCallback((): BudgetExportData => {
+    const businessName = businessContext?.business_name?.trim() || 'Business Budget';
+    const breakEvenLabel =
+      breakEven.status === 'never'
+        ? 'Not achievable with current projections'
+        : breakEven.years != null
+          ? `${breakEven.years.toFixed(1)} years (${breakEven.months} months)`
+          : `${breakEven.months} months`;
+
+    return {
+      budget,
+      businessName,
+      startupItems: [...startupCostItems, ...otherExpenses],
+      operatingItems: operatingExpenseItems,
+      revenueStreams: dynamicRevenueStreams
+        .filter((s) => s.isSelected)
+        .map((s) => ({
+          name: s.name,
+          estimatedPrice: s.estimatedPrice,
+          estimatedVolume: s.estimatedVolume,
+          revenueProjection: s.revenueProjection,
+          isSelected: s.isSelected,
+        })),
+      summary: {
+        initialInvestment: budget.initial_investment ?? 0,
+        startupCostsTotal: startupCostsTotal,
+        startupActualTotal: startupActualTotal,
+        remainingStartupFunds: remainingStartupFunds,
+        monthlyRevenue: effectiveMonthlyRevenueForBreakEven,
+        monthlyOperatingCosts: totalMonthlyCosts,
+        monthlyNetIncome: monthlyNetIncome,
+        breakEvenLabel,
+        revenue24: twoYearProjection.revenue24,
+        costs24: twoYearProjection.costs24,
+        net24: twoYearProjection.net24,
+      },
+      currency,
+    };
+  }, [
+    budget,
+    businessContext,
+    startupCostItems,
+    otherExpenses,
+    operatingExpenseItems,
+    dynamicRevenueStreams,
+    startupCostsTotal,
+    startupActualTotal,
+    remainingStartupFunds,
+    effectiveMonthlyRevenueForBreakEven,
+    totalMonthlyCosts,
+    monthlyNetIncome,
+    breakEven,
+    twoYearProjection,
+    currency,
+  ]);
+
   const handleExportPdf = useCallback(async () => {
     try {
       toast.loading('Generating PDF...', { toastId: 'pdf-export' });
-      
-      const element = document.getElementById('budget-dashboard-content');
-      if (!element) {
-        toast.error('Could not find budget content to export', { toastId: 'pdf-export' });
-        return;
-      }
 
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-      });
-
-      const imgData = canvas.toDataURL('image/png');
-      const imgWidth = 210;
-      const pageHeight = 295;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      let position = 0;
-
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-
-      const businessName = businessContext?.business_name?.trim() || 'budget';
+      const payload = buildBudgetExportPayload();
+      const businessName = payload.businessName || 'Business Budget';
+      const md = buildBudgetMarkdownForExport(payload);
+      const title = `${businessName} — Year 1 Budget`;
       const filename = `${businessName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_budget_${new Date().toISOString().split('T')[0]}.pdf`;
-      
-      pdf.save(filename);
-      
+
+      await generatePDF(md, filename, title);
+
       toast.dismiss('pdf-export');
       toast.success('PDF exported successfully!', { toastId: 'pdf-export-success' });
     } catch (error) {
@@ -768,6 +805,11 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       toast.dismiss('pdf-export');
       toast.error('Failed to generate PDF. Please try again.', { toastId: 'pdf-export-error' });
     }
+  }, [buildBudgetExportPayload]);
+
+  const budgetExportFilenameBase = useCallback(() => {
+    const businessName = businessContext?.business_name?.trim() || 'business_budget';
+    return `${businessName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_budget_${new Date().toISOString().split('T')[0]}`;
   }, [businessContext]);
 
   // Save Budget — only expense items; revenue streams saved separately
@@ -899,17 +941,18 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
 
   const handleExportDocx = useCallback(async () => {
     try {
-      const businessName = businessContext?.business_name?.trim() || 'Business Budget';
-      const md = buildBudgetMarkdownForExport(budget, businessName);
-      const filename = `${businessName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_budget_${new Date().toISOString().split('T')[0]}.docx`;
-      await generateDOCX(md, filename, 'Budget Setup');
+      const payload = buildBudgetExportPayload();
+      const businessName = payload.businessName || 'Business Budget';
+      const md = buildBudgetMarkdownForExport(payload);
+      const filename = `${budgetExportFilenameBase()}.docx`;
+      await generateDOCX(md, filename, `${businessName} — Year 1 Budget`);
       toast.success('DOCX exported successfully!');
     } catch (error) {
       console.error('Error exporting DOCX:', error);
       toast.error('Failed to export DOCX. Please try again.');
       throw error;
     }
-  }, [budget, businessContext]);
+  }, [buildBudgetExportPayload, budgetExportFilenameBase]);
 
   useEffect(() => {
     if (!onRegisterExportActions) return;
@@ -1157,7 +1200,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.15 }}
       >
-        <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+        <div className={tableSectionClass}>
           {/* Header */}
           <div className="px-7 py-5 bg-gradient-to-r from-teal-50 to-cyan-50 border-b border-gray-200/60">
             <div className="flex items-center gap-3">
@@ -1255,7 +1298,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   const modernChartsEl = useMemo(() => (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 min-w-0">
       <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.45 }} className="min-w-0">
-        <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden min-w-0">
+        <div className={`${tableSectionClass} min-w-0`}>
           <div className="px-4 py-3 sm:px-6 sm:py-4 bg-gradient-to-r from-teal-50 to-cyan-50 border-b border-gray-200/60 flex items-center gap-2 min-w-0">
             <PieChartIcon className="w-5 h-5 text-teal-600" />
             <h3 className="font-bold text-gray-900">Startup Costs Breakdown</h3>
@@ -1327,7 +1370,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       </motion.div>
 
       <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.45, delay: 0.1 }}>
-        <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+        <div className={tableSectionClass}>
           <div className="px-4 py-3 sm:px-6 sm:py-4 bg-gradient-to-r from-cyan-50 to-blue-50 border-b border-gray-200/60 flex items-center gap-2 min-w-0">
             <BarChart3 className="w-5 h-5 text-blue-600" />
             <h3 className="font-bold text-gray-900">Monthly Costs Distribution</h3>
@@ -1360,26 +1403,32 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   ), [startupChartData, monthlyChartData, currency]);
 
   return (
+    <BudgetEmbedContext.Provider value={embeddedInParent}>
     <div
       id="budget-dashboard-content"
-      className={`min-w-0 overflow-x-hidden bg-gradient-to-br from-slate-50 via-gray-50 to-teal-50/30 ${
-        embeddedInSetup ? 'pb-2' : 'pb-16 sm:pb-20'
+      className={`min-w-0 overflow-x-hidden ${
+        embeddedInParent
+          ? 'bg-transparent pb-4'
+          : `bg-gradient-to-br from-slate-50 via-gray-50 to-teal-50/30 ${
+              embeddedInSetup ? 'pb-2' : 'pb-16 sm:pb-20'
+            }`
       }`}
     >
       {/* Budget Introduction */}
-      {budgetIntroductionEl}
+      {!embeddedInParent && budgetIntroductionEl}
 
       {/* Header Section */}
       <BudgetDashboardHeader
         viewMode={viewMode}
         setViewMode={setViewMode}
         budget={budget}
-        compact={embeddedInSetup}
+        compact={embeddedInSetup || embeddedInParent}
         onChatWithAngel={() => setIsChatModalOpen(true)}
+        onOpenExport={onRegisterExportActions ? undefined : () => setShowExportModal(true)}
       />
 
       {/* Selected Items Banner */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-w-0">
+      <div className={`max-w-7xl mx-auto ${contentPaddingClass} min-w-0`}>
         <SelectedItemsBanner
           selectedItemIds={selectedItemIds}
           onChatOpen={() => setIsChatModalOpen(true)}
@@ -1387,47 +1436,53 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 md:space-y-8 min-w-0">
+      <div className={`max-w-7xl mx-auto ${contentPaddingClass} space-y-6 md:space-y-8 min-w-0`}>
         {/* Startup Budget Summary */}
         {startupBudgetSummaryEl}
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
-          <div className="-mx-1 overflow-x-auto overscroll-x-contain pb-1 md:mx-0 md:overflow-visible">
-            <TabsList className="bg-white/80 backdrop-blur-md p-1.5 shadow-md rounded-2xl border border-gray-200/60 inline-flex w-max min-w-full md:min-w-0 gap-1">
+          <div className="w-full min-w-0 overflow-hidden">
+            <TabsList className="grid h-auto w-full max-w-full grid-cols-3 gap-1 overflow-hidden rounded-xl border border-gray-200/70 bg-gray-100/90 p-1 shadow-sm">
             <UITooltip>
               <TooltipTrigger asChild>
-                <TabsTrigger
-                  value="overview"
-                  className="px-3 md:px-5 py-2 md:py-2.5 rounded-xl text-xs md:text-sm shrink-0 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-500 data-[state=active]:to-cyan-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all font-semibold"
-                >
-                  <PieChartIcon className="w-4 h-4 mr-1.5 sm:mr-2 shrink-0" />
-                  Overview
-                </TabsTrigger>
+                <span className="contents min-w-0">
+                  <TabsTrigger
+                    value="overview"
+                    className="flex h-9 w-full min-w-0 flex-none items-center justify-center gap-1.5 rounded-lg border-0 px-2 text-xs font-medium text-gray-600 transition-colors hover:text-gray-900 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-600 data-[state=active]:to-cyan-600 data-[state=active]:!text-white data-[state=active]:shadow-none data-[state=active]:[&_svg]:text-white sm:px-3 sm:text-sm"
+                  >
+                    <PieChartIcon className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Overview</span>
+                  </TabsTrigger>
+                </span>
               </TooltipTrigger>
               <TooltipContent side="bottom">Budget summary, charts, and break-even analysis at a glance</TooltipContent>
             </UITooltip>
             <UITooltip>
               <TooltipTrigger asChild>
-                <TabsTrigger
-                  value="manage"
-                  className="px-3 md:px-5 py-2 md:py-2.5 rounded-xl text-xs md:text-sm shrink-0 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-500 data-[state=active]:to-cyan-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all font-semibold"
-                >
-                  <Edit2 className="w-4 h-4 mr-1.5 sm:mr-2 shrink-0" />
-                  <span className="whitespace-nowrap">Manage Items</span>
-                </TabsTrigger>
+                <span className="contents min-w-0">
+                  <TabsTrigger
+                    value="manage"
+                    className="flex h-9 w-full min-w-0 flex-none items-center justify-center gap-1.5 rounded-lg border-0 px-2 text-xs font-medium text-gray-600 transition-colors hover:text-gray-900 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-600 data-[state=active]:to-cyan-600 data-[state=active]:!text-white data-[state=active]:shadow-none data-[state=active]:[&_svg]:text-white sm:px-3 sm:text-sm"
+                  >
+                    <Edit2 className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Manage Items</span>
+                  </TabsTrigger>
+                </span>
               </TooltipTrigger>
               <TooltipContent side="bottom">Add, edit, and remove budget line items across all categories</TooltipContent>
             </UITooltip>
             <UITooltip>
               <TooltipTrigger asChild>
-                <TabsTrigger
-                  value="analysis"
-                  className="px-3 md:px-5 py-2 md:py-2.5 rounded-xl text-xs md:text-sm shrink-0 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-500 data-[state=active]:to-cyan-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all font-semibold"
-                >
-                  <BarChart3 className="w-4 h-4 mr-1.5 sm:mr-2 shrink-0" />
-                  Analysis
-                </TabsTrigger>
+                <span className="contents min-w-0">
+                  <TabsTrigger
+                    value="analysis"
+                    className="flex h-9 w-full min-w-0 flex-none items-center justify-center gap-1.5 rounded-lg border-0 px-2 text-xs font-medium text-gray-600 transition-colors hover:text-gray-900 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-600 data-[state=active]:to-cyan-600 data-[state=active]:!text-white data-[state=active]:shadow-none data-[state=active]:[&_svg]:text-white sm:px-3 sm:text-sm"
+                  >
+                    <BarChart3 className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Analysis</span>
+                  </TabsTrigger>
+                </span>
               </TooltipTrigger>
               <TooltipContent side="bottom">Break-even timeline, charts, and 2-year financial projections</TooltipContent>
             </UITooltip>
@@ -1452,7 +1507,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
             <div className="space-y-6">
               {/* Startup Costs */}
               <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-                <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+                <div className={tableSectionClass}>
                   <div className="px-4 py-3 sm:px-6 sm:py-4 bg-gradient-to-r from-teal-50 to-cyan-50 border-b border-gray-200/60 flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
                     <div className="p-2 bg-teal-100 rounded-lg shrink-0"><DollarSign className="w-5 h-5 text-teal-600" /></div>
                     <h3 className="font-bold text-gray-900 text-base sm:text-lg leading-snug min-w-0 flex-1">Startup Costs <span className="text-gray-500 font-normal text-xs sm:text-sm block sm:inline">(One-Time, Pre-Launch)</span></h3>
@@ -1476,7 +1531,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
 
               {/* Startup Funds */}
               <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.05 }}>
-                <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+                <div className={tableSectionClass}>
                   <div className="px-4 py-3 sm:px-6 sm:py-4 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-gray-200/60 flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
                     <div className="p-2 bg-emerald-100 rounded-lg"><DollarSign className="w-5 h-5 text-emerald-600" /></div>
                     <h3 className="font-bold text-gray-900">Startup Funds <span className="text-gray-500 font-normal text-sm">(Initial Investment)</span></h3>
@@ -1524,7 +1579,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
 
               {/* Monthly Revenue */}
               <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }}>
-                <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+                <div className={tableSectionClass}>
                   <div className="px-4 py-3 sm:px-6 sm:py-4 bg-gradient-to-r from-emerald-50 to-green-50 border-b border-gray-200/60 flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
                     <div className="p-2 bg-emerald-100 rounded-lg"><TrendingUp className="w-5 h-5 text-emerald-600" /></div>
                     <h3 className="font-bold text-gray-900">Monthly Revenue Projection</h3>
@@ -1545,7 +1600,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
 
               {/* Monthly Operating Expenses */}
               <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.15 }}>
-                <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+                <div className={tableSectionClass}>
                   <div className="px-4 py-3 sm:px-6 sm:py-4 bg-gradient-to-r from-amber-50 to-yellow-50 border-b border-gray-200/60 flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
                     <div className="p-2 bg-amber-100 rounded-lg"><Calendar className="w-5 h-5 text-amber-600" /></div>
                     <h3 className="font-bold text-gray-900">Monthly Operating Expenses <span className="text-gray-500 font-normal text-sm">(Post-Launch)</span></h3>
@@ -1571,7 +1626,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
 
             <div className="space-y-6">
               {/* Startup Costs Management */}
-              <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+              <div className={tableSectionClass}>
                 <div className="px-4 py-3 sm:px-6 sm:py-4 bg-gradient-to-r from-teal-50 to-cyan-50 border-b border-gray-200/60">
                   <h3 className="font-bold text-gray-900">Startup Costs</h3>
                 </div>
@@ -1581,7 +1636,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
               </div>
 
               {/* Revenue Management */}
-              <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+              <div className={tableSectionClass}>
                 <div className="px-4 py-3 sm:px-6 sm:py-4 bg-gradient-to-r from-emerald-50 to-green-50 border-b border-gray-200/60">
                   <h3 className="font-bold text-gray-900">Monthly Revenue</h3>
                 </div>
@@ -1595,7 +1650,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
               </div>
 
               {/* Operating Expenses Management */}
-              <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+              <div className={tableSectionClass}>
                 <div className="px-4 py-3 sm:px-6 sm:py-4 bg-gradient-to-r from-amber-50 to-yellow-50 border-b border-gray-200/60">
                   <h3 className="font-bold text-gray-900">Monthly Operating Expenses</h3>
                 </div>
@@ -1616,7 +1671,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
 
             {/* 2-Year Projection */}
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-              <div className="rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-lg overflow-hidden">
+              <div className={tableSectionClass}>
                 <div className="px-6 py-4 bg-gradient-to-r from-teal-50 to-cyan-50 border-b border-gray-200/60 flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
                   <div className="p-2 bg-teal-100 rounded-lg"><Calendar className="w-5 h-5 text-teal-600" /></div>
                   <div>
@@ -1718,9 +1773,23 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         itemName={removeModalState.itemName}
         isCustom={removeModalState.isCustom}
       />
+
+      {!onRegisterExportActions && (
+        <DocumentExportModal
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          documentTitle={businessContext?.business_name?.trim() || 'Budget'}
+          documentType="budget"
+          showSuccessToast={false}
+          budgetFormats={['pdf', 'docx']}
+          onExportPdf={handleExportPdf}
+          onExportDocx={handleExportDocx}
+        />
+      )}
       
       {/* Single roadmap CTA: floating button only */}
     </div>
+    </BudgetEmbedContext.Provider>
   );
 };
 

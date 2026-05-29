@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { MessageSquareText } from 'lucide-react';
+import { Download, MessageSquareText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
@@ -11,6 +11,8 @@ interface BudgetDashboardHeaderProps {
   setViewMode: (mode: 'estimated' | 'actual') => void;
   budget: any;
   onChatWithAngel?: () => void;
+  /** Opens export format modal (PDF / DOCX) */
+  onOpenExport?: () => void;
   /** Hide duplicate title when parent page already shows "Budget Setup" */
   compact?: boolean;
 }
@@ -20,6 +22,7 @@ const BudgetDashboardHeader: React.FC<BudgetDashboardHeaderProps> = ({
   setViewMode,
   budget,
   onChatWithAngel,
+  onOpenExport,
   compact = false,
 }) => {
   return (
@@ -91,6 +94,24 @@ const BudgetDashboardHeader: React.FC<BudgetDashboardHeaderProps> = ({
                 <strong>Estimated:</strong> Your planned budget numbers. <strong>Actual:</strong> Fill in real spending to track variance.
               </TooltipContent>
             </Tooltip>
+
+            {onOpenExport && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onOpenExport}
+                    className="w-full md:w-auto border-gray-200/80 text-gray-700 hover:bg-gray-50"
+                  >
+                    <Download className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                    <span className="truncate">Export</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Download your budget as PDF or Word</TooltipContent>
+              </Tooltip>
+            )}
 
             {onChatWithAngel && (
               <Tooltip>

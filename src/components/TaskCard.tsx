@@ -21,6 +21,16 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import httpClient from '../api/httpClient';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+/** Radix Select items cannot use an empty string as a value. */
+const OPTIONAL_APPROACH_NONE = '__optional_none__';
 
 interface ImplementationSubstep {
   step_number: number;
@@ -57,15 +67,29 @@ interface ImplementationTask {
   };
 }
 
+export interface TaskCompletionResult {
+  success?: boolean;
+  message?: string;
+  progress?: Record<string, unknown>;
+  result?: {
+    task_id?: string;
+    substep_number?: number;
+    notes?: string;
+  };
+}
+
 interface TaskCardProps {
   task: ImplementationTask;
-  onComplete: () => void;
+  onComplete: (result?: TaskCompletionResult) => void;
   onGetServiceProviders: () => void;
   onGetHelp: () => void;
   onUploadDocument: (file: File) => void;
-  sessionId?: string;  // Add sessionId prop
+  sessionId?: string;
   helpContent?: string;
   helpLoading?: boolean;
+  isRefreshing?: boolean;
+  /** Keeps Angel panel / parent state aligned when user reviews a completed step */
+  onSubstepFocus?: (stepNumber: number) => void;
 }
 
 export const TaskCard: React.FC<TaskCardProps> = ({
@@ -76,7 +100,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onUploadDocument,
   sessionId,
   helpContent,
-  helpLoading
+  helpLoading,
+  isRefreshing = false,
+  onSubstepFocus,
 }) => {
   const [selectedOption, setSelectedOption] = useState<string>('');
   const [completionNotes, setCompletionNotes] = useState<string>('');
@@ -84,7 +110,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mentorInsights, setMentorInsights] = useState<string>('');
-  const [currentSubstepIndex, setCurrentSubstepIndex] = useState<number>(0);
   const [showSubstepModal, setShowSubstepModal] = useState(false);
   const [substepToComplete, setSubstepToComplete] = useState<ImplementationSubstep | null>(null);
   const [substepNote, setSubstepNote] = useState<string>('');
@@ -95,28 +120,42 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   // tile flips to "Completed". Without this the user could click Complete,
   // see the modal vanish, and stare at an unchanged tile for 5–10 s.
   const [pendingSubsteps, setPendingSubsteps] = useState<Set<number>>(new Set());
+  /** User-selected step for review; only reset when the implementation task changes. */
+  const [focusedSubstepNumber, setFocusedSubstepNumber] = useState<number | null>(null);
 
   useEffect(() => {
     loadTaskInsights();
-    // Set current substep index based on task's current_substep or first incomplete substep
-    // CRITICAL: This ensures reload shows the correct current step
-    if (task.substeps && task.substeps.length > 0) {
-      const incompleteIndex = task.substeps.findIndex(s => !s.completed);
-      if (incompleteIndex >= 0) {
-        setCurrentSubstepIndex(incompleteIndex);
-      } else {
-        // All substeps completed, show last one
-        setCurrentSubstepIndex(task.substeps.length - 1);
-      }
+    setFocusedSubstepNumber(null);
+  }, [task.id]);
+
+  const resolveActiveSubstepIndex = (): number => {
+    if (!task.substeps?.length) return 0;
+
+    if (focusedSubstepNumber != null) {
+      const focusedIdx = task.substeps.findIndex(
+        (s) => s.step_number === focusedSubstepNumber,
+      );
+      if (focusedIdx >= 0) return focusedIdx;
     }
-    // Also use task.current_substep if provided
-    if (task.current_substep && task.substeps) {
-      const substepIndex = task.substeps.findIndex(s => s.step_number === task.current_substep);
-      if (substepIndex >= 0) {
-        setCurrentSubstepIndex(substepIndex);
-      }
+
+    if (task.current_substep != null) {
+      const fromServer = task.substeps.findIndex(
+        (s) => s.step_number === task.current_substep,
+      );
+      if (fromServer >= 0) return fromServer;
     }
-  }, [task.id, task.substeps, task.current_substep]);
+
+    const incompleteIndex = task.substeps.findIndex((s) => !s.completed);
+    if (incompleteIndex >= 0) return incompleteIndex;
+    return task.substeps.length - 1;
+  };
+
+  const currentSubstepIndex = resolveActiveSubstepIndex();
+
+  const focusSubstep = (substep: ImplementationSubstep) => {
+    setFocusedSubstepNumber(substep.step_number);
+    onSubstepFocus?.(substep.step_number);
+  };
 
   const loadTaskInsights = async () => {
     try {
@@ -151,18 +190,22 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   };
 
   const handleSubstepClick = (substep: ImplementationSubstep) => {
-    // Open modal to confirm completion / edit notes. When the user is
-    // editing a previously-completed step, pre-fill with the note they
-    // saved last time so they can read and amend it instead of starting
-    // from a blank box. Also reposition the visual "current step" pointer
-    // to this substep so the rest of the page (Angel-can-help banner,
-    // chat / providers focus) reflects the step being edited.
+    focusSubstep(substep);
     setSubstepToComplete(substep);
     setSubstepNote(substep.note ?? '');
     setShowSubstepModal(true);
-    if (task.substeps) {
-      const idx = task.substeps.findIndex(s => s.step_number === substep.step_number);
-      if (idx >= 0) setCurrentSubstepIndex(idx);
+  };
+
+  const firstIncompleteIndex =
+    task.substeps?.findIndex((s) => !s.completed) ?? -1;
+
+  const isSubstepNavigable = (substep: ImplementationSubstep, index: number) =>
+    substep.completed ||
+    (firstIncompleteIndex >= 0 && index <= firstIncompleteIndex);
+
+  const handleSubstepRowClick = (substep: ImplementationSubstep, index: number) => {
+    if (isSubstepNavigable(substep, index)) {
+      focusSubstep(substep);
     }
   };
 
@@ -220,9 +263,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       );
 
       if ((response.data as any).success) {
-        // Refresh the parent's task data so the substep tile and progress
-        // bar reflect the persisted state.
-        onComplete();
+        onComplete(response.data as TaskCompletionResult);
       } else {
         const message = (response.data as any).message || 'Failed to complete step';
         toast.error(`Step ${stepNumber}: ${message}`);
@@ -291,7 +332,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       );
 
       if ((response.data as any).success) {
-        onComplete();
+        onComplete(response.data as TaskCompletionResult);
       } else {
         setError((response.data as any).message || 'Failed to complete task');
       }
@@ -320,7 +361,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   };
 
   return (
-    <div className="w-full bg-white rounded-lg shadow-sm border border-gray-200">
+    <div className="relative w-full bg-white rounded-lg shadow-sm border border-gray-200">
+      {isRefreshing && (
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 z-10 h-1 overflow-hidden rounded-t-lg bg-gray-100"
+          aria-hidden
+        >
+          <div className="h-full w-1/3 animate-pulse bg-gradient-to-r from-teal-500 to-blue-500" />
+        </div>
+      )}
       {/* Header */}
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-start justify-between">
@@ -394,18 +443,31 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               Implementation Steps ({task.substeps.length} steps)
             </h3>
             <div className="space-y-3">
-              {task.substeps.map((substep, index) => (
+              {task.substeps.map((substep, index) => {
+                const isActive = index === currentSubstepIndex;
+                const isNavigable = isSubstepNavigable(substep, index);
+
+                return (
                 <div
                   key={substep.step_number}
+                  role={isNavigable ? 'button' : undefined}
+                  tabIndex={isNavigable ? 0 : undefined}
+                  onClick={() => isNavigable && handleSubstepRowClick(substep, index)}
+                  onKeyDown={(e) => {
+                    if (isNavigable && (e.key === 'Enter' || e.key === ' ')) {
+                      e.preventDefault();
+                      handleSubstepRowClick(substep, index);
+                    }
+                  }}
                   className={`rounded-xl p-3 sm:p-4 transition-all shadow-sm ${
                     substep.completed
                       ? 'bg-green-50 border border-green-200'
-                      : index === currentSubstepIndex
+                      : isActive
                       ? 'bg-gradient-to-r from-blue-50 via-white to-blue-50 border border-blue-200 shadow-md'
                       : index < currentSubstepIndex
                       ? 'bg-gray-50 border border-gray-200'
                       : 'bg-white border border-gray-100'
-                  }`}
+                  } ${isNavigable ? 'cursor-pointer hover:shadow-md' : ''}`}
                 >
                   <div className="flex items-start gap-3">
                     <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
@@ -424,7 +486,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     <div className="flex-1 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <h4 className={`font-semibold leading-tight ${
-                          substep.completed ? 'text-green-800' : index === currentSubstepIndex ? 'text-blue-800' : 'text-gray-700'
+                          substep.completed ? 'text-green-800' : isActive ? 'text-blue-800' : 'text-gray-700'
                         }`}>
                           {substep.title}
                         </h4>
@@ -435,13 +497,17 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                           </span>
                         ) : substep.completed ? (
                           <button
-                            onClick={() => handleSubstepClick(substep)}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSubstepClick(substep);
+                            }}
                             className="text-xs font-medium text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1 rounded transition-colors flex items-center gap-1"
                           >
                             <CheckCircle className="h-3 w-3" />
-                            Click to Edit
+                            Edit notes
                           </button>
-                        ) : index === currentSubstepIndex ? (
+                        ) : isActive ? (
                           <span className="text-[11px] font-semibold text-blue-700 bg-blue-100 px-2 py-1 rounded">
                             Current Step
                           </span>
@@ -490,9 +556,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                             <Loader2 className="h-3 w-3 animate-spin" />
                             Saving…
                           </span>
-                        ) : !substep.completed && index === currentSubstepIndex ? (
+                        ) : !substep.completed && isActive ? (
                           <button
-                            onClick={() => handleSubstepClick(substep)}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSubstepClick(substep);
+                            }}
                             disabled={loading}
                             className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded font-semibold transition-colors disabled:opacity-50 flex items-center gap-1"
                           >
@@ -523,11 +593,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     </div>
                   </div>
                 </div>
-              ))}
+              );
+              })}
             </div>
             <div className="mt-4 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
               <p className="text-xs text-indigo-800">
-                <strong>Flow:</strong> Complete each step in order. You must finish Step {task.substeps[currentSubstepIndex]?.step_number || 1} before moving to the next step.
+                <strong>Flow:</strong> Complete each step in order. Click any completed step to review it. Current: Step {task.substeps[currentSubstepIndex]?.step_number || 1}.
               </p>
             </div>
           </div>
@@ -537,23 +608,34 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         {task.options.length > 0 && (
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Optional: What approach did you choose?
+              Optional: what did you choose?
             </label>
             <p className="text-xs text-gray-500 mb-3">
               Help us track your decisions (e.g., "LLC" for business structure, "Online Registration" for registration). This is optional.
             </p>
-            <select 
-              value={selectedOption} 
-              onChange={(e) => setSelectedOption(e.target.value)}
-              className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-sm"
+            <Select
+              value={selectedOption || OPTIONAL_APPROACH_NONE}
+              onValueChange={(value) =>
+                setSelectedOption(value === OPTIONAL_APPROACH_NONE ? '' : value)
+              }
             >
-              <option value="">-- Optional: Select your approach --</option>
-              {task.options.map((option, index) => (
-                <option key={index} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="h-9 w-full border-gray-300 bg-white text-sm text-gray-900 shadow-sm [&_[data-slot=select-value]]:text-gray-900">
+                <SelectValue
+                  placeholder="Optional: Select your approach"
+                  className="text-gray-900 data-[placeholder]:text-gray-500"
+                />
+              </SelectTrigger>
+              <SelectContent position="popper" className="z-[100]">
+                <SelectItem value={OPTIONAL_APPROACH_NONE}>
+                  Optional: Select your approach
+                </SelectItem>
+                {task.options.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
 

@@ -17,6 +17,8 @@ interface DocumentExportModalProps {
   onExportPdf?: () => Promise<void>;
   onExportExcel?: () => void | Promise<void>;
   onExportDocx?: () => Promise<void>;
+  /** Budget exports: which formats to show (default: pdf, xlsx, docx) */
+  budgetFormats?: Array<'pdf' | 'docx' | 'xlsx'>;
 }
 
 const DocumentExportModal: React.FC<DocumentExportModalProps> = ({
@@ -29,11 +31,17 @@ const DocumentExportModal: React.FC<DocumentExportModalProps> = ({
   onExportPdf,
   onExportExcel,
   onExportDocx,
+  budgetFormats,
 }) => {
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat | null>(null);
   const [isExporting, setIsExporting] = useState(false);
 
   const isBudgetExport = documentType === 'budget';
+  const enabledBudgetFormats =
+    budgetFormats ?? (['pdf', 'xlsx', 'docx'] as Array<'pdf' | 'docx' | 'xlsx'>);
+  const showBudgetPdf = enabledBudgetFormats.includes('pdf');
+  const showBudgetXlsx = enabledBudgetFormats.includes('xlsx') && Boolean(onExportExcel);
+  const showBudgetDocx = enabledBudgetFormats.includes('docx');
 
   const handleExport = async () => {
     if (!selectedFormat) {
@@ -264,6 +272,7 @@ const DocumentExportModal: React.FC<DocumentExportModalProps> = ({
           {/* Format Options */}
           <div className="space-y-3">
             {/* PDF Option */}
+            {(!isBudgetExport || showBudgetPdf) && (
             <button
               onClick={() => setSelectedFormat('pdf')}
               disabled={isExporting}
@@ -294,8 +303,9 @@ const DocumentExportModal: React.FC<DocumentExportModalProps> = ({
                 )}
               </div>
             </button>
+            )}
 
-            {isBudgetExport && (
+            {isBudgetExport && showBudgetXlsx && (
               <button
                 onClick={() => setSelectedFormat('xlsx')}
                 disabled={isExporting}
@@ -341,6 +351,7 @@ const DocumentExportModal: React.FC<DocumentExportModalProps> = ({
             )}
 
             {/* DOCX Option */}
+            {(!isBudgetExport || showBudgetDocx) && (
             <button
               onClick={() => setSelectedFormat('docx')}
               disabled={isExporting}
@@ -371,6 +382,7 @@ const DocumentExportModal: React.FC<DocumentExportModalProps> = ({
                 )}
               </div>
             </button>
+            )}
           </div>
 
           {/* Action Buttons */}

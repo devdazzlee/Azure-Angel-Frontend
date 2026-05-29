@@ -23,6 +23,12 @@ import {
 } from 'lucide-react';
 import httpClient from '../api/httpClient';
 import ServiceProviderDetailModal from './ServiceProviderDetailModal';
+import type { ServiceProviderRow } from '../utils/serviceProvider';
+import {
+  implementationCachePolicy,
+  useGetServiceProvidersQuery,
+} from '../store/implementationApi';
+import { generateDOCX } from '@/utils/documentGenerator';
 
 interface Message {
   id: string;
@@ -32,6 +38,21 @@ interface Message {
   // The chat mode that produced this assistant reply. Tracked so the UI
   // can offer a download button only on drafts (the *Draft* mode).
   mode?: 'help' | 'draft' | 'brainstorm';
+}
+
+interface ImplementationTaskContext {
+  id?: string;
+  phase_name?: string;
+  title?: string;
+  description?: string;
+  purpose?: string;
+  current_substep?: number;
+  substeps?: Array<{
+    step_number?: number;
+    title?: string;
+    description?: string;
+    completed?: boolean;
+  }>;
 }
 
 interface FloatingComprehensiveSupportProps {
@@ -44,7 +65,7 @@ interface FloatingComprehensiveSupportProps {
   };
   angelCanHelp: string[];
   sessionId: string;
-  currentTask?: any;
+  currentTask?: ImplementationTaskContext;
 }
 
 const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> = ({
@@ -52,15 +73,13 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
   businessContext,
   angelCanHelp = [],
   sessionId,
-  currentTask
+  currentTask,
 }) => {
   const [activeTab, setActiveTab] = useState<'providers' | 'research' | 'chat'>('chat');
   const [isMinimized, setIsMinimized] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   
-  // Providers state
-  const [providers, setProviders] = useState<any[]>([]);
-  const [providersLoading, setProvidersLoading] = useState(false);
+  // Providers UI state (list data comes from RTK Query cache)
   const [selectedProvider, setSelectedProvider] = useState<any | null>(null);
   const [showProviderModal, setShowProviderModal] = useState(false);
   
@@ -180,35 +199,31 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Fetch providers when tab is opened
-  useEffect(() => {
-    if (activeTab === 'providers' && providers.length === 0) {
-      fetchProviders();
-    }
-  }, [activeTab]);
-
-  const fetchProviders = async () => {
-    setProvidersLoading(true);
-    try {
-      const token = localStorage.getItem('sb_access_token');
-      const response = await httpClient.post('/implementation/service-providers', {
-        session_id: sessionId,
-        task_context: taskContext || currentTask?.title || 'business support',
-        category: currentTask?.phase_name || 'general'
-      }, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if ((response.data as any)?.success) {
-        setProviders((response.data as any).result?.providers || []);
-      }
-    } catch (error: any) {
-      console.error('Error fetching providers:', error);
-      toast.error('Failed to load service providers');
-    } finally {
-      setProvidersLoading(false);
-    }
+  const providerQueryArgs = {
+    sessionId,
+    taskId: currentTask?.id ?? '',
+    taskContext: taskContext || currentTask?.title || 'business support',
+    category: currentTask?.phase_name || 'general',
   };
+
+  const {
+    data: providersResponse,
+    isLoading: providersInitialLoading,
+    isFetching: providersFetching,
+    isError: providersError,
+  } = useGetServiceProvidersQuery(providerQueryArgs, {
+    skip: activeTab !== 'providers' || !sessionId || !currentTask?.id,
+    ...implementationCachePolicy.serviceProviders,
+  });
+
+  const providers: ServiceProviderRow[] = providersResponse?.result?.providers ?? [];
+  const providersLoading = providersInitialLoading || providersFetching;
+
+  useEffect(() => {
+    if (providersError) {
+      toast.error('Failed to load service providers');
+    }
+  }, [providersError]);
 
   const conductResearch = async (query: string, depth: 'basic' | 'standard' | 'deep' = 'standard') => {
     if (!query.trim()) {
@@ -382,32 +397,23 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
     }
   };
 
-  // Save a Draft-mode assistant reply to disk. We emit a Markdown file
-  // since the reply is rendered as Markdown — opening the .md in any
-  // editor (or pasting into Word / Google Docs) preserves headings,
-  // lists and bold spans the user just saw on screen. The filename ties
-  // the file to the active task so multiple drafts don't collide.
-  const handleDownloadDraft = (message: Message) => {
+  // Save a Draft-mode assistant reply as Word (.docx) via shared document export.
+  const handleDownloadDraft = async (message: Message) => {
     const titleSlug = (currentTask?.title || 'angel-draft')
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
       .slice(0, 60) || 'angel-draft';
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-    const filename = `${titleSlug}-draft-${stamp}.md`;
+    const filename = `${titleSlug}-draft-${stamp}.docx`;
+    const documentTitle = currentTask?.title?.trim() || 'Angel Draft';
+
     try {
-      const blob = new Blob([message.content], { type: 'text/markdown;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      await generateDOCX(message.content, filename, documentTitle);
+      toast.success('Word document downloaded');
     } catch (err) {
       console.error('Download failed', err);
-      toast.error('Could not download the draft');
+      toast.error('Could not download the draft as Word');
     }
   };
 
@@ -435,15 +441,15 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
 
   if (isMinimized) {
     return (
-      <div className="fixed right-2 sm:right-4 bottom-4 z-40">
+      <div className="fixed bottom-4 right-4 z-40">
         <button
+          type="button"
           onClick={() => setIsMinimized(false)}
-          className="bg-gradient-to-r from-teal-500 to-blue-600 text-white p-4 sm:p-5 rounded-full shadow-2xl hover:scale-110 transition-all duration-300 flex items-center gap-2 group relative overflow-hidden"
+          aria-label="Open Angel support"
+          className="flex items-center gap-2 rounded-full bg-gradient-to-r from-teal-500 to-blue-600 px-3.5 py-2.5 text-white shadow-lg transition-all hover:from-teal-600 hover:to-blue-700 hover:shadow-xl"
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-teal-400 to-blue-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          <Bot className="h-5 w-5 sm:h-6 sm:w-6 relative z-10 animate-bounce" />
-          <span className="font-semibold text-sm sm:text-base relative z-10">Angel</span>
-          <div className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full animate-pulse"></div>
+          <Bot className="h-5 w-5 shrink-0" aria-hidden />
+          <span className="text-sm font-semibold">Angel</span>
         </button>
       </div>
     );
@@ -500,8 +506,9 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
             </p>
             
             {providersLoading ? (
-              <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
                 <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
+                <p className="text-sm text-gray-600">Loading providers for this step…</p>
               </div>
             ) : providers.length > 0 ? (
               <div className="space-y-2">
@@ -889,7 +896,7 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
                               className="inline-flex items-center gap-1.5 rounded-md border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] font-semibold text-green-700 hover:bg-green-100 transition-colors"
                             >
                               <ExternalLink className="h-3 w-3" />
-                              Download draft
+                              Download as Word
                             </button>
                           </div>
                         )}
@@ -1005,7 +1012,7 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
         <ServiceProviderDetailModal
           provider={selectedProvider}
           isOpen={showProviderModal}
-          businessLocation={businessContext.location}
+          businessContext={businessContext}
           onClose={() => {
             setShowProviderModal(false);
             setSelectedProvider(null);

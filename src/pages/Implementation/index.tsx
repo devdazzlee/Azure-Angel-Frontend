@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import TaskCard from '../../components/TaskCard';
+import TaskCard, { type TaskCompletionResult } from '../../components/TaskCard';
 import TaskCompletionModal from '../../components/TaskCompletionModal';
 import ServiceProviderModal from '../../components/ServiceProviderModal';
 import HelpModal from '../../components/HelpModal';
@@ -10,9 +10,19 @@ import FloatingComprehensiveSupport from '../../components/FloatingComprehensive
 import RoadmapDisplay from '../../components/RoadmapDisplay';
 import ImplementationCompletionModal from '../../components/ImplementationCompletionModal';
 import httpClient from '../../api/httpClient';
-import { fetchRoadmapPlan } from '../../services/authService';
 import { useBusinessContext } from '../../hooks/useBusinessContext';
+import { useAppDispatch } from '../../store';
+import {
+  implementationApi,
+  implementationCachePolicy,
+  useGetBudgetQuery,
+  useGetImplementationTasksQuery,
+  useGetRoadmapPlanQuery,
+  useGetTaskHelpQuery,
+  useLazyGetContactProvidersQuery,
+} from '../../store/implementationApi';
 import { displayBusinessNameFromApi } from '../../utils/businessName';
+import type { ServiceProviderRow } from '../../utils/serviceProvider';
 import { IMPLEMENTATION_RETURN_KEY } from '../ErrorBoundaryPage';
 import { BudgetDashboard } from '../../components/Budget';
 import { budgetService } from '../../services/budgetService';
@@ -39,6 +49,7 @@ interface ImplementationSubstep {
   estimated_time: string;
   required: boolean;
   completed?: boolean;
+  note?: string;
 }
 
 interface ImplementationTask {
@@ -59,6 +70,32 @@ interface ImplementationTask {
     location: string;
     business_type: string;
   };
+  service_providers?: ServiceProviderRow[];
+}
+
+function applySubstepCompletionToTask(
+  task: ImplementationTask,
+  substepNumber: number,
+  note: string,
+  completedIds: string[],
+): ImplementationTask {
+  const substepId = `${task.id}_substep_${substepNumber}`;
+  const completedSet = new Set([...completedIds, substepId]);
+
+  const substeps = (task.substeps ?? []).map((s) => ({
+    ...s,
+    completed: completedSet.has(`${task.id}_substep_${s.step_number}`),
+    note: s.step_number === substepNumber ? note : s.note,
+  }));
+
+  const nextIncomplete = substeps.find((s) => !s.completed);
+  const currentSubstep = nextIncomplete
+    ? nextIncomplete.step_number
+    : substeps.length > 0
+      ? substeps[substeps.length - 1].step_number
+      : task.current_substep;
+
+  return { ...task, substeps, current_substep: currentSubstep };
 }
 
 interface PhaseProgress {
@@ -99,6 +136,19 @@ const Implementation: React.FC<ImplementationProps> = ({
     isReady: businessContextReady,
   } = useBusinessContext(sessionId);
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
+
+  const {
+    data: tasksPayload,
+    isLoading: tasksLoading,
+    isFetching: tasksFetching,
+    error: tasksQueryError,
+    refetch: refetchTasks,
+  } = useGetImplementationTasksQuery(sessionId, {
+    skip: !sessionId,
+    ...implementationCachePolicy.tasks,
+  });
+
   const [currentTask, setCurrentTask] = useState<ImplementationTask | null>(null);
   const [completedTasks, setCompletedTasks] = useState<string[]>([]);
   const [progress, setProgress] = useState<ImplementationProgress>({
@@ -107,43 +157,54 @@ const Implementation: React.FC<ImplementationProps> = ({
     percent: 0,
     phases_completed: 0
   });
-  const [loading, setLoading] = useState(true);
+  const loading = tasksLoading;
+  const isRefreshingTask = tasksFetching && !tasksLoading;
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'task' | 'roadmap' | 'budget'>('task');
   const [mountedTabs, setMountedTabs] = useState<Record<string, boolean>>({ task: true });
   const [roadmapContent, setRoadmapContent] = useState<string>('');
-  const [roadmapLoading, setRoadmapLoading] = useState(false);
-  const [supportLoaded, setSupportLoaded] = useState(false);
-  const [roadmapLoaded, setRoadmapLoaded] = useState(false);
+  const budgetLoadedRef = useRef(false);
   
   // Budget state
   const [budget, setBudget] = useState<Budget | null>(null);
-  const [budgetLoading, setBudgetLoading] = useState(false);
   
   // Local business context that can be updated independently
   const [localBusinessContext, setLocalBusinessContext] = useState<typeof dbBusinessContext | null>(null);
   const [extractionAttempted, setExtractionAttempted] = useState(false);
-  
-  // Cache for ComprehensiveSupport API responses
-  const [agentsCache, setAgentsCache] = useState<any>(null);
-  const [providersCache, setProvidersCache] = useState<any>(null);
-  const [agentsLoading, setAgentsLoading] = useState(false);
-  const [providersLoading, setProvidersLoading] = useState(false);
-  const hasFetchedAgents = useRef(false);
-  const hasFetchedProviders = useRef(false);
   
   // Modal states
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [showServiceProviderModal, setShowServiceProviderModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   
-  // Loading states for Quick Actions
-  const [helpLoading, setHelpLoading] = useState(false);
-  const [serviceProvidersLoading, setServiceProvidersLoading] = useState(false);
-  
   // Modal data
   const [serviceProviders, setServiceProviders] = useState<any[]>([]);
-  const [helpContent, setHelpContent] = useState<string>('');
+
+  const [fetchContactProviders, { isLoading: contactProvidersLoading }] =
+    useLazyGetContactProvidersQuery();
+
+  const { data: helpPayload, isLoading: helpLoading, isFetching: helpFetching } =
+    useGetTaskHelpQuery(
+      { sessionId, taskId: currentTask?.id ?? '' },
+      {
+        skip: !sessionId || !currentTask?.id,
+        ...implementationCachePolicy.taskHelp,
+      },
+    );
+  const helpContent = helpPayload?.help_content ?? '';
+
+  const { data: roadmapPayload, isLoading: roadmapLoading, refetch: refetchRoadmap } =
+    useGetRoadmapPlanQuery(sessionId, {
+      skip: activeTab !== 'roadmap' || !mountedTabs.roadmap || !sessionId,
+      ...implementationCachePolicy.roadmap,
+    });
+
+  const { data: budgetPayload, isLoading: budgetQueryLoading, refetch: refetchBudget } =
+    useGetBudgetQuery(sessionId, {
+      skip: activeTab !== 'budget' || !mountedTabs.budget || !sessionId,
+      ...implementationCachePolicy.budget,
+    });
+  const budgetLoading = budgetQueryLoading;
 
   // Real Implementation completions, in the normalized form used to overlay
   // a "done" checkmark on roadmap rows. Refreshed whenever a task completes.
@@ -166,16 +227,80 @@ const Implementation: React.FC<ImplementationProps> = ({
     refreshCompletedRoadmapStepKeys();
   }, [refreshCompletedRoadmapStepKeys]);
 
+  const invalidateTaskScopedCache = useCallback(
+    (taskId?: string) => {
+      const tags: Parameters<typeof implementationApi.util.invalidateTags>[0] = [
+        { type: 'ImplementationTasks', id: sessionId },
+      ];
+      if (taskId) {
+        tags.push(
+          { type: 'ServiceProviders', id: `${sessionId}:${taskId}` },
+          { type: 'ServiceProviders', id: `${sessionId}:${taskId}:contact` },
+          { type: 'TaskHelp', id: `${sessionId}:${taskId}` },
+        );
+      }
+      dispatch(implementationApi.util.invalidateTags(tags));
+    },
+    [dispatch, sessionId],
+  );
+
+  // Sync RTK Query task payload into local state (supports optimistic substep updates).
   useEffect(() => {
-    loadImplementationData();
+    if (!tasksPayload) return;
+    if (tasksPayload.success) {
+      if (!tasksPayload.current_task) {
+        setCurrentTask(null);
+        if (tasksPayload.progress) {
+          setProgress((prev) => ({ ...prev, ...tasksPayload.progress } as ImplementationProgress));
+        }
+        setShowCompletionModal(true);
+      } else {
+        setCurrentTask((prev) => {
+          const next = tasksPayload.current_task as unknown as ImplementationTask;
+          if (!prev || prev.id !== next.id) return next;
+          const focused = prev.current_substep;
+          if (
+            focused != null &&
+            next.substeps?.some((s) => s.step_number === focused)
+          ) {
+            return { ...next, current_substep: focused };
+          }
+          return next;
+        });
+        setCompletedTasks(tasksPayload.completed_tasks ?? []);
+        if (tasksPayload.progress) {
+          setProgress((prev) => ({ ...prev, ...tasksPayload.progress } as ImplementationProgress));
+        }
+        setShowCompletionModal(false);
+      }
+      setError(null);
+    } else if (tasksPayload.message) {
+      setError(tasksPayload.message);
+    }
+  }, [tasksPayload]);
+
+  useEffect(() => {
+    if (tasksQueryError) {
+      setError('Failed to load implementation data');
+    }
+  }, [tasksQueryError]);
+
+  useEffect(() => {
+    if (roadmapPayload?.result?.plan) {
+      setRoadmapContent(roadmapPayload.result.plan);
+    }
+  }, [roadmapPayload]);
+
+  useEffect(() => {
+    if (budgetPayload?.success && budgetPayload.result) {
+      setBudget(budgetPayload.result);
+      budgetLoadedRef.current = true;
+    }
+  }, [budgetPayload]);
+
+  useEffect(() => {
     setMountedTabs({ task: true });
-    setSupportLoaded(false);
-    setRoadmapLoaded(false);
     setRoadmapContent('');
-    hasFetchedAgents.current = false;
-    hasFetchedProviders.current = false;
-    setAgentsCache(null);
-    setProvidersCache(null);
     setExtractionAttempted(false);
     setLocalBusinessContext(null);
 
@@ -252,61 +377,35 @@ const Implementation: React.FC<ImplementationProps> = ({
     setMountedTabs((prev) => (prev[tab] ? prev : { ...prev, [tab]: true }));
   };
   
-  const loadRoadmapContent = async () => {
-    if (roadmapLoading || roadmapLoaded) return;
-    try {
-      setRoadmapLoading(true);
-      const response = await fetchRoadmapPlan(sessionId);
-      if (response?.result?.plan) {
-        setRoadmapContent(response.result.plan);
-        setRoadmapLoaded(true);
-      }
-    } catch (error) {
-      console.error('Error loading roadmap:', error);
-      toast.error('Failed to load roadmap');
-    } finally {
-      setRoadmapLoading(false);
-    }
-  };
-
-  const budgetLoadedRef = useRef(false);
   const loadBudget = async (forceRefresh = false) => {
     if (budgetLoading) return;
-    // Skip if already loaded, unless force refresh
     if (!forceRefresh && budgetLoadedRef.current && budget) return;
     try {
-      setBudgetLoading(true);
-      console.log('[loadBudget] Fetching budget from DB for session:', sessionId);
-      const response = await budgetService.getBudget(sessionId);
-      console.log('[loadBudget] Response:', { success: response.success, itemsCount: response.result?.items?.length ?? 0, budgetId: response.result?.id });
-      
-      if (response.success && response.result) {
-        const result = response.result;
-        // Backend now always returns a valid budget via _ensure_budget_exists
-        setBudget(result);
+      const result = await refetchBudget().unwrap();
+      if (result.success && result.result) {
+        setBudget(result.result);
         budgetLoadedRef.current = true;
+        return;
+      }
+      console.warn('[loadBudget] No budget returned, creating one...');
+      const created = await budgetService.saveBudget(sessionId, {
+        session_id: sessionId,
+        initial_investment: 0,
+        total_estimated_expenses: 0,
+        total_estimated_revenue: 0,
+        items: [],
+      });
+      if (created.success && created.result) {
+        setBudget(created.result);
+        budgetLoadedRef.current = true;
+        dispatch(implementationApi.util.invalidateTags([{ type: 'Budget', id: sessionId }]));
       } else {
-        console.warn('[loadBudget] No budget returned, creating one...');
-        const created = await budgetService.saveBudget(sessionId, {
-          session_id: sessionId,
-          initial_investment: 0,
-          total_estimated_expenses: 0,
-          total_estimated_revenue: 0,
-          items: [],
-        });
-        if (created.success && created.result) {
-          setBudget(created.result);
-          budgetLoadedRef.current = true;
-        } else {
-          toast.error(created.message || 'Failed to initialize budget');
-          setBudget(null);
-        }
+        toast.error(created.message || 'Failed to initialize budget');
+        setBudget(null);
       }
     } catch (error) {
       console.error('[loadBudget] Error loading budget:', error);
       toast.error('Failed to load budget');
-    } finally {
-      setBudgetLoading(false);
     }
   };
 
@@ -340,6 +439,7 @@ const Implementation: React.FC<ImplementationProps> = ({
       const response = await budgetService.addBudgetItem(sessionId, item);
       if (response.success) {
         setBudget(response.result);
+        dispatch(implementationApi.util.invalidateTags([{ type: 'Budget', id: sessionId }]));
       } else {
         toast.error(response.message || 'Failed to add item');
       }
@@ -355,6 +455,7 @@ const Implementation: React.FC<ImplementationProps> = ({
       const response = await budgetService.updateBudgetItem(sessionId, itemId, updates);
       if (response.success) {
         setBudget(response.result);
+        dispatch(implementationApi.util.invalidateTags([{ type: 'Budget', id: sessionId }]));
       } else {
         toast.error(response.message || 'Failed to update item');
       }
@@ -370,6 +471,7 @@ const Implementation: React.FC<ImplementationProps> = ({
       const response = await budgetService.deleteBudgetItem(sessionId, itemId);
       if (response.success) {
         setBudget(response.result);
+        dispatch(implementationApi.util.invalidateTags([{ type: 'Budget', id: sessionId }]));
       } else {
         toast.error(response.message || 'Failed to delete item');
       }
@@ -379,85 +481,13 @@ const Implementation: React.FC<ImplementationProps> = ({
     }
   };
 
-  useEffect(() => {
-    // Reset provider cache when the active task changes so next visit refetches
-    hasFetchedProviders.current = false;
-    setProvidersCache(null);
-    setSupportLoaded(false);
-  }, [currentTask?.id]);
-
-  // Load budget when budget tab is accessed
+  // Load budget when budget tab is accessed (RTK Query caches the response).
   useEffect(() => {
     if (activeTab === 'budget' && mountedTabs.budget) {
-      loadBudget();
+      void loadBudget();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, mountedTabs.budget]);
-
-  // Removed support tab - no longer needed
-
-  useEffect(() => {
-    if (activeTab === 'roadmap' && !roadmapLoaded) {
-      loadRoadmapContent();
-    }
-  }, [activeTab, roadmapLoaded, sessionId]);
-
-  // Fetch ComprehensiveSupport data
-  const fetchComprehensiveSupportData = async () => {
-    if (supportLoaded) return;
-    // Fetch agents data
-    if (!hasFetchedAgents.current && !agentsLoading) {
-      setAgentsLoading(true);
-      try {
-        const token = localStorage.getItem('sb_access_token');
-        const response = await httpClient.get('/specialized-agents/agents', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if ((response.data as any).success) {
-          setAgentsCache(response.data);
-          hasFetchedAgents.current = true;
-        }
-      } catch (error) {
-        console.error('Error fetching agents:', error);
-      } finally {
-        setAgentsLoading(false);
-      }
-    }
-
-    // Fetch providers data
-    if (!hasFetchedProviders.current && !providersLoading) {
-      setProvidersLoading(true);
-      try {
-        const token = localStorage.getItem('sb_access_token');
-        const response = await httpClient.post('/specialized-agents/provider-table', {
-          task_id: currentTask?.id || 'general business support',
-          task_context: currentTask?.id || 'general business support',
-          business_context: businessContext
-        }, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if ((response.data as any).success) {
-          setProvidersCache(response.data);
-          hasFetchedProviders.current = true;
-        }
-      } catch (error) {
-        console.error('Error fetching providers:', error);
-      } finally {
-        setProvidersLoading(false);
-      }
-    }
-
-    if (hasFetchedAgents.current && hasFetchedProviders.current) {
-      setSupportLoaded(true);
-    }
-  };
 
   const businessContext = localBusinessContext ?? dbBusinessContext;
 
@@ -469,41 +499,45 @@ const Implementation: React.FC<ImplementationProps> = ({
   const substepPercent = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
   const progressPercent = Math.min(100, Math.max((progress as any)?.percent ?? 0, computedPercent, substepPercent));
 
-  const loadImplementationData = async () => {
-    try {
-      setLoading(true);
-      const { data } = await httpClient.get<any>(
-        `/implementation/sessions/${sessionId}/tasks`
-      );
-      
-      if (data.success) {
-        // Check if all tasks are completed
-        if (!data.current_task) {
-          // All tasks completed - show completion modal
-          setCurrentTask(null);
-          setProgress(data.progress);
-          setShowCompletionModal(true);
-        } else {
-          // Ensure substeps are included in the task
-          const task = data.current_task;
-          if (task && !task.substeps) {
-            // If backend didn't provide substeps, we'll fetch them separately
-            console.warn('Task missing substeps, will be generated by backend');
-          }
-          setCurrentTask(task);
-          setCompletedTasks(data.completed_tasks || []);
-          setProgress(data.progress);
-          setShowCompletionModal(false); // Hide modal if task exists
-        }
-      } else {
-        setError(data.message || 'Failed to load implementation data');
-      }
-    } catch (err) {
-      console.error('Error loading implementation data:', err);
-      setError('Failed to load implementation data');
-    } finally {
-      setLoading(false);
+  const loadImplementationData = async (_options?: { silent?: boolean }) => {
+    await refetchTasks();
+  };
+
+  const applyCompletionFromResponse = (data: TaskCompletionResult) => {
+    if (data.progress) {
+      setProgress((prev) => ({
+        ...prev,
+        ...(data.progress as Partial<ImplementationProgress>),
+      }));
     }
+
+    const substepNumber = data.result?.substep_number;
+    if (substepNumber == null) return;
+
+    const note = data.result?.notes?.trim() ?? '';
+
+    setCurrentTask((taskPrev) => {
+      if (!taskPrev) return taskPrev;
+
+      const substepId = `${taskPrev.id}_substep_${substepNumber}`;
+      const completedIds: string[] = [];
+      for (const s of taskPrev.substeps ?? []) {
+        const id = `${taskPrev.id}_substep_${s.step_number}`;
+        if (s.completed || s.step_number === substepNumber) {
+          completedIds.push(id);
+        }
+      }
+      if (!completedIds.includes(substepId)) {
+        completedIds.push(substepId);
+      }
+
+      setCompletedTasks((completedPrev) => {
+        const merged = new Set([...completedPrev, ...completedIds]);
+        return Array.from(merged);
+      });
+
+      return applySubstepCompletionToTask(taskPrev, substepNumber, note, completedIds);
+    });
   };
 
   const handleTaskCompletion = async (completionData: any) => {
@@ -526,9 +560,8 @@ const Implementation: React.FC<ImplementationProps> = ({
         });
 
         // CRITICAL: Reload implementation data to get next task or completion status
-        await loadImplementationData();
-        // Refresh the roadmap-step-keys overlay so the Roadmap tab reflects
-        // this completion immediately.
+        invalidateTaskScopedCache(currentTask.id);
+        await loadImplementationData({ silent: true });
         await refreshCompletedRoadmapStepKeys();
         setShowCompletionModal(false);
       } else {
@@ -540,27 +573,28 @@ const Implementation: React.FC<ImplementationProps> = ({
     }
   };
 
-  // Handle substep completion - reloads data to show next step
-  const handleSubstepCompletion = async () => {
-    // Reload implementation data to get updated task with next substep
-    await loadImplementationData();
-    // Substep completions can also flip a main task complete on the backend
-    // (auto-rollup), so refresh the roadmap overlay too.
+  const handleSubstepCompletion = async (completionData?: TaskCompletionResult) => {
+    if (completionData?.success) {
+      applyCompletionFromResponse(completionData);
+    }
+    if (currentTask?.id) {
+      invalidateTaskScopedCache(currentTask.id);
+    }
+    await loadImplementationData({ silent: true });
     await refreshCompletedRoadmapStepKeys();
   };
 
   const handleGetServiceProviders = async () => {
-    if (!currentTask || serviceProvidersLoading) return;
+    if (!currentTask || contactProvidersLoading) return;
 
     try {
-      setServiceProvidersLoading(true);
-      const { data } = await httpClient.post<any>(
-        `/implementation/sessions/${sessionId}/contact`,
-        { task_id: currentTask.id }
-      );
-      
+      const data = await fetchContactProviders({
+        sessionId,
+        taskId: currentTask.id,
+      }).unwrap();
+
       if (data.success) {
-        setServiceProviders(data.service_providers);
+        setServiceProviders(data.service_providers ?? []);
         setShowServiceProviderModal(true);
       } else {
         toast.error(data.message || 'Failed to get service providers');
@@ -568,58 +602,26 @@ const Implementation: React.FC<ImplementationProps> = ({
     } catch (err) {
       console.error('Error getting service providers:', err);
       toast.error('Failed to get service providers');
-    } finally {
-      setServiceProvidersLoading(false);
     }
   };
 
+  const [pendingHelpModal, setPendingHelpModal] = useState(false);
 
-  const fetchHelpContent = async (options: { showModal?: boolean; force?: boolean } = {}) => {
+  const handleGetHelp = () => {
     if (!currentTask) return;
-    if (helpLoading && !options.force) return;
-
-    try {
-      setHelpLoading(true);
-      const { data } = await httpClient.post<any>(
-        `/implementation/sessions/${sessionId}/help`,
-        { task_id: currentTask.id, help_type: 'detailed' }
-      );
-      
-      if (data.success) {
-        setHelpContent(data.help_content);
-        if (options.showModal) {
-          setShowHelpModal(true);
-        }
-      } else {
-        toast.error(data.message || 'Failed to get help');
-      }
-    } catch (err) {
-      console.error('Error getting help:', err);
-      toast.error('Failed to get help');
-    } finally {
-      setHelpLoading(false);
-    }
-  };
-
-  const handleGetHelp = async () => {
-    if (!currentTask) return;
-
-    // If we already have content ready and are currently loading, just show it
-    if (helpLoading && helpContent) {
+    if (helpContent) {
       setShowHelpModal(true);
       return;
     }
-
-    await fetchHelpContent({ showModal: true, force: true });
+    setPendingHelpModal(true);
   };
 
-  // Preload help content so it's instantly available in the Research-Backed section
   useEffect(() => {
-    if (currentTask) {
-      fetchHelpContent({ showModal: false });
+    if (pendingHelpModal && helpContent) {
+      setShowHelpModal(true);
+      setPendingHelpModal(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTask?.id]);
+  }, [pendingHelpModal, helpContent]);
 
   const handleUploadDocument = async (file: File) => {
     if (!currentTask) return;
@@ -678,7 +680,7 @@ const Implementation: React.FC<ImplementationProps> = ({
     }
   };
 
-  if (loading) {
+  if (loading && !currentTask) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 flex items-center justify-center">
         <div className="text-center">
@@ -697,7 +699,7 @@ const Implementation: React.FC<ImplementationProps> = ({
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Error Loading Implementation</h2>
           <p className="text-gray-600 mb-4">{error}</p>
           <button
-            onClick={loadImplementationData}
+            onClick={() => void loadImplementationData()}
             className="bg-teal-500 hover:bg-teal-600 text-white px-6 py-2 rounded-lg font-medium transition-colors"
           >
             Try Again
@@ -992,12 +994,18 @@ const Implementation: React.FC<ImplementationProps> = ({
               <TaskCard
                 task={currentTask}
                 onComplete={handleSubstepCompletion}
+                onSubstepFocus={(stepNumber) =>
+                  setCurrentTask((prev) =>
+                    prev ? { ...prev, current_substep: stepNumber } : prev,
+                  )
+                }
+                isRefreshing={isRefreshingTask}
                 onGetServiceProviders={handleGetServiceProviders}
                 onGetHelp={handleGetHelp}
                 onUploadDocument={handleUploadDocument}
                 sessionId={sessionId}
                 helpContent={helpContent}
-                helpLoading={helpLoading}
+                helpLoading={helpLoading || helpFetching}
               />
             </motion.div>
           )}
@@ -1042,7 +1050,7 @@ const Implementation: React.FC<ImplementationProps> = ({
                 <p className="mb-2 text-lg font-semibold text-gray-700">Roadmap not loaded</p>
                 <p className="mb-5 text-sm text-gray-500">View your full launch plan with all stages and tasks</p>
                 <motion.button
-                  onClick={loadRoadmapContent}
+                  onClick={() => void refetchRoadmap()}
                   className="rounded-lg bg-gradient-to-r from-teal-500 to-blue-600 px-6 py-2.5 font-semibold text-white shadow-md transition-all hover:from-teal-600 hover:to-blue-700 hover:shadow-lg"
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
@@ -1063,8 +1071,7 @@ const Implementation: React.FC<ImplementationProps> = ({
               transition={{ duration: 0.3 }}
               className="w-full"
             >
-              <div className="bg-white/95 backdrop-blur-xl border border-gray-200/60 rounded-2xl p-6 shadow-lg">
-                {budgetLoading ? (
+              {budgetLoading ? (
                   <div className="flex flex-col items-center justify-center py-12">
                     <div className="relative">
                       <div className="animate-spin rounded-full h-12 w-12 border-4 border-teal-200 border-t-teal-600"></div>
@@ -1082,6 +1089,7 @@ const Implementation: React.FC<ImplementationProps> = ({
                     sessionId={sessionId}
                     businessType={businessContext?.business_type}
                     businessContext={businessContext}
+                    embeddedInParent
                   />
                 ) : (
                   <div className="text-center py-12">
@@ -1100,7 +1108,6 @@ const Implementation: React.FC<ImplementationProps> = ({
                     </motion.button>
                   </div>
                 )}
-              </div>
             </motion.div>
           )}
         </AnimatePresence>
