@@ -84,6 +84,101 @@ const PLAN_CONTENT_SECTIONS: { title: string; items: string[] }[] = [
   },
 ];
 
+const IMPORT_METHOD_TABS: {
+  id: UploadMode;
+  label: string;
+  icon: string;
+  activeClass: string;
+  idleClass: string;
+}[] = [
+  {
+    id: 'upload',
+    label: 'Upload file',
+    icon: '📄',
+    activeClass: 'border-blue-300 bg-white text-blue-900 shadow-sm ring-1 ring-blue-100',
+    idleClass: 'border-transparent bg-transparent text-slate-600 hover:bg-white/70 hover:text-slate-900',
+  },
+  {
+    id: 'paste',
+    label: 'Paste plan text',
+    icon: '📋',
+    activeClass: 'border-indigo-300 bg-white text-indigo-900 shadow-sm ring-1 ring-indigo-100',
+    idleClass: 'border-transparent bg-transparent text-slate-600 hover:bg-white/70 hover:text-slate-900',
+  },
+  {
+    id: 'session',
+    label: 'Another venture',
+    icon: '🔄',
+    activeClass: 'border-teal-300 bg-white text-teal-900 shadow-sm ring-1 ring-teal-100',
+    idleClass: 'border-transparent bg-transparent text-slate-600 hover:bg-white/70 hover:text-slate-900',
+  },
+];
+
+function ImportMethodTab({
+  tab,
+  isActive,
+  onSelect,
+  disabled,
+}: {
+  tab: (typeof IMPORT_METHOD_TABS)[number];
+  isActive: boolean;
+  onSelect: (mode: UploadMode) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={isActive}
+      aria-controls={`import-panel-${tab.id}`}
+      id={`import-tab-${tab.id}`}
+      onClick={() => onSelect(tab.id)}
+      disabled={disabled}
+      className={`flex min-h-[2.75rem] flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+        isActive ? tab.activeClass : tab.idleClass
+      }`}
+    >
+      <span className="text-base leading-none" aria-hidden>
+        {tab.icon}
+      </span>
+      <span className="text-center leading-tight">{tab.label}</span>
+    </button>
+  );
+}
+
+function ImportMethodTabs({
+  activeMode,
+  onSelect,
+  disabled,
+}: {
+  activeMode: UploadMode;
+  onSelect: (mode: UploadMode) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="mb-5 rounded-xl border border-slate-200/90 bg-gradient-to-b from-slate-50 to-slate-100/80 px-3 py-3 shadow-inner">
+      <p className="mb-2.5 text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+        Choose import method
+      </p>
+      <div
+        role="tablist"
+        aria-label="Business plan import method"
+        className="grid grid-cols-1 gap-1.5 rounded-lg bg-slate-200/60 p-1 sm:grid-cols-3"
+      >
+        {IMPORT_METHOD_TABS.map((tab) => (
+          <ImportMethodTab
+            key={tab.id}
+            tab={tab}
+            isActive={activeMode === tab.id}
+            onSelect={onSelect}
+            disabled={disabled}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PlanRequirementsPanel({ mode }: { mode: UploadMode }) {
   if (mode === 'session') return null;
   return (
@@ -388,16 +483,10 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
     }
   };
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
+  const openFilePicker = () => {
+    if (!uploading && fileInputRef.current) {
+      fileInputRef.current.click();
+    }
   };
 
   const handleAnalysisClose = () => {
@@ -514,52 +603,25 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
 
         {/* Content */}
         <div className="p-6">
-          <div className="mb-6 rounded-xl border border-purple-200 bg-purple-50 p-4">
-            <p className="text-sm font-medium text-purple-900">
-              If you already have a completed business plan, upload it now and I&rsquo;ll review it to highlight anything else we need before generating your launch roadmap.
-            </p>
-          </div>
+          <p className="mb-6 text-sm leading-relaxed text-gray-600">
+            If you already have a completed business plan, upload it below and Angel will map it to the questionnaire — only asking about gaps before your launch roadmap.
+          </p>
 
-          <div className="flex flex-wrap items-center gap-3 mb-4">
-            <button
-              onClick={() => setActiveMode('upload')}
-              disabled={uploading}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                activeMode === 'upload'
-                  ? 'bg-purple-600 text-white border-purple-600'
-                  : 'border-gray-200 text-gray-600 hover:border-purple-300 hover:text-purple-700'
-              }`}
-            >
-              Upload document
-            </button>
-            <button
-              onClick={() => setActiveMode('paste')}
-              disabled={uploading}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                activeMode === 'paste'
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'border-gray-200 text-gray-600 hover:border-indigo-300 hover:text-indigo-700'
-              }`}
-            >
-              Paste plan text
-            </button>
-            <button
-              onClick={() => setActiveMode('session')}
-              disabled={uploading}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                activeMode === 'session'
-                  ? 'bg-teal-600 text-white border-teal-600'
-                  : 'border-gray-200 text-gray-600 hover:border-teal-300 hover:text-teal-700'
-              }`}
-            >
-              From another venture
-            </button>
-          </div>
+          <ImportMethodTabs
+            activeMode={activeMode}
+            onSelect={setActiveMode}
+            disabled={uploading}
+          />
 
           <PlanRequirementsPanel mode={activeMode} />
 
           {/* Upload / paste / pick area */}
-          <div className="space-y-6">
+          <div
+            className="space-y-6"
+            role="tabpanel"
+            id={`import-panel-${activeMode}`}
+            aria-labelledby={`import-tab-${activeMode}`}
+          >
             {activeMode === 'session' ? (
               <div className="rounded-xl border border-teal-200 bg-teal-50/40 p-5">
                 <div className="mb-3 flex items-center justify-between">
@@ -639,12 +701,23 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
               </div>
             ) : activeMode === 'upload' ? (
               <div
+                role="button"
+                tabIndex={uploading ? -1 : 0}
+                aria-label="Upload business plan file"
+                onClick={openFilePicker}
+                onKeyDown={(event) => {
+                  if (uploading) return;
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openFilePicker();
+                  }
+                }}
                 className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
                   dragActive
                     ? 'border-blue-500 bg-blue-50'
                     : uploading
-                    ? 'border-gray-300 bg-gray-50'
-                    : 'border-gray-300 hover:border-gray-400'
+                    ? 'border-gray-300 bg-gray-50 cursor-not-allowed'
+                    : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50/40 cursor-pointer'
                 }`}
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
@@ -672,10 +745,10 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
                   </div>
                   
                   <button
-                    onClick={() => {
-                      if (!uploading && fileInputRef.current) {
-                        fileInputRef.current.click();
-                      }
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openFilePicker();
                     }}
                     disabled={uploading}
                     className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
@@ -703,7 +776,7 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
                   />
                 </div>
               </div>
-            ) : (
+            ) : activeMode === 'paste' ? (
               <div className="space-y-4">
                 <textarea
                   value={pastedText}
@@ -738,9 +811,9 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
                   )}
                 </button>
               </div>
-            )}
+            ) : null}
 
-              {/* File Requirements */}
+              {activeMode !== 'session' && (
               <div className="bg-gray-50 rounded-lg p-4">
                 <h3 className="font-medium text-gray-900 mb-2">Supported File Types</h3>
                 <ul className="text-sm text-gray-600 space-y-1">
@@ -750,6 +823,7 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
                   <li>• Maximum file size: 10MB</li>
                 </ul>
               </div>
+              )}
 
               {/* What Happens Next */}
               <div className="bg-blue-50 rounded-lg p-4">
