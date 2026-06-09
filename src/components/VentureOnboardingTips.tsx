@@ -29,13 +29,14 @@ const STEPS: { title: string; body: string }[] = [
   },
 ];
 
-function formatInlineBold(text: string) {
+/** `**phrase**` in step copy → underlined emphasis (readable on plain black body text). */
+function formatInlineEmphasis(text: string) {
   const parts = text.split("**");
   return parts.map((chunk, i) =>
     i % 2 === 1 ? (
-      <strong key={i} className="font-semibold text-foreground">
+      <span key={i} className="underline decoration-2 underline-offset-2">
         {chunk}
-      </strong>
+      </span>
     ) : (
       <span key={i}>{chunk}</span>
     )
@@ -75,8 +76,8 @@ export default function VentureOnboardingTips({ open, sessionId, onOpenChange }:
       <DialogContent className="max-w-md sm:max-w-lg" showCloseButton>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription className="text-left text-sm leading-relaxed pt-1">
-            {formatInlineBold(body)}
+          <DialogDescription className="pt-1 text-left text-sm leading-relaxed text-gray-900">
+            {formatInlineEmphasis(body)}
           </DialogDescription>
         </DialogHeader>
         <div className="flex justify-center gap-1.5 py-1" aria-hidden>

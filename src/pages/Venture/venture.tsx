@@ -28,6 +28,7 @@ import ModifyModal from "../../components/ModifyModal";
 import RoadmapDisplay from "../../components/RoadmapDisplay";
 import UploadPlanModal from "../../components/UploadPlanModal";
 import VentureOnboardingTips from "../../components/VentureOnboardingTips";
+import GkyProceedButton from "../../components/GkyProceedButton";
 import { isVentureOnboardingTipsComplete } from "@/constants/ventureOnboarding";
 import FounderportIcon from "../../assets/images/home/Founderport_Favicon_Mariner.svg?url";
 import VentureBrandMark from "../../components/layout/VentureBrandMark";
@@ -799,6 +800,7 @@ export default function ChatPage() {
   });
   const [showVerificationButtons, setShowVerificationButtons] = useState(false);
   const [showYesNoButtons, setShowYesNoButtons] = useState(false);
+  const [awaitingGkyProceed, setAwaitingGkyProceed] = useState(false);
   const [webSearchStatus, setWebSearchStatus] = useState<{
     is_searching: boolean;
     query?: string;
@@ -2800,9 +2802,17 @@ export default function ChatPage() {
       setLoading(true);
       try {
         const {
-          result: { reply, progress, web_search_status, immediate_response, question_number },
+          result: { reply, progress, web_search_status, immediate_response, question_number, transition_phase, awaiting_gky_proceed },
         } = await fetchQuestion("", sessionId!);
         if (cancelled) return;
+
+        if (transition_phase === 'GKY_TO_BUSINESS_PLAN' || awaiting_gky_proceed) {
+          setAwaitingGkyProceed(true);
+          setShowVerificationButtons(false);
+        }
+        if (progress.phase === 'BUSINESS_PLAN') {
+          setAwaitingGkyProceed(false);
+        }
 
         console.log("📥 Initial Question API Response:", {
           reply: reply.substring(0, 100) + "...",
@@ -2910,6 +2920,47 @@ export default function ChatPage() {
           persistPlanImported(sessionId);
           setHasUploadedPlan(true);
           setHasSeenUploadPrompt(true);
+        }
+
+        const introPhase = ((sessionMeta.current_phase as string) || '').toUpperCase();
+        if (introPhase === 'BUSINESS_PLAN_INTRO') {
+          const gkyTotal = QUESTION_COUNTS.GKY || 5;
+          const bpTotal = QUESTION_COUNTS.BUSINESS_PLAN || 45;
+          const reconstructedIntro = buildConversationFromHistory(historyResponse || []);
+          const gkyPairs = reconstructedIntro.pairs.filter(
+            (pair) => (pair.phase || 'GKY').toUpperCase() === 'GKY' && !pair.isCommand
+          );
+
+          setHistory(gkyPairs);
+          setProgress({
+            phase: 'GKY',
+            answered: gkyTotal,
+            total: gkyTotal,
+            percent: 100,
+            asked_q: 'GKY.05_ACK',
+            overall_progress: {
+              answered: gkyTotal,
+              total: gkyTotal,
+              percent: 100,
+              scope: 'gky',
+              phase_breakdown: {
+                gky_completed: gkyTotal,
+                gky_total: gkyTotal,
+                bp_completed: 0,
+                bp_total: bpTotal,
+              },
+            },
+          });
+          setAwaitingGkyProceed(true);
+          setNeedsInitialQuestion(true);
+          setBackendTotals({
+            answered: gkyTotal,
+            total: gkyTotal,
+            overallAnswered: gkyTotal,
+            overallTotal: gkyTotal,
+          });
+          setLoading(false);
+          return;
         }
 
         const reconstructed = buildConversationFromHistory(historyResponse || []);
@@ -3444,7 +3495,18 @@ export default function ChatPage() {
         ? await fetchQuestion(input, sessionId!, { modify: options.modify })
         : await fetchQuestion(input, sessionId!);
       const {
-        result: { reply, progress, web_search_status, immediate_response, transition_phase, business_plan_summary, show_accept_modify, question_number, is_section_summary },
+        result: {
+          reply,
+          progress,
+          web_search_status,
+          immediate_response,
+          transition_phase,
+          business_plan_summary,
+          show_accept_modify,
+          question_number,
+          is_section_summary,
+          awaiting_gky_proceed,
+        },
       } = response;
       
       // Get business_plan_artifact from response if available
@@ -3465,6 +3527,13 @@ export default function ChatPage() {
       });
       
       applyProgressUpdate(progress);
+      if (awaiting_gky_proceed) {
+        setAwaitingGkyProceed(true);
+        setShowVerificationButtons(false);
+      }
+      if (progress.phase === 'BUSINESS_PLAN') {
+        setAwaitingGkyProceed(false);
+      }
       await refreshBusinessContext();
       
       // Handle transition phases - return early (no history add for modal transitions)
@@ -3510,17 +3579,26 @@ export default function ChatPage() {
         return;
       }
 
-        // Handle GKY to Business Plan transition — display the congratulation /
-        // transition message as a normal question.  The user reads it and types
-        // a response (e.g. "yes, I'm ready").  Their response goes through the
-        // regular handleNext → fetchQuestion flow which returns BP Q1.
-        // NO modal, NO auto-start, NO upload popup.
         if (transition_phase === "GKY_TO_BUSINESS_PLAN") {
+          setHistory((prev) => [
+            ...prev,
+            {
+              question: previousQuestion,
+              answer: input,
+              questionNumber: previousQuestionNumber,
+              phase: "GKY",
+            },
+          ]);
+
           const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
           setCurrentQuestion(parsedQ);
           setCurrentAcknowledgement(ack);
           setCurrentQuestionNumber(null);
+          setAwaitingGkyProceed(true);
+          setShowVerificationButtons(false);
           applyProgressUpdate(progress);
+          setPendingUserReply(null);
+          lastFullAssistantReplyRef.current = reply;
           setLoading(false);
           return;
         }      
@@ -5340,6 +5418,15 @@ export default function ChatPage() {
               </div>
             )}
 
+            {awaitingGkyProceed && !loading && (
+              <div className="mb-4">
+                <GkyProceedButton
+                  onProceed={() => handleNext('Proceed')}
+                  disabled={loading}
+                />
+              </div>
+            )}
+
             {progress.phase !== 'GKY' && (
               <div className="mb-1 flex justify-center sm:mb-3 lg:mb-3">
                 <button
@@ -5352,16 +5439,18 @@ export default function ChatPage() {
               </div>
             )}
 
-            <SmartInput
-              value={currentInput}
-              onChange={setCurrentInput}
-              onSubmit={handleNext}
-              placeholder="Type your response..."
-              disabled={loading}
-              loading={loading}
-              currentQuestion={currentQuestion}
-              currentPhase={progress.phase}
-            />
+            {!awaitingGkyProceed && (
+              <SmartInput
+                value={currentInput}
+                onChange={setCurrentInput}
+                onSubmit={handleNext}
+                placeholder="Type your response..."
+                disabled={loading}
+                loading={loading}
+                currentQuestion={currentQuestion}
+                currentPhase={progress.phase}
+              />
+            )}
 
             {/* Quick Actions Row - Mobile only (desktop shows in left sidebar) */}
             {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||

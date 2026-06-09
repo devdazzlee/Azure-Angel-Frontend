@@ -71,6 +71,8 @@ export interface AngelResponse {
         question_number?: number | null;
         /** True when the reply is a section-end summary (not a questionnaire question). */
         is_section_summary?: boolean;
+        /** GKY complete — show Proceed button instead of free-text confirmation. */
+        awaiting_gky_proceed?: boolean;
     };
 }
 
