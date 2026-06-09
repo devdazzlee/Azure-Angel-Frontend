@@ -1,6 +1,6 @@
 export default function AboutUs() {
   return (
-    <div className="bg-slate-100  pt-20 text-slate-800">
+    <div className="bg-slate-100 pt-20 text-slate-800">
       <section className="w-full px-4 pb-12">
         <div className="w-full bg-white px-5 py-8 shadow-sm md:px-8">
           <h1 className="text-center text-4xl font-bold text-blue-600 md:text-5xl">

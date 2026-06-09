@@ -28,25 +28,27 @@ const handleAction = () => {
   }
 };
 
-interface NavBarContentProps { scrolled: boolean; toggleMenu: () => void; isOpen: boolean; isSessionActive: boolean; }
-const NavBarContent: React.FC<NavBarContentProps> = ({ scrolled, toggleMenu, isOpen, isSessionActive }) => {
+interface NavBarContentProps {
+  toggleMenu: () => void;
+  isOpen: boolean;
+  isSessionActive: boolean;
+}
 
+const NavBarContent: React.FC<NavBarContentProps> = ({ toggleMenu, isOpen, isSessionActive }) => {
   return (
-    <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-      {/* Logo */}
-      <Link to="/" className="flex items-center">
+    <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
+      <Link to="/" className="flex h-full shrink-0 items-center">
         <img
           src={LOGO}
           alt="Founderport Logo"
-          className={`transition-all duration-300 ${scrolled ? 'h-14' : 'h-14'} w-auto`}
+          className="h-[4.75rem] w-auto transition-all duration-300"
         />
       </Link>
 
-      {/* Desktop Nav */}
-      <nav className="hidden md:flex items-center space-x-8">
+      <nav className="hidden items-center space-x-8 md:flex">
         {navItems.map(item => (
           <motion.div key={item.to} whileHover={{ scale: 1.1 }} transition={{ duration: 0.2 }}>
-            <Link to={item.to} className="font-medium text-black hover:text-teal-600 transition-colors">
+            <Link to={item.to} className="font-medium text-black transition-colors hover:text-teal-600">
               {item.label}
             </Link>
           </motion.div>
@@ -56,7 +58,7 @@ const NavBarContent: React.FC<NavBarContentProps> = ({ scrolled, toggleMenu, isO
             <motion.div whileHover={{ scale: 1.05 }} transition={{ duration: 0.2 }}>
               <Link
                 to="/ventures"
-                className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-5 py-2 rounded-full font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+                className="flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 px-5 py-2 font-semibold text-white shadow-md transition-all hover:from-blue-600 hover:to-indigo-600 hover:shadow-lg"
               >
                 Your Business
               </Link>
@@ -64,9 +66,9 @@ const NavBarContent: React.FC<NavBarContentProps> = ({ scrolled, toggleMenu, isO
             <motion.div whileHover={{ scale: 1.05 }} transition={{ duration: 0.2 }}>
               <Link
                 to="/profile"
-                className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-5 py-2 rounded-full font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+                className="flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 px-5 py-2 font-semibold text-white shadow-md transition-all hover:from-blue-600 hover:to-indigo-600 hover:shadow-lg"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
                 My Profile
@@ -74,8 +76,8 @@ const NavBarContent: React.FC<NavBarContentProps> = ({ scrolled, toggleMenu, isO
             </motion.div>
             <motion.button
               whileHover={{ scale: 1.05 }}
-              onClick={toggleMenu}
-              className="ml-2 bg-teal-600 text-white px-5 py-2 rounded-full font-semibold shadow-lg transition-all"
+              onClick={handleAction}
+              className="ml-2 rounded-full bg-teal-600 px-5 py-2 font-semibold text-white shadow-lg transition-all"
             >
               Logout
             </motion.button>
@@ -84,19 +86,90 @@ const NavBarContent: React.FC<NavBarContentProps> = ({ scrolled, toggleMenu, isO
         {!isSessionActive && (
           <motion.button
             whileHover={{ scale: 1.05 }}
-            onClick={toggleMenu}
-            className="bg-teal-600 text-white px-5 py-2 rounded-full font-semibold shadow-lg transition-all"
+            onClick={handleAction}
+            className="rounded-full bg-teal-600 px-5 py-2 font-semibold text-white shadow-lg transition-all"
           >
             Get Started
           </motion.button>
         )}
       </nav>
 
-      {/* Mobile Toggle */}
-      <button onClick={toggleMenu} className="md:hidden text-black focus:outline-none transition-colors" aria-label="Toggle menu">
-        {isOpen ? <FaTimes className="w-6 h-6" /> : <FaBars className="w-6 h-6" />}
+      <button
+        onClick={toggleMenu}
+        className="text-black transition-colors focus:outline-none md:hidden"
+        aria-label="Toggle menu"
+      >
+        {isOpen ? <FaTimes className="h-6 w-6" /> : <FaBars className="h-6 w-6" />}
       </button>
     </div>
+  );
+};
+
+interface MobileMenuProps {
+  isOpen: boolean;
+  onClose: () => void;
+  scrolled: boolean;
+}
+
+const MobileMenu: React.FC<MobileMenuProps> = ({ isOpen, onClose, scrolled }) => {
+  if (!isOpen) return null;
+
+  return (
+    <motion.div
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: 'auto', opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      transition={{ duration: 0.3 }}
+      className={`md:hidden ${scrolled ? 'bg-white/90 shadow-inner backdrop-blur-md' : 'bg-transparent'}`}
+    >
+      <div className="flex flex-col space-y-4 px-6 pb-6 pt-2">
+        {navItems.map(i => (
+          <Link
+            key={i.to}
+            to={i.to}
+            onClick={onClose}
+            className="font-medium text-black transition-colors hover:text-teal-600"
+          >
+            {i.label}
+          </Link>
+        ))}
+        {isSessionActive && (
+          <>
+            <Link
+              to="/ventures"
+              onClick={onClose}
+              className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 px-4 py-2 font-semibold text-white shadow-md transition-all hover:from-blue-600 hover:to-indigo-600"
+            >
+              Your Business
+            </Link>
+            <Link
+              to="/profile"
+              onClick={onClose}
+              className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 px-4 py-2 font-semibold text-white shadow-md transition-all hover:from-blue-600 hover:to-indigo-600"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              My Profile
+            </Link>
+            <button
+              onClick={handleAction}
+              className="w-full rounded-full bg-teal-600 px-4 py-2 font-medium text-white shadow-sm transition-all"
+            >
+              Logout
+            </button>
+          </>
+        )}
+        {!isSessionActive && (
+          <button
+            onClick={handleAction}
+            className="mt-2 w-full rounded-full bg-teal-600 px-4 py-2 font-medium text-white shadow-sm transition-all"
+          >
+            Get Started
+          </button>
+        )}
+      </div>
+    </motion.div>
   );
 };
 
@@ -110,15 +183,11 @@ const Header: React.FC = () => {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  const toggleMenu = () => {
-    setIsOpen(prev => !prev);
-    handleAction();
-  };
-
+  const toggleMenu = () => setIsOpen(prev => !prev);
+  const closeMenu = () => setIsOpen(false);
 
   return (
     <>
-      {/* Top Header */}
       <AnimatePresence>
         {!scrolled && (
           <motion.header
@@ -130,64 +199,12 @@ const Header: React.FC = () => {
             transition={{ duration: 0.3 }}
             className="absolute inset-x-0 top-0 z-40 bg-transparent"
           >
-            <NavBarContent
-              scrolled={false}
-              toggleMenu={toggleMenu}
-              isOpen={isOpen}
-              isSessionActive={isSessionActive}
-            />
-            {/* Mobile Menu */}
-            {isOpen && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.3 }}
-                className="md:hidden bg-transparent"
-              >
-                <div className="px-6 pt-2 pb-6 flex flex-col space-y-4">
-                  {navItems.map(i => (
-                    <Link key={i.to} to={i.to} onClick={() => setIsOpen(false)} className="text-black font-medium hover:text-gray-600 transition-colors">
-                      {i.label}
-                    </Link>
-                  ))}
-                  {isSessionActive && (
-                    <>
-                      <Link
-                        to="/ventures"
-                        onClick={() => setIsOpen(false)}
-                        className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-4 py-2 rounded-full font-semibold shadow-md transition-all flex items-center justify-center gap-2"
-                      >
-                        Your Business
-                      </Link>
-                      <Link
-                        to="/profile"
-                        onClick={() => setIsOpen(false)}
-                        className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-4 py-2 rounded-full font-semibold shadow-md transition-all flex items-center justify-center gap-2"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                        My Profile
-                      </Link>
-                      <button onClick={handleAction} className="bg-teal-600 text-white px-4 py-2 rounded-full font-medium shadow-sm transition-all w-full">
-                        Logout
-                      </button>
-                    </>
-                  )}
-                  {!isSessionActive && (
-                    <button onClick={handleAction} className="mt-2 bg-teal-600 text-white px-4 py-2 rounded-full font-medium shadow-sm transition-all w-full">
-                      Get Started
-                    </button>
-                  )}
-                </div>
-              </motion.div>
-            )}
+            <NavBarContent toggleMenu={toggleMenu} isOpen={isOpen} isSessionActive={isSessionActive} />
+            <MobileMenu isOpen={isOpen} onClose={closeMenu} scrolled={false} />
           </motion.header>
         )}
       </AnimatePresence>
 
-      {/* Sticky Header */}
       <AnimatePresence>
         {scrolled && (
           <motion.header
@@ -197,56 +214,10 @@ const Header: React.FC = () => {
             exit="hidden"
             variants={headerVariants}
             transition={{ duration: 0.3 }}
-            className="fixed inset-x-0 top-0 z-50 bg-white bg-opacity-90 backdrop-blur-md shadow-md"
+            className="fixed inset-x-0 top-0 z-50 bg-white/90 shadow-md backdrop-blur-md"
           >
-            <NavBarContent scrolled={true} toggleMenu={toggleMenu} isOpen={isOpen} isSessionActive={isSessionActive} />
-            {/* Mobile Menu */}
-            {isOpen && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.3 }}
-                className="md:hidden bg-white bg-opacity-90 backdrop-blur-md shadow-inner"
-              >
-                <div className="px-6 pt-2 pb-6 flex flex-col space-y-4">
-                  {navItems.map(i => (
-                    <Link key={i.to} to={i.to} onClick={() => setIsOpen(false)} className="text-black font-medium hover:text-teal-600 transition-colors">
-                      {i.label}
-                    </Link>
-                  ))}
-                  {isSessionActive && (
-                    <>
-                      <Link
-                        to="/ventures"
-                        onClick={() => setIsOpen(false)}
-                        className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-4 py-2 rounded-full font-semibold shadow-md transition-all flex items-center justify-center gap-2"
-                      >
-                        Your Business
-                      </Link>
-                      <Link
-                        to="/profile"
-                        onClick={() => setIsOpen(false)}
-                        className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-4 py-2 rounded-full font-semibold shadow-md transition-all flex items-center justify-center gap-2"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                        My Profile
-                      </Link>
-                      <button onClick={handleAction} className="bg-teal-600 text-white px-4 py-2 rounded-full font-medium shadow-sm transition-all w-full">
-                        Logout
-                      </button>
-                    </>
-                  )}
-                  {!isSessionActive && (
-                    <button onClick={handleAction} className="mt-2 bg-teal-600 text-white px-4 py-2 rounded-full font-medium shadow-sm transition-all w-full">
-                      Get Started
-                    </button>
-                  )}
-                </div>
-              </motion.div>
-            )}
+            <NavBarContent toggleMenu={toggleMenu} isOpen={isOpen} isSessionActive={isSessionActive} />
+            <MobileMenu isOpen={isOpen} onClose={closeMenu} scrolled />
           </motion.header>
         )}
       </AnimatePresence>

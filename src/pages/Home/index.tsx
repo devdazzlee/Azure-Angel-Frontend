@@ -161,7 +161,7 @@ const FounderportHome: React.FC = () => {
             className="mx-auto max-w-4xl text-center text-3xl font-bold leading-tight md:text-5xl"
             variants={fadeItem}
           >
-            A centralized space to plan, learn, and build.
+            Turn your business idea into a real launch plan — with guided support every step of the way.
           </motion.h1>
           <motion.p className="mx-auto mt-5 max-w-4xl text-center text-base text-blue-100 md:text-lg" variants={fadeItem}>
             Starting with Founderport &mdash; the first widget in a growing suite for first-time
