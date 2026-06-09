@@ -23,6 +23,7 @@ import { budgetService } from '@/services/budgetService';
 import BudgetDashboard from '@/components/Budget/BudgetDashboard';
 import BudgetContinueToRoadmapCta from '@/components/Budget/BudgetContinueToRoadmapCta';
 import DocumentExportModal from '@/components/DocumentExportModal';
+import VentureBrandMark from '@/components/layout/VentureBrandMark';
 import type { BudgetExportActions } from '@/components/Budget/budgetExportActions';
 import httpClient from '@/api/httpClient';
 
@@ -311,6 +312,8 @@ const BudgetPage: React.FC = () => {
           {/* Mobile: toolbar row + title block */}
           <div className="md:hidden">
             <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <VentureBrandMark />
               <Button
                 variant="ghost"
                 size="sm"
@@ -327,6 +330,7 @@ const BudgetPage: React.FC = () => {
                 <ArrowLeft className="h-4 w-4 shrink-0" />
                 Back
               </Button>
+              </div>
               <Button
                 variant="outline"
                 size="sm"
@@ -352,6 +356,7 @@ const BudgetPage: React.FC = () => {
           {/* Desktop */}
           <div className="hidden md:flex md:flex-row md:items-center md:justify-between md:gap-6">
             <div className="flex min-w-0 items-center gap-6">
+              <VentureBrandMark />
               <Button
                 variant="ghost"
                 onClick={() =>

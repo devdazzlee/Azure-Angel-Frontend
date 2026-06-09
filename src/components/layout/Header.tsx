@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FaBars, FaTimes } from 'react-icons/fa';
-import { motion, AnimatePresence } from 'framer-motion';
-import type { Variants } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { clearSession } from '../../utils/tokenUtils';
 import LOGO from '../../assets/images/home/Founderport_Logo_Horizontal_Mariner_Main.svg';
@@ -11,11 +10,6 @@ const navItems: NavItem[] = [
   { label: 'Who We Are', to: '/about' },
   { label: 'Services', to: '/services' },
 ];
-
-const headerVariants: Variants = {
-  hidden: { y: -50, opacity: 0 },
-  visible: { y: 0, opacity: 1 },
-};
 
 const isSessionActive = Boolean(localStorage.getItem('sb_access_token'));
 
@@ -187,41 +181,14 @@ const Header: React.FC = () => {
   const closeMenu = () => setIsOpen(false);
 
   return (
-    <>
-      <AnimatePresence>
-        {!scrolled && (
-          <motion.header
-            key="top"
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
-            variants={headerVariants}
-            transition={{ duration: 0.3 }}
-            className="absolute inset-x-0 top-0 z-40 bg-transparent"
-          >
-            <NavBarContent toggleMenu={toggleMenu} isOpen={isOpen} isSessionActive={isSessionActive} />
-            <MobileMenu isOpen={isOpen} onClose={closeMenu} scrolled={false} />
-          </motion.header>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {scrolled && (
-          <motion.header
-            key="sticky"
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
-            variants={headerVariants}
-            transition={{ duration: 0.3 }}
-            className="fixed inset-x-0 top-0 z-50 bg-white/90 shadow-md backdrop-blur-md"
-          >
-            <NavBarContent toggleMenu={toggleMenu} isOpen={isOpen} isSessionActive={isSessionActive} />
-            <MobileMenu isOpen={isOpen} onClose={closeMenu} scrolled />
-          </motion.header>
-        )}
-      </AnimatePresence>
-    </>
+    <header
+      className={`fixed inset-x-0 top-0 z-50 transition-colors duration-300 ${
+        scrolled ? 'bg-white/90 shadow-md backdrop-blur-md' : 'bg-transparent'
+      }`}
+    >
+      <NavBarContent toggleMenu={toggleMenu} isOpen={isOpen} isSessionActive={isSessionActive} />
+      <MobileMenu isOpen={isOpen} onClose={closeMenu} scrolled={scrolled} />
+    </header>
   );
 };
 

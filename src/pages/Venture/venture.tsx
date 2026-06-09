@@ -30,6 +30,7 @@ import UploadPlanModal from "../../components/UploadPlanModal";
 import VentureOnboardingTips from "../../components/VentureOnboardingTips";
 import { isVentureOnboardingTipsComplete } from "@/constants/ventureOnboarding";
 import FounderportIcon from "../../assets/images/home/Founderport_Favicon_Mariner.svg?url";
+import VentureBrandMark from "../../components/layout/VentureBrandMark";
 import Implementation from "../Implementation";
 import RoadmapEditModal from "../../components/RoadmapEditModal";
 import BusinessQuestionFormatter from "../../components/BusinessQuestionFormatter";
@@ -4562,7 +4563,8 @@ export default function ChatPage() {
         <div className="flex-shrink-0 px-2 py-2 sm:px-3 sm:py-3 lg:px-3 lg:py-4">
           <div className="max-w-6xl mx-auto">
             {/* Mobile header — single compact row */}
-            <div className="mb-2 flex min-w-0 items-center gap-1 sm:gap-1.5 lg:hidden">
+            <div className="mb-2 flex h-11 min-w-0 items-center gap-1.5 sm:gap-2 lg:hidden">
+              <VentureBrandMark />
               <motion.button
                 whileHover={{ scale: 1.02, x: -2 }}
                 whileTap={{ scale: 0.98 }}
@@ -4586,15 +4588,8 @@ export default function ChatPage() {
                 <span className="max-[340px]:hidden sm:inline">Ventures</span>
               </motion.button>
 
-              <div className="flex min-w-0 flex-1 items-center justify-center gap-1 overflow-hidden sm:gap-1.5">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gradient-to-r from-teal-500 to-blue-500 text-white shadow-sm sm:h-8 sm:w-8 sm:rounded-lg">
-                  <img
-                    src={FounderportIcon}
-                    alt="Angel"
-                    className="h-5 w-5 object-contain sm:h-6 sm:w-6"
-                  />
-                </div>
-                <div className="flex min-w-0 max-w-[8.5rem] items-center gap-1 rounded-md border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-1.5 py-1 shadow-sm sm:max-w-none sm:gap-1.5 sm:px-2.5 sm:py-1.5">
+              <div className="flex min-w-0 flex-1 items-center justify-center overflow-hidden">
+                <div className="flex min-w-0 max-w-[10rem] items-center gap-1 rounded-md border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-1.5 py-1 shadow-sm sm:max-w-none sm:gap-1.5 sm:px-2.5 sm:py-1.5">
                   <div className="relative shrink-0">
                     <div className="h-1 w-1 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 animate-pulse sm:h-1.5 sm:w-1.5"></div>
                     <div className="absolute inset-0 h-1 w-1 rounded-full bg-gradient-to-r from-emerald-400 to-teal-400 animate-ping opacity-60 sm:h-1.5 sm:w-1.5"></div>
@@ -4657,53 +4652,34 @@ export default function ChatPage() {
             </div>
 
             {/* Desktop header — unchanged layout */}
-            <div className="mb-3 hidden items-center justify-between lg:flex">
-              <motion.button
-                whileHover={{ scale: 1.02, x: -2 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => navigate("/ventures")}
-                className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:text-teal-600 bg-white/60 hover:bg-white/90 backdrop-blur-sm rounded-full border border-gray-200/50 hover:border-teal-300/50 transition-all duration-200 shadow-sm hover:shadow-md text-sm group"
-              >
-                <svg
-                  className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+            <div className="mb-3 hidden h-12 items-center gap-4 lg:flex">
+              <div className="flex h-full min-w-0 items-center gap-3">
+                <VentureBrandMark />
+                <motion.button
+                  whileHover={{ scale: 1.02, x: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => navigate("/ventures")}
+                  className="flex items-center gap-2 rounded-full border border-gray-200/50 bg-white/60 px-3 py-1.5 text-sm text-gray-600 shadow-sm backdrop-blur-sm transition-all duration-200 hover:border-teal-300/50 hover:bg-white/90 hover:text-teal-600 hover:shadow-md group"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 19l-7-7 7-7"
-                  />
-                </svg>
-                <span className="font-medium">All Ventures</span>
-              </motion.button>
+                  <svg
+                    className="h-4 w-4 transition-transform group-hover:-translate-x-0.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 19l-7-7 7-7"
+                    />
+                  </svg>
+                  <span className="font-medium">All Ventures</span>
+                </motion.button>
+              </div>
 
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 bg-gradient-to-r from-teal-500 to-blue-500 rounded-lg flex items-center justify-center text-white flex-shrink-0 shadow-md">
-                  <img
-                    src={FounderportIcon}
-                    alt="Angel"
-                    className="!w-14 !h-14 object-cover"
-                  />
-                </div>
+              <div className="flex flex-1 items-center justify-center">
                 <div className="hidden sm:block">
-                  <div className="flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg border border-emerald-200 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-[1.02]">
-                    <div className="relative">
-                      <div className="w-2 h-2 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full animate-pulse"></div>
-                      <div className="absolute inset-0 w-2 h-2 bg-gradient-to-r from-emerald-400 to-teal-400 rounded-full animate-ping opacity-60"></div>
-                    </div>
-                    <span className="text-sm font-semibold text-transparent bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text">
-                      {headerPhaseLabel}
-                    </span>
-                    <div className="h-4 w-px bg-gradient-to-b from-emerald-300 to-teal-300"></div>
-                    <span className="text-sm font-medium text-gray-700">
-                      {`${headerDisplayAnswered} of ${headerDisplayTotal}`}
-                    </span>
-                  </div>
-                </div>
-                <div className="sm:hidden">
                   <div className="flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg border border-emerald-200 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-[1.02]">
                     <div className="relative">
                       <div className="w-2 h-2 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full animate-pulse"></div>

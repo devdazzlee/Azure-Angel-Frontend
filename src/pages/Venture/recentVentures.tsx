@@ -1,8 +1,11 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { IRecentChats } from '../../types/apiTypes';
 import { fetchSessions } from '../../services/authService';
 import VentureLoader from '../../components/VentureLoader';
+import VenturesPagination from '../../components/VenturesPagination';
+
+const VENTURES_PAGE_SIZE = 10;
 
 // Add animation styles
 const styles = `
@@ -21,9 +24,38 @@ const styles = `
 const RecentVenturePage = () => {
   const [sessions, setSessions] = useState<IRecentChats[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
   const navigate = useNavigate();
   const hasFetched = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  const sortedSessions = useMemo(() => {
+    return [...sessions].sort((a, b) => {
+      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return bTime - aTime;
+    });
+  }, [sessions]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedSessions.length / VENTURES_PAGE_SIZE));
+
+  const paginatedSessions = useMemo(() => {
+    const start = (currentPage - 1) * VENTURES_PAGE_SIZE;
+    return sortedSessions.slice(start, start + VENTURES_PAGE_SIZE);
+  }, [sortedSessions, currentPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const goToPage = (page: number) => {
+    const nextPage = Math.min(Math.max(1, page), totalPages);
+    setCurrentPage(nextPage);
+    gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   useEffect(() => {
     if (hasFetched.current) return;
@@ -153,8 +185,9 @@ const RecentVenturePage = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {sessions.map((sesh, index) => (
+          <>
+          <div ref={gridRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {paginatedSessions.map((sesh, index) => (
               <div
                 key={sesh.id}
                 className="group relative bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-500 cursor-pointer border border-gray-100 hover:border-teal-200 transform hover:-translate-y-2"
@@ -238,6 +271,15 @@ const RecentVenturePage = () => {
               </div>
             ))}
           </div>
+
+          <VenturesPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={sortedSessions.length}
+            pageSize={VENTURES_PAGE_SIZE}
+            onPageChange={goToPage}
+          />
+          </>
         )}
 
         {sessions.length > 0 && (
@@ -258,8 +300,8 @@ const RecentVenturePage = () => {
         )}
         </div>
 
-        {/* Scroll to bottom button */}
-        {!loading && sessions.length > 3 && (
+        {/* Scroll to bottom button — only when all ventures fit on one page */}
+        {!loading && sessions.length > 3 && sessions.length <= VENTURES_PAGE_SIZE && (
           <div className="fixed bottom-8 right-8 z-50 group">
             <button
               onClick={() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' })}
