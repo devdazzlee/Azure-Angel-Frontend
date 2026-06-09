@@ -4129,12 +4129,16 @@ export default function ChatPage() {
     }
   };
 
-  const handleRevisitPlan = async () => {
+  const handleRevisitPlan = async (modificationAreas?: string[]) => {
     setLoading(true);
     try {
-      const { data } = await httpClient.post<any>(`/angel/sessions/${sessionId}/transition-decision`, {
-        decision: 'revisit',
-      });
+      const { data } = modificationAreas?.length
+        ? await httpClient.post<any>(`/angel/sessions/${sessionId}/revisit-plan-with-areas`, {
+            modification_areas: modificationAreas,
+          })
+        : await httpClient.post<any>(`/angel/sessions/${sessionId}/transition-decision`, {
+            decision: 'revisit',
+          });
 
       if (!data.success) {
         toast.error(data.message || "Failed to activate review mode");

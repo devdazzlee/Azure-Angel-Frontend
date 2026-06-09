@@ -12,6 +12,7 @@ import { upsertTransitionSession } from '../../store/businessPlanTransitionSlice
 import httpClient from '../../api/httpClient';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/ui/tooltip';
 import { responsiveMarkdownTableComponents } from '../../components/ResponsiveMarkdownTable';
+import BusinessPlanModificationModal from '../../components/BusinessPlanModificationModal';
 
 interface LocationState {
   businessPlan?: string;
@@ -21,7 +22,15 @@ interface LocationState {
   initialView?: 'summary' | 'full';
   /** When `budget`, back navigation returns to budget instead of venture chat. */
   backTarget?: 'budget' | 'chat';
+  /** Opened from post-summary flow — show forward nav to budgeting instead of back. */
+  postSummaryFlow?: boolean;
 }
+
+const BUDGET_FORWARD_PHASES = new Set([
+  'PLAN_TO_SUMMARY_TRANSITION',
+  'PLAN_TO_BUDGET_TRANSITION',
+  'BUDGET',
+]);
 
 const BP_SESSION_CACHE_PREFIX = 'angel_bp_transition_';
 
@@ -69,7 +78,7 @@ const BusinessPlanView: React.FC = () => {
   const locationState = (location.state as LocationState) || {};
   const backTarget = locationState.backTarget === 'budget' ? 'budget' : 'chat';
   const backLabel =
-    backTarget === 'budget' ? 'Back to Budget' : 'Back to Business Summary';
+    backTarget === 'budget' ? 'Back to Budget' : 'Back to Venture';
   const dispatch = useAppDispatch();
   const normalizedSessionId = sessionId ?? 'anonymous';
   const cachedTransition = useAppSelector(
@@ -118,6 +127,15 @@ const BusinessPlanView: React.FC = () => {
   const [hasPaid, setHasPaid] = useState(false); // Track payment status
   const [checkingSubscription, setCheckingSubscription] = useState(true);
   const [roadmapAvailable, setRoadmapAvailable] = useState(false);
+  const [sessionPhase, setSessionPhase] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [showModificationModal, setShowModificationModal] = useState(false);
+
+  const showBudgetForwardNav =
+    backTarget !== 'budget' &&
+    !roadmapAvailable &&
+    (locationState.postSummaryFlow === true ||
+      (sessionPhase ? BUDGET_FORWARD_PHASES.has(sessionPhase) : false));
 
   useEffect(() => {
     if (cachedTransition?.artifact && !businessPlan) {
@@ -286,6 +304,10 @@ const BusinessPlanView: React.FC = () => {
           setLoading(false);
         }
         
+        if (session.current_phase) {
+          setSessionPhase(String(session.current_phase).toUpperCase());
+        }
+
         // Check if roadmap is available
         if (session.roadmap_data) {
           setRoadmapAvailable(true);
@@ -389,6 +411,66 @@ const BusinessPlanView: React.FC = () => {
     navigate(`/ventures/${sessionId}`, { state: { preferVentureChat: true } });
   };
 
+  const handleProceedToBudget = async () => {
+    if (!sessionId || actionLoading) return;
+    setActionLoading(true);
+    try {
+      if (
+        sessionPhase === 'BUDGET' ||
+        sessionPhase === 'PLAN_TO_BUDGET_TRANSITION'
+      ) {
+        navigate(`/ventures/${sessionId}/budget`, { state: { fromTransition: true } });
+        return;
+      }
+
+      const { data } = await httpClient.post<any>(
+        `/angel/sessions/${sessionId}/transition-decision`,
+        {
+          decision: 'approve',
+          transition_type: 'summary_to_budget',
+        },
+      );
+
+      if (!data.success) {
+        toast.error(data.message || 'Could not proceed to budgeting');
+        return;
+      }
+
+      toast.success('Proceeding to budget setup');
+      navigate(`/ventures/${sessionId}/budget`, { state: { fromTransition: true } });
+    } catch (error) {
+      console.error('Failed to proceed to budget:', error);
+      toast.error('Could not proceed to budgeting. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleModifyPlanConfirm = async (modificationAreas: string[]) => {
+    if (!sessionId || actionLoading) return;
+    setActionLoading(true);
+    setShowModificationModal(false);
+    try {
+      const { data } = await httpClient.post<any>(
+        `/angel/sessions/${sessionId}/revisit-plan-with-areas`,
+        { modification_areas: modificationAreas },
+      );
+
+      if (!data.success) {
+        toast.error(data.message || 'Failed to activate plan modification');
+        return;
+      }
+
+      toast.success('Plan review mode activated');
+      navigate(`/ventures/${sessionId}`, { state: { preferVentureChat: true } });
+    } catch (error) {
+      console.error('Failed to modify plan:', error);
+      toast.error('Could not start plan modification. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 flex items-center justify-center">
@@ -446,31 +528,36 @@ const BusinessPlanView: React.FC = () => {
           {/* Compact document toolbar — 1–2 lines on desktop; wraps cleanly on mobile */}
           <div className="relative border-b border-teal-700/30 bg-gradient-to-r from-teal-600 to-blue-600 px-3 py-3 text-white shadow-sm sm:px-5 sm:py-3.5 print:border-gray-300 print:bg-white print:text-gray-900 print:shadow-none">
 
-            <div className="relative flex flex-col gap-2 print:hidden md:flex-row md:items-center md:justify-between md:gap-4">
-              <div className="flex min-w-0 items-center gap-2 md:max-w-[55%] md:gap-3 lg:max-w-none lg:flex-1">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={handleBackToChat}
-                      className={`${headerActionBtn} shrink-0 border border-white/20 bg-white/10 text-white hover:bg-white/15`}
-                      aria-label={backLabel}
-                    >
-                      <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                      </svg>
-                      <span className="hidden whitespace-nowrap sm:inline">{backLabel}</span>
-                      <span className="whitespace-nowrap sm:hidden">Back</span>
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="max-w-[240px] text-sm">
-                    Return to your business plan summary review page
-                  </TooltipContent>
-                </Tooltip>
+            <div className="relative flex flex-col gap-3 print:hidden md:flex-row md:items-center md:justify-between md:gap-4">
+              <div className="flex min-w-0 items-center gap-2 md:gap-3 lg:flex-1">
+                {!showBudgetForwardNav && (
+                  <>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={handleBackToChat}
+                          className={`${headerActionBtn} shrink-0 border border-white/20 bg-white/10 text-white hover:bg-white/15`}
+                          aria-label={backLabel}
+                        >
+                          <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                          </svg>
+                          <span className="hidden whitespace-nowrap sm:inline">{backLabel}</span>
+                          <span className="whitespace-nowrap sm:hidden">Back</span>
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-[240px] text-sm">
+                        {backTarget === 'budget'
+                          ? 'Return to your budget workspace'
+                          : 'Return to your venture chat'}
+                      </TooltipContent>
+                    </Tooltip>
+                    <div className="hidden h-8 w-px shrink-0 bg-white/20 md:block" aria-hidden />
+                  </>
+                )}
 
-                <div className="hidden h-8 w-px shrink-0 bg-white/20 md:block" aria-hidden />
-
-                <div className="min-w-0 flex-1 border-l border-white/15 pl-2 md:border-0 md:pl-0">
+                <div className="min-w-0 flex-1">
                   <h1 className="truncate text-base font-semibold leading-tight md:text-lg">
                     Business Plan
                   </h1>
@@ -481,7 +568,7 @@ const BusinessPlanView: React.FC = () => {
               </div>
 
               <div className="flex flex-wrap items-center gap-2 md:shrink-0 md:justify-end">
-                {businessPlan && businessPlanSummary && (
+                  {businessPlan && businessPlanSummary && (
                   <div
                     className="inline-flex shrink-0 rounded-lg bg-black/25 p-0.5"
                     role="tablist"
@@ -554,6 +641,39 @@ const BusinessPlanView: React.FC = () => {
             </div>
           </div>
 
+          {showBudgetForwardNav && (
+            <div className="flex flex-col-reverse gap-2 border-b border-gray-100 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-end sm:gap-3 sm:px-6 print:hidden">
+              <button
+                type="button"
+                onClick={() => setShowModificationModal(true)}
+                disabled={actionLoading}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 bg-white px-5 text-sm font-medium text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Modify Plan"
+              >
+                Modify Plan
+              </button>
+              <button
+                type="button"
+                onClick={handleProceedToBudget}
+                disabled={actionLoading}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-teal-600 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Next: Budgeting"
+              >
+                {actionLoading ? (
+                  <svg className="h-4 w-4 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : (
+                  <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                )}
+                Next: Budgeting
+              </button>
+            </div>
+          )}
+
           {/* Document Content */}
           <div className="p-4 sm:p-8 md:p-12" ref={contentRef} id="document-content">
             {content ? (
@@ -623,10 +743,14 @@ const BusinessPlanView: React.FC = () => {
                   Complete the business planning phase to generate your business plan.
                 </p>
                 <button
-                  onClick={handleBackToChat}
+                  onClick={showBudgetForwardNav ? handleProceedToBudget : handleBackToChat}
                   className="px-6 py-3 bg-teal-500 hover:bg-teal-600 text-white rounded-lg font-medium transition-colors"
                 >
-                  {backTarget === 'budget' ? 'Return to Budget' : 'Return to Business Summary'}
+                  {showBudgetForwardNav
+                    ? 'Next: Budgeting'
+                    : backTarget === 'budget'
+                      ? 'Return to Budget'
+                      : 'Return to Venture'}
                 </button>
               </div>
             )}
@@ -662,6 +786,13 @@ const BusinessPlanView: React.FC = () => {
           }
         }
       `}</style>
+
+      <BusinessPlanModificationModal
+        isOpen={showModificationModal}
+        onClose={() => setShowModificationModal(false)}
+        onConfirm={handleModifyPlanConfirm}
+        loading={actionLoading}
+      />
 
       {/* Payment Modal - $20/month subscription for Roadmap and Implementation */}
       <PaymentForm

@@ -14,6 +14,7 @@ import { upsertTransitionSession } from '../store/businessPlanTransitionSlice';
 import httpClient from '../api/httpClient';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { responsiveMarkdownTableComponents } from './ResponsiveMarkdownTable';
+import BusinessPlanModificationModal from './BusinessPlanModificationModal';
 
 interface PlanToRoadmapTransitionProps {
   businessPlanSummary: string;
@@ -27,12 +28,6 @@ interface PlanToRoadmapTransitionProps {
   nextStep?: 'budget' | 'roadmap'; // Indicates what the next step is
 }
 
-interface ModificationArea {
-  id: string;
-  title: string;
-  description: string;
-  questions: string[];
-}
 
 const normalizeBusinessPlanSummary = (summary: string): string => {
   if (!summary) return "";
@@ -254,7 +249,6 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showModificationModal, setShowModificationModal] = useState(false);
-  const [selectedModifications, setSelectedModifications] = useState<string[]>([]);
   const [showPaywall, setShowPaywall] = useState(false);
   const [hasPaid, setHasPaid] = useState(false); // Track payment status
   const [businessPlanArtifact, setBusinessPlanArtifact] = useState<string | null>(
@@ -487,6 +481,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
             businessPlan: data.result.business_plan_artifact,
             businessPlanSummary: actualSummary || businessPlanSummary,
             sessionId: sessionId,
+            postSummaryFlow: nextStep === 'budget',
           },
         });
       } else {
@@ -502,70 +497,6 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
       setIsGeneratingArtifact(false);
     }
   };
-
-  // Define modification areas based on business plan sections
-  const modificationAreas: ModificationArea[] = [
-    {
-      id: 'business-overview',
-      title: 'Business Overview',
-      description: 'Core business concept, mission, vision, and value proposition',
-      questions: [
-        'Is your business concept clearly defined?',
-        'Are your mission and vision statements compelling?',
-        'Is your value proposition unique and marketable?'
-      ]
-    },
-    {
-      id: 'market-research',
-      title: 'Market Research & Analysis',
-      description: 'Target market, customer segments, and competitive landscape',
-      questions: [
-        'Have you thoroughly researched your target market?',
-        'Are your customer personas detailed and accurate?',
-        'Is your competitive analysis comprehensive?'
-      ]
-    },
-    {
-      id: 'financial-projections',
-      title: 'Financial Projections',
-      description: 'Revenue models, cost structure, and financial forecasts',
-      questions: [
-        'Are your revenue projections realistic?',
-        'Have you accounted for all startup costs?',
-        'Do you have a clear path to profitability?'
-      ]
-    },
-    {
-      id: 'operations',
-      title: 'Operations & Logistics',
-      description: 'Day-to-day operations, supply chain, and resource requirements',
-      questions: [
-        'Are your operational processes clearly defined?',
-        'Have you identified key suppliers and partners?',
-        'Is your resource planning complete?'
-      ]
-    },
-    {
-      id: 'marketing-strategy',
-      title: 'Marketing & Sales Strategy',
-      description: 'Customer acquisition, branding, and sales processes',
-      questions: [
-        'Is your marketing strategy comprehensive?',
-        'Have you defined your sales process?',
-        'Are your branding elements consistent?'
-      ]
-    },
-    {
-      id: 'legal-compliance',
-      title: 'Legal & Compliance',
-      description: 'Business structure, licenses, permits, and regulatory requirements',
-      questions: [
-        'Is your business structure optimal?',
-        'Have you identified all required licenses?',
-        'Are you compliant with regulations?'
-      ]
-    }
-  ];
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleExportPlan = () => {
@@ -639,28 +570,9 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
     setShowModificationModal(true);
   };
 
-  const handleModificationToggle = (areaId: string) => {
-    setSelectedModifications(prev => 
-      prev.includes(areaId) 
-        ? prev.filter(id => id !== areaId)
-        : [...prev, areaId]
-    );
-  };
-
-  const handleConfirmModifications = () => {
-    if (selectedModifications.length === 0) {
-      toast.warning('Please select at least one area to modify');
-      return;
-    }
-    
+  const handleConfirmModifications = (areaIds: string[]) => {
     setShowModificationModal(false);
-    onRevisit(selectedModifications);
-    setSelectedModifications([]);
-  };
-
-  const handleCancelModifications = () => {
-    setShowModificationModal(false);
-    setSelectedModifications([]);
+    onRevisit(areaIds);
   };
 
   return (
@@ -909,6 +821,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
                       businessPlan: businessPlanArtifact,
                       businessPlanSummary: actualSummary || businessPlanSummary,
                       sessionId: sessionId,
+                      postSummaryFlow: nextStep === 'budget',
                     },
                   });
                 } else {
@@ -1381,92 +1294,12 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
         </div>
       )}
 
-      {/* Modification Modal */}
-      {showModificationModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Select Areas to Modify</h2>
-              <p className="text-gray-600">
-                Choose which sections of your business plan need adjustment. We'll guide you through the modification process for each selected area.
-              </p>
-            </div>
-
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                {modificationAreas.map((area) => (
-                  <div
-                    key={area.id}
-                    className={`border-2 rounded-lg p-4 cursor-pointer transition-all duration-200 ${
-                      selectedModifications.includes(area.id)
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                    onClick={() => handleModificationToggle(area.id)}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                        selectedModifications.includes(area.id)
-                          ? 'border-blue-500 bg-blue-500'
-                          : 'border-gray-300'
-                      }`}>
-                        {selectedModifications.includes(area.id) && (
-                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900 mb-1">{area.title}</h3>
-                        <p className="text-sm text-gray-600 mb-2">{area.description}</p>
-                        <div className="space-y-1">
-                          {area.questions.map((question) => (
-                            <p key={question} className="text-xs text-gray-500">• {question}</p>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {selectedModifications.length > 0 && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                  <h4 className="font-semibold text-blue-900 mb-2">Selected Areas:</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedModifications.map((areaId) => {
-                      const area = modificationAreas.find(a => a.id === areaId);
-                      return (
-                        <span
-                          key={areaId}
-                          className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm"
-                        >
-                          {area?.title}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={handleCancelModifications}
-                  className="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleConfirmModifications}
-                  className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
-                >
-                  Proceed with Modifications ({selectedModifications.length})
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <BusinessPlanModificationModal
+        isOpen={showModificationModal}
+        onClose={() => setShowModificationModal(false)}
+        onConfirm={handleConfirmModifications}
+        loading={loading}
+      />
       </div>
       
       {/* Custom CSS for table hover - only tbody rows */}
