@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback } from 'react';
-import { Trash2, Plus, HelpCircle } from 'lucide-react';
+import { Trash2, Plus, HelpCircle, ArrowUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -108,7 +108,8 @@ type StartupCostsTableProps = {
   selectedItemIds: Set<string>; // New prop for selected item IDs
   onToggleItemSelection: (itemId: string, isSelected: boolean) => void; // New prop for toggling individual item selection
   onToggleAllSelection: (isSelected: boolean) => void; // New prop for toggling all items selection
-  onAddLineItem: (category: 'startup_cost') => void; // New prop for adding line item
+  onAddLineItem: (category: 'startup_cost') => void;
+  onBackToTop?: () => void;
 };
 
 const StartupCostsTable: React.FC<StartupCostsTableProps> = ({
@@ -119,7 +120,8 @@ const StartupCostsTable: React.FC<StartupCostsTableProps> = ({
   selectedItemIds,
   onToggleItemSelection,
   onToggleAllSelection,
-  onAddLineItem, // Destructure new prop
+  onAddLineItem,
+  onBackToTop,
 }) => {
   const totals = useMemo(() => {
     const budgetTotal = items.reduce((sum, item) => sum + (Number(item.estimated_amount) || 0), 0);
@@ -275,7 +277,19 @@ const StartupCostsTable: React.FC<StartupCostsTableProps> = ({
         </table>
       </BudgetTableScroll>
 
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+        {onBackToTop && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onBackToTop}
+            className="border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5"
+          >
+            <ArrowUp className="w-3.5 h-3.5" />
+            Back to Top
+          </Button>
+        )}
         <Button onClick={() => onAddLineItem('startup_cost')} size="sm" className="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white shadow-sm flex items-center gap-1.5">
           <Plus className="w-3.5 h-3.5" /> Add Line Item
         </Button>

@@ -23,6 +23,7 @@ interface BudgetOverviewProps {
   formatCurrency: (value: number, currency?: string) => string;
   breakEvenCard: React.ReactNode;
   modernCharts: React.ReactNode;
+  onNavigateToSection?: (section: 'startupCosts' | 'monthlyRevenue' | 'operatingExpenses' | 'breakEven') => void;
 }
 
 const BudgetOverview: React.FC<BudgetOverviewProps> = ({
@@ -34,7 +35,8 @@ const BudgetOverview: React.FC<BudgetOverviewProps> = ({
   currency,
   formatCurrency,
   breakEvenCard,
-  modernCharts
+  modernCharts,
+  onNavigateToSection,
 }) => {
   return (
     <div className="space-y-8">
@@ -42,13 +44,17 @@ const BudgetOverview: React.FC<BudgetOverviewProps> = ({
       <BudgetWarnings warnings={warnings} />
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div
+        id="budget-topline-metrics"
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 scroll-mt-24"
+      >
         <MetricCard
           title="Total Startup Costs"
           value={formatCurrency(startupCostsTotal, currency)}
           icon={Zap}
           color="blue"
           delay={0}
+          onClick={onNavigateToSection ? () => onNavigateToSection('startupCosts') : undefined}
         />
         <MetricCard
           title="Monthly Revenue"
@@ -56,6 +62,7 @@ const BudgetOverview: React.FC<BudgetOverviewProps> = ({
           icon={TrendingUp}
           color="green"
           delay={0.1}
+          onClick={onNavigateToSection ? () => onNavigateToSection('monthlyRevenue') : undefined}
         />
         <MetricCard
           title="Monthly Costs"
@@ -63,6 +70,7 @@ const BudgetOverview: React.FC<BudgetOverviewProps> = ({
           icon={TrendingDown}
           color="red"
           delay={0.2}
+          onClick={onNavigateToSection ? () => onNavigateToSection('operatingExpenses') : undefined}
         />
         <MetricCard
           title="Monthly Net"
@@ -70,6 +78,7 @@ const BudgetOverview: React.FC<BudgetOverviewProps> = ({
           icon={Calculator}
           color={monthlyNetIncome >= 0 ? 'green' : 'red'}
           delay={0.3}
+          onClick={onNavigateToSection ? () => onNavigateToSection('breakEven') : undefined}
         />
       </div>
 

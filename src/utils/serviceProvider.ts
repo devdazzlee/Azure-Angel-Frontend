@@ -7,7 +7,13 @@ export interface ServiceProviderRow {
   estimated_cost?: string;
   contact_method?: string;
   website?: string;
+  address?: string;
   rating?: number | string;
+  rating_source?: string;
+  key_considerations?: string;
+  category?: string;
+  email?: string;
+  phone?: string;
   [key: string]: unknown;
 }
 

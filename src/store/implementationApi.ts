@@ -37,6 +37,8 @@ export interface ServiceProvidersQueryArgs {
   taskId: string;
   taskContext: string;
   category: string;
+  /** Active substep — included in cache key so provider lists refresh per step. */
+  activeSubstep?: number;
 }
 
 export interface ServiceProvidersResponse {
@@ -110,8 +112,8 @@ export const implementationApi = createApi({
           category,
         },
       }),
-      providesTags: (_result, _error, { sessionId, taskId }) => [
-        { type: 'ServiceProviders', id: `${sessionId}:${taskId}` },
+      providesTags: (_result, _error, { sessionId, taskId, activeSubstep }) => [
+        { type: 'ServiceProviders', id: `${sessionId}:${taskId}:${activeSubstep ?? 0}` },
       ],
       keepUnusedDataFor: 600,
     }),

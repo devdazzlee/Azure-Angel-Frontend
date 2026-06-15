@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Trash2, Plus, Edit2, HelpCircle } from 'lucide-react';
+import { Trash2, Plus, Edit2, HelpCircle, ArrowUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -158,7 +158,8 @@ type OperatingExpensesTableProps = {
   selectedItemIds: Set<string>;
   onToggleItemSelection: (itemId: string, isSelected: boolean) => void;
   onToggleAllSelection: (isSelected: boolean) => void;
-  onAddLineItem: (category: 'operating_expense') => void; // New prop
+  onAddLineItem: (category: 'operating_expense') => void;
+  onBackToTop?: () => void;
 };
 
 const OperatingExpensesTable: React.FC<OperatingExpensesTableProps> = ({
@@ -169,7 +170,8 @@ const OperatingExpensesTable: React.FC<OperatingExpensesTableProps> = ({
   selectedItemIds,
   onToggleItemSelection,
   onToggleAllSelection,
-  onAddLineItem
+  onAddLineItem,
+  onBackToTop,
 }) => {
   const totals = useMemo(() => {
     const budgetTotal = items.reduce((sum, item) => sum + (Number(item.estimated_amount) || 0), 0);
@@ -285,7 +287,19 @@ const OperatingExpensesTable: React.FC<OperatingExpensesTableProps> = ({
           </tbody>
         </table>
       </BudgetTableScroll>
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+        {onBackToTop && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onBackToTop}
+            className="border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5"
+          >
+            <ArrowUp className="w-3.5 h-3.5" />
+            Back to Top
+          </Button>
+        )}
         <Button onClick={() => onAddLineItem('operating_expense')} size="sm" className="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white shadow-sm flex items-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Add Line Item</Button>
       </div>
     </div>

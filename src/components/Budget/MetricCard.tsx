@@ -10,6 +10,7 @@ interface MetricCardProps {
   subtitle?: string;
   color?: 'blue' | 'green' | 'red' | 'purple' | 'amber' | 'orange';
   delay?: number;
+  onClick?: () => void;
 }
 
 const MetricCard: React.FC<MetricCardProps> = ({ 
@@ -19,7 +20,8 @@ const MetricCard: React.FC<MetricCardProps> = ({
   trend, 
   subtitle, 
   color = 'blue', 
-  delay = 0 
+  delay = 0,
+  onClick,
 }) => {
   const colorMap: Record<string, { gradient: string; ring: string }> = {
     blue:   { gradient: 'from-teal-500 to-cyan-600',    ring: 'ring-teal-200' },
@@ -39,7 +41,24 @@ const MetricCard: React.FC<MetricCardProps> = ({
       whileHover={{ y: -4, scale: 1.02 }}
       className="group"
     >
-      <div className={`relative overflow-hidden rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-md hover:shadow-xl transition-all duration-300 ring-1 ${c.ring}`}>
+      <div
+        role={onClick ? 'button' : undefined}
+        tabIndex={onClick ? 0 : undefined}
+        onClick={onClick}
+        onKeyDown={
+          onClick
+            ? (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onClick();
+                }
+              }
+            : undefined
+        }
+        className={`relative overflow-hidden rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-md hover:shadow-xl transition-all duration-300 ring-1 ${c.ring} ${
+          onClick ? 'cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2' : ''
+        }`}
+      >
         {/* decorative blob */}
         <div className={`absolute -top-8 -right-8 w-28 h-28 rounded-full bg-gradient-to-br ${c.gradient} opacity-[0.08] group-hover:scale-125 transition-transform duration-500`} />
 
@@ -53,6 +72,11 @@ const MetricCard: React.FC<MetricCardProps> = ({
 
           <p className="text-2xl font-extrabold text-gray-900 tracking-tight">{value}</p>
           {subtitle && <p className="text-[11px] text-gray-500 mt-1">{subtitle}</p>}
+          {onClick && (
+            <p className="text-[11px] text-teal-600 mt-2 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+              View details ↓
+            </p>
+          )}
 
           {trend && (
             <div className={`mt-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${

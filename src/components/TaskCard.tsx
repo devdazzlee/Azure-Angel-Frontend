@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { 
@@ -10,6 +10,8 @@ import {
   Rocket, 
   Phone, 
   FileText,
+  Upload,
+  X,
   Target,
   TrendingUp,
   Shield,
@@ -83,7 +85,7 @@ interface TaskCardProps {
   onComplete: (result?: TaskCompletionResult) => void;
   onGetServiceProviders: () => void;
   onGetHelp: () => void;
-  onUploadDocument: (file: File) => void;
+  onUploadDocument: (file: File) => Promise<{ filename: string; file_id: string }>;
   sessionId?: string;
   helpContent?: string;
   helpLoading?: boolean;
@@ -107,6 +109,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const [selectedOption, setSelectedOption] = useState<string>('');
   const [completionNotes, setCompletionNotes] = useState<string>('');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedFileId, setUploadedFileId] = useState<string | null>(null);
+  const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mentorInsights, setMentorInsights] = useState<string>('');
@@ -126,6 +132,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   useEffect(() => {
     loadTaskInsights();
     setFocusedSubstepNumber(null);
+    setUploadedFile(null);
+    setUploadedFileId(null);
+    setUploadState('idle');
+    setUploadError(null);
   }, [task.id]);
 
   const resolveActiveSubstepIndex = (): number => {
@@ -181,12 +191,37 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     }
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
+    if (!file) return;
+
+    setUploadState('uploading');
+    setUploadError(null);
+
+    try {
+      const result = await onUploadDocument(file);
       setUploadedFile(file);
-      onUploadDocument(file);
+      setUploadedFileId(result.file_id);
+      setUploadState('success');
+    } catch (err: unknown) {
+      setUploadedFile(null);
+      setUploadedFileId(null);
+      setUploadState('error');
+      const message =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        (err instanceof Error ? err.message : 'Upload failed');
+      setUploadError(typeof message === 'string' ? message : 'Failed to upload document');
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  };
+
+  const clearUploadedFile = () => {
+    setUploadedFile(null);
+    setUploadedFileId(null);
+    setUploadState('idle');
+    setUploadError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleSubstepClick = (substep: ImplementationSubstep) => {
@@ -317,6 +352,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         decision: selectedOption,
         completion_notes: completionNotes,
         uploaded_file: uploadedFile?.name,
+        file_id: uploadedFileId,
         completed_at: new Date().toISOString()
       };
 
@@ -710,21 +746,82 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
         {/* Document Upload */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Upload Documentation</label>
-          <div className="mt-2">
-            <input
-              type="file"
-              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-              onChange={handleFileUpload}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-            />
-            {uploadedFile && (
-              <div className="mt-2 flex items-center gap-2 text-sm text-green-600">
-                <FileText className="h-4 w-4" />
-                {uploadedFile.name}
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Upload documentation
+            <span className="ml-1 font-normal text-gray-500">(optional)</span>
+          </label>
+          <div
+            className={`rounded-xl border-2 border-dashed p-4 transition-colors ${
+              uploadState === 'error'
+                ? 'border-red-300 bg-red-50/50'
+                : uploadState === 'success'
+                  ? 'border-green-300 bg-green-50/40'
+                  : 'border-gray-200 bg-gray-50/60 hover:border-blue-300 hover:bg-blue-50/30'
+            }`}
+          >
+            {uploadState === 'success' && uploadedFile ? (
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-green-100 text-green-700">
+                    <FileText className="h-5 w-5" aria-hidden />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-gray-900">{uploadedFile.name}</p>
+                    <p className="mt-0.5 text-xs text-green-700">Uploaded successfully</p>
+                    <p className="mt-1 text-[11px] text-gray-500">
+                      PDF, DOC, DOCX, JPG, or PNG · max 10 MB
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearUploadedFile}
+                  className="shrink-0 rounded-md p-1.5 text-gray-500 hover:bg-white hover:text-gray-800"
+                  aria-label="Remove uploaded file"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center text-center sm:flex-row sm:text-left sm:items-center sm:justify-between sm:gap-4">
+                <div className="flex flex-col items-center gap-2 sm:flex-row sm:items-center">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+                    {uploadState === 'uploading' ? (
+                      <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+                    ) : (
+                      <Upload className="h-5 w-5" aria-hidden />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {uploadState === 'uploading' ? 'Uploading…' : 'Attach proof of completion'}
+                    </p>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      PDF, DOC, DOCX, JPG, or PNG · max 10 MB
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={uploadState === 'uploading'}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="mt-3 inline-flex shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 shadow-sm transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60 sm:mt-0"
+                >
+                  Choose file
+                </button>
               </div>
             )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png"
+              onChange={handleFileUpload}
+              className="sr-only"
+            />
           </div>
+          {uploadError && (
+            <p className="mt-2 text-xs text-red-600">{uploadError}</p>
+          )}
         </div>
 
         {/* Error Display */}

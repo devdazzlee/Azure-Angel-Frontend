@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { RevenueStream } from '../../types/apiTypes';
 import { FaTrash, FaPlus, FaDollarSign } from 'react-icons/fa';
 import { BiRename } from "react-icons/bi";
-import { HelpCircle } from 'lucide-react';
+import { HelpCircle, ArrowUp } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
@@ -15,23 +15,25 @@ import BudgetRevenueMobileCards from './BudgetRevenueMobileCards';
 interface RevenueTableProps {
   items: RevenueStream[]; // Changed from initialRevenueStreams
   onRevenueStreamsChange: (revenueStreams: RevenueStream[]) => void;
-  onTotalMonthlyRevenueChange: (totalRevenue: number) => void;
+  onTotalMonthlyRevenueChange?: (totalRevenue: number) => void;
   currency?: string;
   selectedItemIds: Set<string>; // New prop for selected item IDs
   onToggleItemSelection: (itemId: string, isSelected: boolean) => void; // New prop for toggling individual item selection
   onToggleAllSelection: (itemIds: string[], isSelected: boolean) => void; // New prop for toggling all items selection
-  onAddLineItem: (category: 'revenue') => void; // New prop for adding line item
+  onAddLineItem: (category: 'revenue') => void;
+  onBackToTop?: () => void;
 }
 
 const RevenueTable: React.FC<RevenueTableProps> = ({
-  items, // Changed from initialRevenueStreams
+  items,
   onRevenueStreamsChange,
   onTotalMonthlyRevenueChange,
   currency = '$',
   selectedItemIds,
   onToggleItemSelection,
   onToggleAllSelection,
-  onAddLineItem, // Destructure new prop
+  onAddLineItem,
+  onBackToTop,
 }) => {
   const [editingStreamId, setEditingStreamId] = useState<string | null>(null);
   const [editingStreamName, setEditingStreamName] = useState<string>('');
@@ -103,7 +105,7 @@ const RevenueTable: React.FC<RevenueTableProps> = ({
   }, [items, calculateTotalMonthlyRevenue]);
 
   useEffect(() => {
-    onTotalMonthlyRevenueChange(totalMonthlyRevenue);
+    onTotalMonthlyRevenueChange?.(totalMonthlyRevenue);
   }, [totalMonthlyRevenue, onTotalMonthlyRevenueChange]);
 
   const isAllSelected = items.length > 0 && items.every((item) => selectedItemIds.has(item.id));
@@ -219,7 +221,19 @@ const RevenueTable: React.FC<RevenueTableProps> = ({
           </tfoot>
         </table>
       </BudgetTableScroll>
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+        {onBackToTop && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onBackToTop}
+            className="border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5"
+          >
+            <ArrowUp className="w-3.5 h-3.5" />
+            Back to Top
+          </Button>
+        )}
         <Button onClick={() => onAddLineItem('revenue')} size="sm" className="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white shadow-sm flex items-center gap-1.5"><FaPlus className="w-3 h-3" /> Add Revenue Stream</Button>
       </div>
     </div>

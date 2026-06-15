@@ -705,27 +705,33 @@ const Implementation: React.FC<ImplementationProps> = ({
     }
   }, [pendingHelpModal, helpContent]);
 
-  const handleUploadDocument = async (file: File) => {
-    if (!activeSupportTask) return;
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const { data } = await httpClient.post<any>(
-        `/implementation/sessions/${sessionId}/tasks/${activeSupportTask.id}/upload-document`,
-        formData
-      );
-      
-      if (data.success) {
-        toast.success('Document uploaded successfully!');
-      } else {
-        toast.error(data.message || 'Failed to upload document');
-      }
-    } catch (err) {
-      console.error('Error uploading document:', err);
-      toast.error('Failed to upload document');
+  const handleUploadDocument = async (file: File): Promise<{ filename: string; file_id: string }> => {
+    if (!activeSupportTask) {
+      throw new Error('No active task selected');
     }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const { data } = await httpClient.post<{
+      success: boolean;
+      message?: string;
+      filename?: string;
+      file_id?: string;
+    }>(
+      `/implementation/sessions/${sessionId}/tasks/${activeSupportTask.id}/upload-document`,
+      formData,
+    );
+
+    if (!data.success || !data.file_id) {
+      throw new Error(data.message || 'Failed to upload document');
+    }
+
+    toast.success('Document uploaded successfully');
+    return {
+      filename: data.filename || file.name,
+      file_id: data.file_id,
+    };
   };
 
   const getPhaseIcon = (phase: string) => {

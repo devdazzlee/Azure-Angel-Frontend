@@ -69,6 +69,12 @@ import AddLineItemModal from './AddLineItemModal';
 import RemoveItemModal from './RemoveItemModal'; 
 import MonthlyOperatingCostsChart from './MonthlyOperatingCostsChart';
 import { buildOperatingExpenseChartData } from '@/utils/budgetChartData';
+import {
+  BUDGET_SECTION_IDS,
+  calculateProjectedMonthlyRevenue,
+  mapApiRecordToRevenueStream,
+  scrollToBudgetSection,
+} from '@/utils/budgetCalculations';
 // Types
 type RevenueStream = {
   id: string;
@@ -136,10 +142,8 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   const contentPaddingClass = embeddedInParent ? 'px-0' : 'px-4 sm:px-6 lg:px-8';
 
   // State Management
-  const [viewMode, setViewMode] = useState<'estimated' | 'actual'>('estimated');
   const [dynamicRevenueStreams, setDynamicRevenueStreams] = useState<RevenueStream[]>([]);
   const [loadingRevenueStreams, setLoadingRevenueStreams] = useState<boolean>(true);
-  const [totalMonthlyRevenue, setTotalMonthlyRevenue] = useState<number>(0);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(() => new Set());
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -254,16 +258,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
           const res = await budgetService.saveRevenueStreams(sessionId, streamsToSave);
           // Sync IDs from DB so subsequent saves can match records
           if (res.result && Array.isArray(res.result) && res.result.length > 0) {
-            const synced: RevenueStream[] = res.result.map((item: any) => ({
-              id: item.id,
-              name: item.name,
-              estimatedPrice: item.estimated_price ?? item.estimated_amount ?? 0,
-              estimatedVolume: item.estimated_volume ?? 1,
-              revenueProjection: item.estimated_amount ?? 0,
-              isSelected: item.is_selected !== false,
-              isCustom: item.is_custom ?? false,
-              category: 'revenue' as const,
-            }));
+            const synced: RevenueStream[] = res.result.map(mapApiRecordToRevenueStream);
             setDynamicRevenueStreams(synced);
           }
         } catch (error) {
@@ -285,16 +280,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         // 1. Try loading from DB first
         const dbResponse = await budgetService.getRevenueStreams(sessionId);
         if (dbResponse.success && dbResponse.result && dbResponse.result.length > 0) {
-          const fromDb: RevenueStream[] = dbResponse.result.map((item: any) => ({
-            id: item.id,
-            name: item.name,
-            estimatedPrice: item.estimated_price ?? item.estimated_amount ?? 0,
-            estimatedVolume: item.estimated_volume ?? 1,
-            revenueProjection: item.estimated_amount ?? 0,
-            isSelected: item.is_selected !== false,
-            isCustom: item.is_custom ?? false,
-            category: 'revenue' as const,
-          }));
+          const fromDb: RevenueStream[] = dbResponse.result.map(mapApiRecordToRevenueStream);
           setDynamicRevenueStreams(fromDb);
           revenueLoadedRef.current = true;
           setLoadingRevenueStreams(false);
@@ -304,16 +290,17 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         // 2. Also check budget.items for saved revenue items
         const savedRevenueItems = budget.items.filter(item => item.category === 'revenue');
         if (savedRevenueItems.length > 0) {
-          const fromBudget: RevenueStream[] = savedRevenueItems.map(item => ({
-            id: item.id,
-            name: item.name,
-            estimatedPrice: item.estimated_price ?? item.estimated_amount ?? 0,
-            estimatedVolume: item.estimated_volume ?? 1,
-            revenueProjection: item.estimated_amount ?? 0,
-            isSelected: item.is_selected !== false,
-            isCustom: item.is_custom ?? false,
-            category: 'revenue' as const,
-          }));
+          const fromBudget: RevenueStream[] = savedRevenueItems.map((item) =>
+            mapApiRecordToRevenueStream({
+              id: item.id,
+              name: item.name,
+              estimated_price: item.estimated_price,
+              estimated_amount: item.estimated_amount,
+              estimated_volume: item.estimated_volume,
+              is_selected: item.is_selected,
+              is_custom: item.is_custom,
+            }),
+          );
           setDynamicRevenueStreams(fromBudget);
           revenueLoadedRef.current = true;
           setLoadingRevenueStreams(false);
@@ -341,16 +328,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
               // Re-fetch from DB to get proper IDs
               const refreshed = await budgetService.getRevenueStreams(sessionId);
               if (refreshed.success && refreshed.result && refreshed.result.length > 0) {
-                const final: RevenueStream[] = refreshed.result.map((item: any) => ({
-                  id: item.id,
-                  name: item.name,
-                  estimatedPrice: item.estimated_price ?? item.estimated_amount ?? 0,
-                  estimatedVolume: item.estimated_volume ?? 1,
-                  revenueProjection: item.estimated_amount ?? 0,
-                  isSelected: item.is_selected !== false,
-                  isCustom: item.is_custom ?? false,
-                  category: 'revenue' as const,
-                }));
+                const final: RevenueStream[] = refreshed.result.map(mapApiRecordToRevenueStream);
                 setDynamicRevenueStreams(final);
               } else {
                 setDynamicRevenueStreams(aiStreams);
@@ -388,16 +366,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       const res = await budgetService.saveRevenueStreams(sessionId, streams);
       // Sync IDs from DB so subsequent saves can match records
       if (res.result && Array.isArray(res.result) && res.result.length > 0) {
-        const synced: RevenueStream[] = res.result.map((item: any) => ({
-          id: item.id,
-          name: item.name,
-          estimatedPrice: item.estimated_price ?? item.estimated_amount ?? 0,
-          estimatedVolume: item.estimated_volume ?? 1,
-          revenueProjection: item.estimated_amount ?? 0,
-          isSelected: item.is_selected !== false,
-          isCustom: item.is_custom ?? false,
-          category: 'revenue' as const,
-        }));
+        const synced: RevenueStream[] = res.result.map(mapApiRecordToRevenueStream);
         setDynamicRevenueStreams(synced);
       }
     } catch (error) {
@@ -426,6 +395,23 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       return next;
     });
   }, []);
+
+  const scrollToToplineMetrics = useCallback(() => {
+    scrollToBudgetSection(BUDGET_SECTION_IDS.topline);
+  }, []);
+
+  const handleNavigateToSection = useCallback(
+    (section: 'startupCosts' | 'monthlyRevenue' | 'operatingExpenses' | 'breakEven') => {
+      const sectionIdMap = {
+        startupCosts: BUDGET_SECTION_IDS.startupCosts,
+        monthlyRevenue: BUDGET_SECTION_IDS.monthlyRevenue,
+        operatingExpenses: BUDGET_SECTION_IDS.operatingExpenses,
+        breakEven: BUDGET_SECTION_IDS.breakEven,
+      } as const;
+      scrollToBudgetSection(sectionIdMap[section]);
+    },
+    [],
+  );
 
   // Classification
   const classifyExpenseGroup = useCallback((item: BudgetItem): 'startup' | 'operating' | 'other' => {
@@ -512,20 +498,24 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   }, [budget.items]);
 
   const revenues = useMemo(() => {
-    if (!budget.items || budget.items.length === 0) return [];
-    const selectedDynamicStreams = dynamicRevenueStreams.filter(stream => stream.isSelected);
-    const dynamicStreamsAsBudgetItems: BudgetItem[] = selectedDynamicStreams.map(stream => ({
-      id: stream.id,
-      name: stream.name,
-      category: 'revenue',
-      estimated_amount: stream.revenueProjection,
-      actual_amount: undefined,
-      description: '',
-      is_custom: stream.isCustom,
-      isSelected: stream.isSelected,
-    }));
-    return [...dynamicStreamsAsBudgetItems];
-  }, [budget.items, dynamicRevenueStreams]);
+    return dynamicRevenueStreams
+      .filter((stream) => stream.isSelected)
+      .map((stream) => ({
+        id: stream.id,
+        name: stream.name,
+        category: 'revenue' as const,
+        estimated_amount: stream.revenueProjection,
+        actual_amount: undefined,
+        description: '',
+        is_custom: stream.isCustom,
+        isSelected: stream.isSelected,
+      }));
+  }, [dynamicRevenueStreams]);
+
+  const projectedMonthlyRevenue = useMemo(
+    () => calculateProjectedMonthlyRevenue(dynamicRevenueStreams),
+    [dynamicRevenueStreams],
+  );
 
   const startupCostItems = useMemo(
     () => expenses.filter((item) => classifyExpenseGroup(item) === 'startup'),
@@ -543,32 +533,10 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   );
 
   // Calculations
-  const totalEstimatedExpenses = expenses.reduce((sum, item) => sum + item.estimated_amount, 0);
-  const totalActualExpenses = expenses.reduce((sum, item) => sum + (item.actual_amount || 0), 0);
-  const totalActualRevenue = revenues.reduce((sum, item) => sum + (item.actual_amount || 0), 0);
-
-  const currentTotalExpenses = viewMode === 'actual' ? totalActualExpenses : totalEstimatedExpenses;
-  const currentTotalRevenue = viewMode === 'actual' ? totalActualRevenue : totalMonthlyRevenue;
-  const netBudget = currentTotalRevenue - currentTotalExpenses;
-
-  const estimatedRevenueFromItems = useMemo(() => {
-    return revenues.reduce((sum, item) => sum + (Number(item.estimated_amount) || 0), 0);
-  }, [revenues]);
-
-  const effectiveEstimatedMonthlyRevenue = useMemo(() => {
-    return totalMonthlyRevenue > 0 ? totalMonthlyRevenue : estimatedRevenueFromItems;
-  }, [totalMonthlyRevenue, estimatedRevenueFromItems]);
-
-  const effectiveMonthlyRevenueForBreakEven = useMemo(() => {
-    return viewMode === 'actual' ? totalActualRevenue : effectiveEstimatedMonthlyRevenue;
-  }, [viewMode, totalActualRevenue, effectiveEstimatedMonthlyRevenue]);
-
-  const getMonthlyValue = useCallback((item: BudgetItem) => {
-    if (viewMode === 'actual' && item.actual_amount !== undefined && item.actual_amount !== null) {
-      return Number(item.actual_amount) || 0;
-    }
-    return Number(item.estimated_amount) || 0;
-  }, [viewMode]);
+  const getEstimatedAmount = useCallback(
+    (item: BudgetItem) => Number(item.estimated_amount) || 0,
+    [],
+  );
 
   const startupCostsTotal = useMemo(() => 
     startupCostItems.reduce((sum, item) => sum + (item.estimated_amount || 0), 0), 
@@ -581,8 +549,8 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   );
 
   const monthlyNetIncome = useMemo(() => 
-    effectiveMonthlyRevenueForBreakEven - totalMonthlyCosts,
-    [effectiveMonthlyRevenueForBreakEven, totalMonthlyCosts]
+    projectedMonthlyRevenue - totalMonthlyCosts,
+    [projectedMonthlyRevenue, totalMonthlyCosts]
   );
 
   const breakEven = useMemo(() => {
@@ -605,7 +573,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
 
   const twoYearProjection = useMemo(() => {
     const months = 24;
-    const revenue24 = (Number(effectiveMonthlyRevenueForBreakEven) || 0) * months;
+    const revenue24 = (Number(projectedMonthlyRevenue) || 0) * months;
     const costs24 = (Number(totalMonthlyCosts) || 0) * months;
     const net24 = revenue24 - costs24;
 
@@ -613,7 +581,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
     const netAfterStartup24 = net24 - totalStartup;
 
     return { months, revenue24, costs24, net24, totalStartup, netAfterStartup24 };
-  }, [effectiveMonthlyRevenueForBreakEven, totalMonthlyCosts, startupCostsTotal]);
+  }, [projectedMonthlyRevenue, totalMonthlyCosts, startupCostsTotal]);
 
   const startupActualTotal = useMemo(() => {
     return startupCostItems.reduce((sum, item) => sum + (Number(item.actual_amount) || 0), 0);
@@ -690,14 +658,14 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
     return startupCostItems
       .map((item) => ({
         name: item.name,
-        value: getMonthlyValue(item),
+        value: getEstimatedAmount(item),
       }))
       .filter((d) => Number.isFinite(d.value) && d.value > 0);
-  }, [startupCostItems, getMonthlyValue]);
+  }, [startupCostItems, getEstimatedAmount]);
 
   const monthlyChartData = useMemo(
-    () => buildOperatingExpenseChartData(operatingExpenseItems, getMonthlyValue),
-    [operatingExpenseItems, getMonthlyValue],
+    () => buildOperatingExpenseChartData(operatingExpenseItems, getEstimatedAmount),
+    [operatingExpenseItems, getEstimatedAmount],
   );
 
   const allBudgetItems = useMemo(() => {
@@ -757,7 +725,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         startupCostsTotal: startupCostsTotal,
         startupActualTotal: startupActualTotal,
         remainingStartupFunds: remainingStartupFunds,
-        monthlyRevenue: effectiveMonthlyRevenueForBreakEven,
+        monthlyRevenue: projectedMonthlyRevenue,
         monthlyOperatingCosts: totalMonthlyCosts,
         monthlyNetIncome: monthlyNetIncome,
         breakEvenLabel,
@@ -777,7 +745,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
     startupCostsTotal,
     startupActualTotal,
     remainingStartupFunds,
-    effectiveMonthlyRevenueForBreakEven,
+    projectedMonthlyRevenue,
     totalMonthlyCosts,
     monthlyNetIncome,
     breakEven,
@@ -861,7 +829,6 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   // Add this function to BudgetDashboard
   const handleExportExcel = useCallback(async () => {
     try {
-      // Install: npm install xlsx
       const XLSX = await import('xlsx');
       
       const wb = XLSX.utils.book_new();
@@ -874,7 +841,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         ['Total Startup Costs', formatCurrency(startupCostsTotal, currency)],
         ['Remaining Funds', formatCurrency(remainingStartupFunds, currency)],
         [''],
-        ['Monthly Revenue', formatCurrency(effectiveMonthlyRevenueForBreakEven, currency)],
+        ['Monthly Revenue', formatCurrency(projectedMonthlyRevenue, currency)],
         ['Monthly Costs', formatCurrency(totalMonthlyCosts, currency)],
         ['Monthly Net Income', formatCurrency(monthlyNetIncome, currency)],
         [''],
@@ -907,7 +874,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
           stream.estimatedVolume,
           stream.revenueProjection
         ]),
-        ['Total', '', '', totalMonthlyRevenue]
+        ['Total', '', '', projectedMonthlyRevenue]
       ];
       const revenueSheet = XLSX.utils.aoa_to_sheet(revenueData);
       XLSX.utils.book_append_sheet(wb, revenueSheet, 'Revenue');
@@ -936,7 +903,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       console.error('Error exporting to Excel:', error);
       toast.error('Failed to export Excel file');
     }
-  }, [budget, startupCostItems, operatingExpenseItems, dynamicRevenueStreams, businessContext, currency, startupCostsTotal, startupActualTotal, remainingStartupFunds, effectiveMonthlyRevenueForBreakEven, totalMonthlyCosts, monthlyNetIncome, breakEven, totalMonthlyRevenue]);
+  }, [budget, startupCostItems, operatingExpenseItems, dynamicRevenueStreams, businessContext, currency, startupCostsTotal, startupActualTotal, remainingStartupFunds, projectedMonthlyRevenue, totalMonthlyCosts, monthlyNetIncome, breakEven]);
 
   const handleExportDocx = useCallback(async () => {
     try {
@@ -1195,9 +1162,11 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
 
     return (
       <motion.div
+        id={BUDGET_SECTION_IDS.breakEven}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.15 }}
+        className="scroll-mt-24"
       >
         <div className={tableSectionClass}>
           {/* Header */}
@@ -1218,7 +1187,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
               {/* Left: Financial summary */}
               <div className="space-y-3">
                 {[
-                  { label: 'Monthly Revenue', value: effectiveMonthlyRevenueForBreakEven, color: 'text-emerald-600' },
+                  { label: 'Monthly Revenue', value: projectedMonthlyRevenue, color: 'text-emerald-600' },
                   { label: 'Monthly Costs', value: totalMonthlyCosts, color: 'text-red-500' },
                 ].map((row) => (
                   <div key={row.label} className="flex items-center justify-between p-4 bg-gray-50/80 rounded-xl border border-gray-100">
@@ -1291,7 +1260,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         </div>
       </motion.div>
     );
-  }, [effectiveMonthlyRevenueForBreakEven, totalMonthlyCosts, monthlyNetIncome, breakEven, currency]);
+  }, [projectedMonthlyRevenue, totalMonthlyCosts, monthlyNetIncome, breakEven, currency]);
 
   // Modern Charts — teal themed (memoised)
   const modernChartsEl = useMemo(() => (
@@ -1399,9 +1368,6 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
 
       {/* Header Section */}
       <BudgetDashboardHeader
-        viewMode={viewMode}
-        setViewMode={setViewMode}
-        budget={budget}
         compact={embeddedInSetup || embeddedInParent}
         onChatWithAngel={() => setIsChatModalOpen(true)}
         onOpenExport={onRegisterExportActions ? undefined : () => setShowExportModal(true)}
@@ -1474,19 +1440,26 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
             <BudgetOverview
               warnings={warnings}
               startupCostsTotal={startupCostsTotal}
-              effectiveMonthlyRevenueForBreakEven={effectiveMonthlyRevenueForBreakEven}
+              effectiveMonthlyRevenueForBreakEven={projectedMonthlyRevenue}
               totalMonthlyCosts={totalMonthlyCosts}
               monthlyNetIncome={monthlyNetIncome}
               currency={currency}
               formatCurrency={formatCurrency}
               breakEvenCard={breakEvenEl}
               modernCharts={modernChartsEl}
+              onNavigateToSection={handleNavigateToSection}
             />
 
             {/* Budget Tables */}
             <div className="space-y-6">
               {/* Startup Costs */}
-              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+              <motion.div
+                id={BUDGET_SECTION_IDS.startupCosts}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4 }}
+                className="scroll-mt-24"
+              >
                 <div className={tableSectionClass}>
                   <div className="px-4 py-3 sm:px-6 sm:py-4 bg-gradient-to-r from-teal-50 to-cyan-50 border-b border-gray-200/60 flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
                     <div className="p-2 bg-teal-100 rounded-lg shrink-0"><DollarSign className="w-5 h-5 text-teal-600" /></div>
@@ -1504,6 +1477,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                       currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection}
                       onToggleAllSelection={(s) => onToggleSectionSelection([...startupCostItems, ...otherExpenses].map(i => i.id), s)}
                       onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal}
+                      onBackToTop={scrollToToplineMetrics}
                     />
                   </div>
                 </div>
@@ -1558,7 +1532,13 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
               </motion.div>
 
               {/* Monthly Revenue */}
-              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }}>
+              <motion.div
+                id={BUDGET_SECTION_IDS.monthlyRevenue}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.1 }}
+                className="scroll-mt-24"
+              >
                 <div className={tableSectionClass}>
                   <div className="px-4 py-3 sm:px-6 sm:py-4 bg-gradient-to-r from-emerald-50 to-green-50 border-b border-gray-200/60 flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
                     <div className="p-2 bg-emerald-100 rounded-lg"><TrendingUp className="w-5 h-5 text-emerald-600" /></div>
@@ -1572,14 +1552,20 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                     {loadingRevenueStreams ? (
                       <div className="flex items-center justify-center py-12"><Loader className="animate-spin w-7 h-7 text-teal-600" /></div>
                     ) : (
-                      <RevenueTable items={dynamicRevenueStreams} onRevenueStreamsChange={handleRevenueStreamsChange} onTotalMonthlyRevenueChange={setTotalMonthlyRevenue} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(ids, s) => onToggleSectionSelection(ids, s)} onAddLineItem={openAddLineItemModal} />
+                      <RevenueTable items={dynamicRevenueStreams} onRevenueStreamsChange={handleRevenueStreamsChange} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(ids, s) => onToggleSectionSelection(ids, s)} onAddLineItem={openAddLineItemModal} onBackToTop={scrollToToplineMetrics} />
                     )}
                   </div>
                 </div>
               </motion.div>
 
               {/* Monthly Operating Expenses */}
-              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.15 }}>
+              <motion.div
+                id={BUDGET_SECTION_IDS.operatingExpenses}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.15 }}
+                className="scroll-mt-24"
+              >
                 <div className={tableSectionClass}>
                   <div className="px-4 py-3 sm:px-6 sm:py-4 bg-gradient-to-r from-amber-50 to-yellow-50 border-b border-gray-200/60 flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
                     <div className="p-2 bg-amber-100 rounded-lg"><Calendar className="w-5 h-5 text-amber-600" /></div>
@@ -1590,7 +1576,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                     </UITooltip>
                   </div>
                   <div className="p-4 sm:p-6 min-w-0">
-                    <OperatingExpensesTable items={operatingExpenseItems} onChange={(next) => handleBudgetUpdate({ items: [...startupCostItems, ...otherExpenses, ...next, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection(operatingExpenseItems.map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} />
+                    <OperatingExpensesTable items={operatingExpenseItems} onChange={(next) => handleBudgetUpdate({ items: [...startupCostItems, ...otherExpenses, ...next, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection(operatingExpenseItems.map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} onBackToTop={scrollToToplineMetrics} />
                   </div>
                 </div>
               </motion.div>
@@ -1611,7 +1597,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                   <h3 className="font-bold text-gray-900">Startup Costs</h3>
                 </div>
                 <div className="p-6">
-                  <StartupCostsTable items={[...startupCostItems, ...otherExpenses]} onChange={(next) => handleBudgetUpdate({ items: [...next, ...operatingExpenseItems, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection([...startupCostItems, ...otherExpenses].map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} />
+                  <StartupCostsTable items={[...startupCostItems, ...otherExpenses]} onChange={(next) => handleBudgetUpdate({ items: [...next, ...operatingExpenseItems, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection([...startupCostItems, ...otherExpenses].map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} onBackToTop={scrollToToplineMetrics} />
                 </div>
               </div>
 
@@ -1624,7 +1610,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                   {loadingRevenueStreams ? (
                     <div className="flex items-center justify-center py-12"><Loader className="animate-spin w-7 h-7 text-teal-600" /></div>
                   ) : (
-                    <RevenueTable items={dynamicRevenueStreams} onRevenueStreamsChange={handleRevenueStreamsChange} onTotalMonthlyRevenueChange={setTotalMonthlyRevenue} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(ids, s) => onToggleSectionSelection(ids, s)} onAddLineItem={openAddLineItemModal} />
+                    <RevenueTable items={dynamicRevenueStreams} onRevenueStreamsChange={handleRevenueStreamsChange} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(ids, s) => onToggleSectionSelection(ids, s)} onAddLineItem={openAddLineItemModal} onBackToTop={scrollToToplineMetrics} />
                   )}
                 </div>
               </div>
@@ -1635,7 +1621,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                   <h3 className="font-bold text-gray-900">Monthly Operating Expenses</h3>
                 </div>
                 <div className="p-6">
-                  <OperatingExpensesTable items={operatingExpenseItems} onChange={(next) => handleBudgetUpdate({ items: [...startupCostItems, ...otherExpenses, ...next, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection(operatingExpenseItems.map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} />
+                  <OperatingExpensesTable items={operatingExpenseItems} onChange={(next) => handleBudgetUpdate({ items: [...startupCostItems, ...otherExpenses, ...next, ...revenues] })} currency={currency} selectedItemIds={selectedItemIds} onToggleItemSelection={onToggleItemSelection} onToggleAllSelection={(s) => onToggleSectionSelection(operatingExpenseItems.map(i => i.id), s)} onAddLineItem={openAddLineItemModal} onRemoveItem={openRemoveModal} onBackToTop={scrollToToplineMetrics} />
                 </div>
               </div>
             </div>
@@ -1725,9 +1711,6 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
 
             const next = [...dynamicRevenueStreams, newStream];
             setDynamicRevenueStreams(next);
-            setTotalMonthlyRevenue(
-              next.filter((s) => s.isSelected).reduce((sum, s) => sum + s.revenueProjection, 0)
-            );
             // Save ALL revenue streams to DB immediately and await it
             await saveRevenueStreamsDirect(next);
           }}
@@ -1761,13 +1744,12 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
           documentTitle={businessContext?.business_name?.trim() || 'Budget'}
           documentType="budget"
           showSuccessToast={false}
-          budgetFormats={['pdf', 'docx']}
           onExportPdf={handleExportPdf}
+          onExportExcel={handleExportExcel}
           onExportDocx={handleExportDocx}
         />
       )}
-      
-      {/* Single roadmap CTA: floating button only */}
+
     </div>
     </BudgetEmbedContext.Provider>
   );

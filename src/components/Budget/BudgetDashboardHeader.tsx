@@ -7,20 +7,14 @@ import { cn } from '@/lib/utils';
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 interface BudgetDashboardHeaderProps {
-  viewMode: 'estimated' | 'actual';
-  setViewMode: (mode: 'estimated' | 'actual') => void;
-  budget: any;
   onChatWithAngel?: () => void;
-  /** Opens export format modal (PDF / DOCX) */
+  /** Opens export format modal (PDF, Excel, DOCX) */
   onOpenExport?: () => void;
   /** Hide duplicate title when parent page already shows "Budget Setup" */
   compact?: boolean;
 }
 
 const BudgetDashboardHeader: React.FC<BudgetDashboardHeaderProps> = ({
-  viewMode,
-  setViewMode,
-  budget,
   onChatWithAngel,
   onOpenExport,
   compact = false,
@@ -46,9 +40,7 @@ const BudgetDashboardHeader: React.FC<BudgetDashboardHeaderProps> = ({
               <h2 className="text-xl sm:text-2xl font-extrabold bg-gradient-to-r from-teal-600 to-cyan-600 bg-clip-text text-transparent tracking-tight">
                 Budget Dashboard
               </h2>
-              <p className="text-sm text-gray-500 mt-0.5">
-                {viewMode === 'actual' ? 'Actual' : 'Estimated'} budget for Year 1
-              </p>
+              <p className="text-sm text-gray-500 mt-0.5">Year 1 budget planning and tracking</p>
             </div>
           )}
 
@@ -58,43 +50,6 @@ const BudgetDashboardHeader: React.FC<BudgetDashboardHeaderProps> = ({
               compact ? 'w-full md:w-auto md:justify-end' : 'w-full md:w-auto',
             )}
           >
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex items-center gap-1 bg-gray-100/80 p-1 rounded-xl border border-gray-200/60 w-full md:w-auto">
-                  <Button
-                    variant={viewMode === 'estimated' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode('estimated')}
-                    className={cn(
-                      'flex-1 md:flex-none',
-                      viewMode === 'estimated'
-                        ? 'bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900',
-                    )}
-                  >
-                    Estimated
-                  </Button>
-                  <Button
-                    variant={viewMode === 'actual' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode('actual')}
-                    disabled={!budget?.items?.some((item: any) => item.actual_amount !== undefined)}
-                    className={cn(
-                      'flex-1 md:flex-none',
-                      viewMode === 'actual'
-                        ? 'bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900',
-                    )}
-                  >
-                    Actual
-                  </Button>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="max-w-[280px]">
-                <strong>Estimated:</strong> Your planned budget numbers. <strong>Actual:</strong> Fill in real spending to track variance.
-              </TooltipContent>
-            </Tooltip>
-
             {onOpenExport && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -109,7 +64,7 @@ const BudgetDashboardHeader: React.FC<BudgetDashboardHeaderProps> = ({
                     <span className="truncate">Export</span>
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">Download your budget as PDF or Word</TooltipContent>
+                <TooltipContent side="bottom">Download your budget as PDF, Excel, or Word</TooltipContent>
               </Tooltip>
             )}
 

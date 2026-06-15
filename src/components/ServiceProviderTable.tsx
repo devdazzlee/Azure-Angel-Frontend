@@ -5,19 +5,7 @@ import { Loader2, MapPin, Globe, Building2, DollarSign, Star, CheckCircle, Alert
 import httpClient from '../api/httpClient';
 import ServiceProviderDetailModal from './ServiceProviderDetailModal';
 import BusinessContextDisplay from './BusinessContextDisplay';
-import { normalizeSpecialties } from '../utils/serviceProvider';
-
-interface ServiceProvider {
-  name: string;
-  type: string;
-  local: boolean;
-  description: string;
-  key_considerations: string;
-  estimated_cost: string;
-  contact_method: string;
-  specialties?: string | string[];
-  category: string;
-}
+import { normalizeSpecialties, type ServiceProviderRow } from '../utils/serviceProvider';
 
 interface ServiceProviderTableProps {
   taskContext: string;
@@ -27,7 +15,7 @@ interface ServiceProviderTableProps {
     business_type?: string;
     business_name?: string;
   };
-  onProviderSelect?: (provider: ServiceProvider) => void;
+  onProviderSelect?: (provider: ServiceProviderRow) => void;
   className?: string;
   cachedData?: any;
   isLoading?: boolean;
@@ -45,18 +33,18 @@ const ServiceProviderTable: React.FC<ServiceProviderTableProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [providers, setProviders] = useState<ServiceProvider[]>([]);
+  const [providers, setProviders] = useState<ServiceProviderRow[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedLocation, setSelectedLocation] = useState<string>('all');
-  const [selectedProvider, setSelectedProvider] = useState<ServiceProvider | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<ServiceProviderRow | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
   useEffect(() => {
     if (cachedData) {
       // Use cached data
       const providerData = cachedData.result.providers.provider_table.original_table;
-      const allProviders: ServiceProvider[] = [];
+      const allProviders: ServiceProviderRow[] = [];
       
       // Flatten providers from all categories
       if (providerData && providerData.provider_tables) {
@@ -108,7 +96,7 @@ const ServiceProviderTable: React.FC<ServiceProviderTableProps> = ({
 
       if ((response.data as any).success) {
         const providerData = (response.data as any).result.providers.provider_table.original_table;
-        const allProviders: ServiceProvider[] = [];
+        const allProviders: ServiceProviderRow[] = [];
         
         // Flatten providers from all categories
         if (providerData && providerData.provider_tables) {
@@ -368,10 +356,8 @@ const ServiceProviderTable: React.FC<ServiceProviderTableProps> = ({
           setSelectedProvider(null);
         }}
         provider={selectedProvider}
-        businessContext={businessContext}
         onContactProvider={(provider) => {
           console.log('Contacting provider:', provider);
-          // Parent component can handle this via onProviderSelect
         }}
       />
     </div>

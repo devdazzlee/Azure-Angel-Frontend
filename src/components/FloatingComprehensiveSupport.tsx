@@ -25,6 +25,17 @@ import httpClient from '../api/httpClient';
 import ServiceProviderDetailModal from './ServiceProviderDetailModal';
 import type { ServiceProviderRow } from '../utils/serviceProvider';
 import {
+  buildImplementationTaskContext,
+  resolveActiveSubstepNumber,
+} from '../utils/implementationTaskContext';
+import {
+  loadImplementationChat,
+  saveImplementationChat,
+  loadImplementationResearch,
+  saveImplementationResearch,
+  type PersistedAngelMessage,
+} from '../utils/implementationSupportStorage';
+import {
   implementationCachePolicy,
   useGetServiceProvidersQuery,
 } from '../store/implementationApi';
@@ -106,86 +117,51 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
 
   const chatBoxRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatHydratedRef = useRef(false);
 
-  // Persist Angel chat messages per (session, implementation task). When
-  // the user moves to a new task the old conversation is preserved under
-  // its task id; if they later return (e.g. by clicking "Click to Edit"
-  // on a completed step that becomes the current task again) the saved
-  // history is offered with a "Continue / Start fresh" banner.
-  const chatStorageKey = (taskId: string | undefined): string | null => {
-    if (!taskId || !sessionId) return null;
-    return `angel:implementation:chat:${sessionId}:${taskId}`;
-  };
-
-  const persistMessages = (taskId: string | undefined, msgs: Message[]) => {
-    const key = chatStorageKey(taskId);
-    if (!key || typeof window === 'undefined') return;
-    try {
-      if (msgs.length === 0) {
-        window.localStorage.removeItem(key);
-        return;
-      }
-      const serializable = msgs.map(m => ({
-        ...m,
-        timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : m.timestamp,
-      }));
-      window.localStorage.setItem(key, JSON.stringify(serializable));
-    } catch {
-      // Non-fatal: localStorage may be unavailable in private mode.
-    }
-  };
-
-  const restoreMessages = (taskId: string | undefined): Message[] => {
-    const key = chatStorageKey(taskId);
-    if (!key || typeof window === 'undefined') return [];
-    try {
-      const raw = window.localStorage.getItem(key);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw) as Array<Omit<Message, 'timestamp'> & { timestamp: string }>;
-      if (!Array.isArray(parsed)) return [];
-      return parsed.map(m => ({
-        ...m,
-        timestamp: new Date(m.timestamp),
-      }));
-    } catch {
-      return [];
-    }
-  };
-
-  // When the active implementation task changes, swap the chat history
-  // out for that task's persisted conversation (if any).
-  const previousTaskIdRef = useRef<string | undefined>(undefined);
+  // Angel chat persists for the whole implementation venture (session), not
+  // just the current task or panel interaction. Task context is injected on
+  // each API call so answers stay step-aware while history carries forward.
   useEffect(() => {
-    const newTaskId = currentTask?.id;
+    if (!sessionId) return;
+    const restored = loadImplementationChat(sessionId).map((m) => ({
+      ...m,
+      timestamp: new Date(m.timestamp),
+    }));
+    setMessages(restored);
+    setHasRestoredHistory(restored.length > 0);
+    chatHydratedRef.current = true;
+  }, [sessionId]);
 
-    // Save the conversation we're about to navigate away from.
-    const previousTaskId = previousTaskIdRef.current;
-    if (previousTaskId && previousTaskId !== newTaskId) {
-      persistMessages(previousTaskId, messages);
-    }
-
-    // Load whatever we have for the new task.
-    if (newTaskId !== previousTaskId) {
-      const restored = restoreMessages(newTaskId);
-      setMessages(restored);
-      setHasRestoredHistory(restored.length > 0);
-    }
-
-    previousTaskIdRef.current = newTaskId;
-    // We intentionally only run this on currentTask.id change; the
-    // `messages` snapshot read above is exactly what we want — the latest
-    // state at the moment of the swap. ESLint's exhaustive-deps would
-    // demand `messages` here and trigger an infinite save/load loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTask?.id, sessionId]);
-
-  // Mirror new messages to localStorage so refreshes / minimisations don't
-  // lose context.
   useEffect(() => {
-    if (!currentTask?.id) return;
-    persistMessages(currentTask.id, messages);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages, currentTask?.id]);
+    if (!sessionId || !chatHydratedRef.current) return;
+    const serializable: PersistedAngelMessage[] = messages.map((m) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      mode: m.mode,
+      timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : String(m.timestamp),
+    }));
+    saveImplementationChat(sessionId, serializable);
+  }, [messages, sessionId]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    const saved = loadImplementationResearch(sessionId);
+    if (!saved) return;
+    setCustomQuery(saved.customQuery || '');
+    setResearchResult(saved.researchResult ?? null);
+    setSelectedTopic(saved.selectedTopic);
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    saveImplementationResearch(sessionId, {
+      customQuery,
+      researchResult,
+      selectedTopic,
+    });
+  }, [sessionId, customQuery, researchResult, selectedTopic]);
 
   // Initialize research topics from angelCanHelp
   useEffect(() => {
@@ -202,8 +178,9 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
   const providerQueryArgs = {
     sessionId,
     taskId: currentTask?.id ?? '',
-    taskContext: taskContext || currentTask?.title || 'business support',
+    taskContext: buildImplementationTaskContext(currentTask, taskContext || 'business support'),
     category: currentTask?.phase_name || 'general',
+    activeSubstep: resolveActiveSubstepNumber(currentTask),
   };
 
   const {
@@ -296,42 +273,8 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
   // EIN" instead of producing a marketing-plan checklist). The previous
   // implementation passed only the parent task *title*, which is why
   // Angel was hallucinating off-topic responses.
-  const buildTaskContext = (): string => {
-    const parts: string[] = [];
-    if (currentTask?.title) parts.push(`Current Task: ${currentTask.title}`);
-    if (currentTask?.description) parts.push(`Task Description: ${currentTask.description}`);
-    if (currentTask?.purpose) parts.push(`Task Purpose: ${currentTask.purpose}`);
-
-    const substeps: any[] = Array.isArray(currentTask?.substeps) ? currentTask.substeps : [];
-    if (substeps.length > 0) {
-      const activeIdx = (() => {
-        const byCurrentNumber = substeps.findIndex(
-          (s: any) => s?.step_number === currentTask?.current_substep
-        );
-        if (byCurrentNumber >= 0) return byCurrentNumber;
-        const firstIncomplete = substeps.findIndex((s: any) => !s?.completed);
-        return firstIncomplete >= 0 ? firstIncomplete : 0;
-      })();
-      const active = substeps[activeIdx];
-      if (active?.title) {
-        parts.push(`Active Step ${active.step_number ?? activeIdx + 1}: ${active.title}`);
-      }
-      if (active?.description) {
-        parts.push(`Active Step Description: ${active.description}`);
-      }
-      const stepsList = substeps
-        .map((s: any, i: number) =>
-          `  ${s?.step_number ?? i + 1}. ${s?.title ?? ''}${s?.completed ? ' (completed)' : ''}`
-        )
-        .join('\n');
-      if (stepsList) parts.push(`All Steps for this task:\n${stepsList}`);
-    }
-
-    // Fall back to the legacy `taskContext` prop (a free-text string) if
-    // no structured task object is available.
-    if (parts.length === 0 && taskContext) parts.push(taskContext);
-    return parts.join('\n\n');
-  };
+  const buildTaskContext = (): string =>
+    buildImplementationTaskContext(currentTask, taskContext);
 
   const handleSendMessage = async (overrideContent?: string, modeOverride?: 'help' | 'draft' | 'brainstorm') => {
     const content = (overrideContent ?? chatInput).trim();
@@ -800,8 +743,8 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
             {hasRestoredHistory && messages.length > 0 && (
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2">
                 <span className="text-xs text-teal-900">
-                  Picking up where you left off — {messages.length} previous
-                  message{messages.length === 1 ? '' : 's'} loaded for this step.
+                  Your Angel conversation is saved for this venture across tasks and refreshes
+                  ({messages.length} message{messages.length === 1 ? '' : 's'}).
                 </span>
                 <div className="flex items-center gap-2">
                   <button
@@ -816,7 +759,7 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
                     onClick={() => {
                       setMessages([]);
                       setHasRestoredHistory(false);
-                      persistMessages(currentTask?.id, []);
+                      saveImplementationChat(sessionId, []);
                     }}
                     className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded px-2.5 py-1 transition-colors"
                   >
@@ -1012,7 +955,6 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
         <ServiceProviderDetailModal
           provider={selectedProvider}
           isOpen={showProviderModal}
-          businessContext={businessContext}
           onClose={() => {
             setShowProviderModal(false);
             setSelectedProvider(null);
