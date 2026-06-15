@@ -10,6 +10,7 @@ import {
   Target,
 } from 'lucide-react';
 import { displayBusinessNameFromApi } from '@/utils/businessName';
+import VentureBrandMark from '@/components/layout/VentureBrandMark';
 
 const HELP_ITEMS = [
   {
@@ -70,7 +71,7 @@ interface RoadmapToImplementationTransitionProps {
 }
 
 function formatDisplayBusinessName(raw: string): string {
-  return displayBusinessNameFromApi(raw) || 'your business';
+  return displayBusinessNameFromApi(raw) || 'Not specified';
 }
 
 const RoadmapToImplementationTransition: React.FC<RoadmapToImplementationTransitionProps> = ({
@@ -83,8 +84,8 @@ const RoadmapToImplementationTransition: React.FC<RoadmapToImplementationTransit
   isPageLoading = false,
 }) => {
   const displayBusinessName = formatDisplayBusinessName(businessName);
-  const displayIndustry = industry.trim() || 'your industry';
-  const displayLocation = location.trim() || 'your location';
+  const displayIndustry = industry.trim() || 'Not specified';
+  const displayLocation = location.trim() || 'Not specified';
   const busy = isPageLoading || isStarting;
 
   if (isPageLoading) {
@@ -116,35 +117,60 @@ const RoadmapToImplementationTransition: React.FC<RoadmapToImplementationTransit
 
       <header className="sticky top-0 z-40 border-b border-indigo-100/80 bg-white/95 shadow-sm backdrop-blur-sm">
         <div className="h-1 bg-gradient-to-r from-indigo-500 via-violet-500 to-teal-500" aria-hidden />
-        <div className="mx-auto flex max-w-7xl min-w-0 items-center gap-3 px-4 py-3 sm:gap-6 sm:px-6 sm:py-4 lg:px-8">
-          <button
-            type="button"
-            onClick={onBack}
-            disabled={busy}
-            className="inline-flex shrink-0 items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
-            <span className="hidden sm:inline">Back to Roadmap</span>
-            <span className="sm:hidden">Back</span>
-          </button>
-          <div className="hidden h-10 w-px shrink-0 bg-indigo-100 sm:block" aria-hidden />
-          <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
-            <div
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-sm sm:h-12 sm:w-12"
-              aria-hidden
-            >
-              <Rocket className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={2} />
+        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
+          {/* Mobile — logo + back on one row, title block below (matches Budget / venture flows) */}
+          <div className="md:hidden">
+            <div className="flex items-center gap-2">
+              <VentureBrandMark />
+              <button
+                type="button"
+                onClick={onBack}
+                disabled={busy}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
+                Back
+              </button>
             </div>
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-600 sm:text-xs">
-                Founderport
-              </p>
-              <h1 className="truncate text-lg font-bold tracking-tight text-gray-900 sm:text-2xl">
+            <div className="mt-2.5 border-t border-indigo-100 pt-2.5">
+              <h1 className="text-lg font-bold leading-tight tracking-tight text-gray-900">
                 Implementation transition
               </h1>
-              <p className="mt-0.5 hidden text-sm text-gray-500 sm:block">
+              <p className="mt-1 text-xs leading-relaxed text-gray-500">
                 From roadmap to hands-on execution
               </p>
+            </div>
+          </div>
+
+          {/* Desktop — balanced bar: brand + nav + title | phase pill */}
+          <div className="hidden md:flex md:items-center md:justify-between md:gap-8">
+            <div className="flex min-w-0 flex-1 items-center gap-6">
+              <VentureBrandMark />
+              <button
+                type="button"
+                onClick={onBack}
+                disabled={busy}
+                className="inline-flex shrink-0 items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-indigo-50 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
+                Back to Roadmap
+              </button>
+              <div className="h-10 w-px shrink-0 bg-indigo-100" aria-hidden />
+              <div className="min-w-0">
+                <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+                  Implementation transition
+                </h1>
+                <p className="mt-0.5 text-sm text-gray-500">
+                  From roadmap to hands-on execution
+                </p>
+              </div>
+            </div>
+            <div
+              className="flex shrink-0 items-center gap-2 rounded-full border border-teal-200/80 bg-gradient-to-r from-teal-50 to-indigo-50 px-4 py-2 shadow-sm"
+              aria-hidden
+            >
+              <Rocket className="h-4 w-4 text-teal-600" strokeWidth={2} />
+              <span className="text-sm font-semibold text-teal-900">Hands-on execution</span>
             </div>
           </div>
         </div>
@@ -275,22 +301,18 @@ const RoadmapToImplementationTransition: React.FC<RoadmapToImplementationTransit
                     {displayBusinessName}
                   </dd>
                 </div>
-                {displayIndustry !== 'your industry' && (
-                  <div>
-                    <dt className="text-xs font-semibold uppercase tracking-wide text-violet-600">
-                      Industry
-                    </dt>
-                    <dd className="mt-0.5 text-violet-900 break-words">{displayIndustry}</dd>
-                  </div>
-                )}
-                {displayLocation !== 'your location' && (
-                  <div>
-                    <dt className="text-xs font-semibold uppercase tracking-wide text-teal-600">
-                      Location
-                    </dt>
-                    <dd className="mt-0.5 text-teal-900 break-words">{displayLocation}</dd>
-                  </div>
-                )}
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-violet-600">
+                    Industry
+                  </dt>
+                  <dd className="mt-0.5 text-violet-900 break-words">{displayIndustry}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-teal-600">
+                    Location
+                  </dt>
+                  <dd className="mt-0.5 text-teal-900 break-words">{displayLocation}</dd>
+                </div>
               </dl>
 
               <button

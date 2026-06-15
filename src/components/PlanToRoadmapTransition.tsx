@@ -15,6 +15,7 @@ import httpClient from '../api/httpClient';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { responsiveMarkdownTableComponents } from './ResponsiveMarkdownTable';
 import BusinessPlanModificationModal from './BusinessPlanModificationModal';
+import VentureBrandMark from './layout/VentureBrandMark';
 
 interface PlanToRoadmapTransitionProps {
   businessPlanSummary: string;
@@ -275,7 +276,6 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
   useEffect(() => {
     if (!loading) setPendingAction(null);
   }, [loading]);
-
   // Show floating control when the action buttons are below the viewport.
   useEffect(() => {
     const target = decisionSectionRef.current;
@@ -677,33 +677,36 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
         )}
       </AnimatePresence>
 
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 flex items-center justify-center px-3 py-6 sm:px-4 sm:py-10 md:py-14">
-        <div className="w-full max-w-4xl bg-white/90 backdrop-blur-xl border border-white/30 shadow-2xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8">
-        <header className="relative mb-6 sm:mb-10 pt-2 pb-5 sm:pb-6 border-b border-slate-200/70 overflow-hidden">
-          {/* Ambient decorative orbs — softly float behind the title.
-              `pointer-events-none` so they never block clicks. */}
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50">
+        <header className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white/95 shadow-sm backdrop-blur-sm">
+          <div className="h-0.5 bg-gradient-to-r from-teal-500 via-emerald-500 to-blue-500" aria-hidden />
+          <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-2.5 sm:px-6 sm:py-3 lg:px-8">
+            <div className="flex min-w-0 items-center gap-3 sm:gap-6">
+              <VentureBrandMark />
+            </div>
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-teal-50 to-blue-50 px-3 py-1.5 text-[10px] font-semibold text-teal-800 ring-1 ring-teal-200/80 sm:text-xs">
+              <span aria-hidden>✦</span>
+              {nextStep === 'budget' ? 'Plan complete · Budget next' : 'Summary phase'}
+            </span>
+          </div>
+        </header>
+
+        <div className="mx-auto w-full max-w-4xl px-3 py-4 sm:px-6 sm:py-6">
+        <div className="w-full bg-white/90 backdrop-blur-xl border border-white/30 shadow-2xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8">
+        <header className="relative mb-6 sm:mb-8 overflow-hidden border-b border-slate-200/70 pb-5 sm:pb-6">
           <motion.div
             aria-hidden="true"
-            className="pointer-events-none absolute -top-10 left-1/4 h-40 w-40 rounded-full bg-teal-300/30 blur-3xl"
-            animate={{
-              x: [0, 20, -10, 0],
-              y: [0, -15, 10, 0],
-              scale: [1, 1.1, 0.95, 1],
-            }}
+            className="pointer-events-none absolute -top-10 left-1/4 h-32 w-32 rounded-full bg-teal-300/25 blur-3xl"
+            animate={{ x: [0, 16, -8, 0], y: [0, -10, 8, 0] }}
             transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
           />
           <motion.div
             aria-hidden="true"
-            className="pointer-events-none absolute -top-8 right-1/4 h-32 w-32 rounded-full bg-blue-300/30 blur-3xl"
-            animate={{
-              x: [0, -25, 15, 0],
-              y: [0, 12, -10, 0],
-              scale: [1, 0.9, 1.15, 1],
-            }}
+            className="pointer-events-none absolute -top-8 right-1/4 h-28 w-28 rounded-full bg-blue-300/25 blur-3xl"
+            animate={{ x: [0, -20, 12, 0], y: [0, 10, -8, 0] }}
             transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
           />
 
-          {/* Back button — slides in from the left, lifts on hover. */}
           <motion.button
             type="button"
             disabled={loading || isGeneratingArtifact}
@@ -711,23 +714,22 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
               setPendingAction('revisit');
               onRevisit();
             }}
-            initial={{ opacity: 0, x: -16 }}
+            initial={{ opacity: 0, x: -12 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.4, ease: 'easeOut' }}
-            whileHover={{ x: -4 }}
-            whileTap={{ scale: 0.96 }}
-            className="relative z-10 mb-4 inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-white/80 backdrop-blur px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-white hover:border-teal-300 hover:text-teal-700 hover:shadow-md disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 sm:absolute sm:left-0 sm:top-1/2 sm:mb-0 sm:w-auto sm:-translate-y-1/2 sm:justify-start"
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+            whileHover={{ x: -3 }}
+            whileTap={{ scale: 0.98 }}
+            className="relative z-10 mb-4 inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:border-teal-300 hover:text-teal-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 sm:absolute sm:left-0 sm:top-2 sm:mb-0 sm:w-auto"
             title="Go back to the chat and edit your answers"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M15 19l-7-7 7-7" />
             </svg>
             <span>Edit Plan</span>
           </motion.button>
 
-          {/* Title block — staggered fade-up with a shimmering eyebrow pill. */}
           <motion.div
-            className="relative text-center sm:px-24"
+            className="relative text-center sm:px-28 md:px-32"
             initial="hidden"
             animate="show"
             variants={{
@@ -740,22 +742,15 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
                 hidden: { opacity: 0, y: -6 },
                 show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: 'easeOut' } },
               }}
-              className="relative inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-teal-50 via-emerald-50 to-blue-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-700 ring-1 ring-teal-200/70 mb-3 overflow-hidden"
+              className="relative mb-3 inline-flex items-center gap-2 overflow-hidden rounded-full bg-gradient-to-r from-teal-50 via-emerald-50 to-blue-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-700 ring-1 ring-teal-200/70"
             >
-              {/* Shine sweep across the pill, perpetual. */}
               <motion.span
                 aria-hidden="true"
                 className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/70 to-transparent"
                 animate={{ x: ['-100%', '200%'] }}
                 transition={{ duration: 3.5, repeat: Infinity, repeatDelay: 2, ease: 'easeInOut' }}
               />
-              <motion.span
-                aria-hidden="true"
-                animate={{ rotate: [0, 14, -10, 0], scale: [1, 1.15, 1] }}
-                transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                ✦
-              </motion.span>
+              <span aria-hidden>✦</span>
               <span className="relative">Summary</span>
             </motion.div>
 
@@ -764,16 +759,9 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
                 hidden: { opacity: 0, y: 10 },
                 show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } },
               }}
-              className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-slate-900 via-teal-700 to-blue-700 bg-clip-text text-transparent bg-[length:200%_100%]"
-              style={{ backgroundPosition: '0% 50%' }}
+              className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl md:text-4xl"
             >
-              <motion.span
-                className="inline-block bg-gradient-to-r from-slate-900 via-teal-700 to-blue-700 bg-clip-text text-transparent bg-[length:200%_100%]"
-                animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
-                transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                Business Plan Summary
-              </motion.span>
+              Business Plan Summary
             </motion.h1>
 
             <motion.p
@@ -781,13 +769,12 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
                 hidden: { opacity: 0, y: 8 },
                 show: { opacity: 1, y: 0, transition: { duration: 0.45, ease: 'easeOut' } },
               }}
-              className="mx-auto mt-3 max-w-xl text-sm md:text-base leading-relaxed text-slate-500"
+              className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-slate-500 md:text-base"
             >
               Review your summary below, then continue or generate your full plan.
             </motion.p>
           </motion.div>
         </header>
-
         {/* Info Banner - How to Generate Full Plan */}
         {!businessPlanArtifact && !isGeneratingArtifact && (
           <div className="mb-6 rounded-lg border-l-4 border-blue-500 bg-blue-50 p-3 sm:p-4">
@@ -1267,6 +1254,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
                 : 'Next: generate your launch roadmap.'}
           </p>
         </div>
+      </div>
       </div>
 
       {/* Business Plan Paywall Modal */}

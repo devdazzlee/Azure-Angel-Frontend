@@ -13,6 +13,7 @@ import httpClient from '../../api/httpClient';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/ui/tooltip';
 import { responsiveMarkdownTableComponents } from '../../components/ResponsiveMarkdownTable';
 import BusinessPlanModificationModal from '../../components/BusinessPlanModificationModal';
+import VentureBrandMark from '../../components/layout/VentureBrandMark';
 
 interface LocationState {
   businessPlan?: string;
@@ -411,6 +412,22 @@ const BusinessPlanView: React.FC = () => {
     navigate(`/ventures/${sessionId}`, { state: { preferVentureChat: true } });
   };
 
+  const handleBackNavigation = () => {
+    if (!sessionId) {
+      navigate('/ventures');
+      return;
+    }
+    if (showBudgetForwardNav) {
+      navigate(`/ventures/${sessionId}`, {
+        state: { restorePlanSummaryOverview: true, preferVentureChat: true },
+      });
+      return;
+    }
+    handleBackToChat();
+  };
+
+  const headerBackLabel = showBudgetForwardNav ? 'Back to Summary' : backLabel;
+
   const handleProceedToBudget = async () => {
     if (!sessionId || actionLoading) return;
     setActionLoading(true);
@@ -495,8 +512,77 @@ const BusinessPlanView: React.FC = () => {
   const headerActionBtn =
     'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors';
 
+  const documentActions = (
+    <>
+      {businessPlan && businessPlanSummary && (
+        <div
+          className="inline-flex shrink-0 rounded-lg border border-gray-200 bg-gray-50 p-0.5"
+          role="tablist"
+          aria-label="Document view"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={viewMode === 'summary'}
+            onClick={() => setViewMode('summary')}
+            className={`${headerActionBtn} ${
+              viewMode === 'summary'
+                ? 'bg-white text-teal-800 shadow-sm'
+                : 'text-gray-600 hover:bg-white/70'
+            }`}
+          >
+            <span className="whitespace-nowrap">Summary</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={viewMode === 'full'}
+            onClick={() => setViewMode('full')}
+            className={`${headerActionBtn} ${
+              viewMode === 'full'
+                ? 'bg-white text-teal-800 shadow-sm'
+                : 'text-gray-600 hover:bg-white/70'
+            }`}
+          >
+            <span className="whitespace-nowrap">Full plan</span>
+          </button>
+        </div>
+      )}
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={handleDownload}
+            className={`${headerActionBtn} shrink-0 border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100`}
+          >
+            <span className="whitespace-nowrap">Download</span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-sm">
+          Export this document
+        </TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={handlePrint}
+            className={`${headerActionBtn} shrink-0 border border-gray-200 bg-white text-gray-700 hover:bg-gray-50`}
+          >
+            <span className="whitespace-nowrap">Print</span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-sm">
+          Print this document
+        </TooltipContent>
+      </Tooltip>
+    </>
+  );
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 pt-2 sm:pt-4">
+    <div className="min-h-screen min-w-0 overflow-x-hidden bg-gradient-to-br from-slate-50 to-teal-50">
       {showScrollToBottom && (
         <div
           className={`fixed z-[100] print:hidden ${
@@ -523,122 +609,63 @@ const BusinessPlanView: React.FC = () => {
         </div>
       )}
 
-      <div className="mx-auto max-w-5xl px-3 py-3 sm:px-6 sm:py-6 lg:px-8">
+      <header className="sticky top-0 z-40 w-full border-b border-gray-200 bg-white shadow-sm print:hidden">
+        <div className="h-0.5 bg-gradient-to-r from-teal-600 to-blue-600" aria-hidden />
+        <div className="mx-auto w-full max-w-7xl px-4 py-2.5 sm:px-6 sm:py-3 lg:px-8">
+          <div className="md:hidden">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <VentureBrandMark />
+                <button
+                  type="button"
+                  onClick={handleBackNavigation}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-teal-700"
+                  aria-label={headerBackLabel}
+                >
+                  <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  Back
+                </button>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">{documentActions}</div>
+            </div>
+            <div className="mt-2 border-t border-gray-100 pt-2">
+              <h1 className="text-lg font-bold leading-tight text-gray-900">Business Plan</h1>
+              <p className="mt-0.5 text-xs text-gray-500">Generated {generatedDateLabel}</p>
+            </div>
+          </div>
+
+          <div className="hidden md:flex md:items-center md:justify-between md:gap-8">
+            <div className="flex min-w-0 items-center gap-6">
+              <VentureBrandMark />
+              <button
+                type="button"
+                onClick={handleBackNavigation}
+                className="inline-flex shrink-0 items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-teal-700"
+                aria-label={headerBackLabel}
+              >
+                <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                {headerBackLabel}
+              </button>
+              <div className="h-8 w-px shrink-0 bg-gray-200" aria-hidden />
+              <div className="min-w-0">
+                <h1 className="text-xl font-bold tracking-tight text-gray-900">Business Plan</h1>
+                <p className="mt-0.5 text-sm text-gray-500">Generated {generatedDateLabel}</p>
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{documentActions}</div>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-5xl px-3 py-3 sm:px-6 lg:px-8">
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg sm:rounded-2xl">
-          {/* Compact document toolbar — 1–2 lines on desktop; wraps cleanly on mobile */}
-          <div className="relative border-b border-teal-700/30 bg-gradient-to-r from-teal-600 to-blue-600 px-3 py-3 text-white shadow-sm sm:px-5 sm:py-3.5 print:border-gray-300 print:bg-white print:text-gray-900 print:shadow-none">
-
-            <div className="relative flex flex-col gap-3 print:hidden md:flex-row md:items-center md:justify-between md:gap-4">
-              <div className="flex min-w-0 items-center gap-2 md:gap-3 lg:flex-1">
-                {!showBudgetForwardNav && (
-                  <>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          onClick={handleBackToChat}
-                          className={`${headerActionBtn} shrink-0 border border-white/20 bg-white/10 text-white hover:bg-white/15`}
-                          aria-label={backLabel}
-                        >
-                          <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                          </svg>
-                          <span className="hidden whitespace-nowrap sm:inline">{backLabel}</span>
-                          <span className="whitespace-nowrap sm:hidden">Back</span>
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="max-w-[240px] text-sm">
-                        {backTarget === 'budget'
-                          ? 'Return to your budget workspace'
-                          : 'Return to your venture chat'}
-                      </TooltipContent>
-                    </Tooltip>
-                    <div className="hidden h-8 w-px shrink-0 bg-white/20 md:block" aria-hidden />
-                  </>
-                )}
-
-                <div className="min-w-0 flex-1">
-                  <h1 className="truncate text-base font-semibold leading-tight md:text-lg">
-                    Business Plan
-                  </h1>
-                  <p className="truncate text-xs text-white/80 md:text-sm">
-                    Generated {generatedDateLabel}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 md:shrink-0 md:justify-end">
-                  {businessPlan && businessPlanSummary && (
-                  <div
-                    className="inline-flex shrink-0 rounded-lg bg-black/25 p-0.5"
-                    role="tablist"
-                    aria-label="Document view"
-                  >
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={viewMode === 'summary'}
-                      onClick={() => setViewMode('summary')}
-                      className={`${headerActionBtn} ${
-                        viewMode === 'summary'
-                          ? 'bg-white text-teal-800 shadow-sm'
-                          : 'text-white/90 hover:bg-white/10'
-                      }`}
-                    >
-                      <span className="whitespace-nowrap">Summary</span>
-                    </button>
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={viewMode === 'full'}
-                      onClick={() => setViewMode('full')}
-                      className={`${headerActionBtn} ${
-                        viewMode === 'full'
-                          ? 'bg-white text-teal-800 shadow-sm'
-                          : 'text-white/90 hover:bg-white/10'
-                      }`}
-                    >
-                      <span className="whitespace-nowrap">Full plan</span>
-                    </button>
-                  </div>
-                )}
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={handleDownload}
-                      className={`${headerActionBtn} shrink-0 bg-white text-teal-800 hover:bg-teal-50`}
-                    >
-                      <span className="whitespace-nowrap">Download</span>
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="text-sm">
-                    Export this document
-                  </TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={handlePrint}
-                      className={`${headerActionBtn} shrink-0 border border-white/25 bg-white/10 text-white hover:bg-white/15`}
-                    >
-                      <span className="whitespace-nowrap">Print</span>
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="text-sm">
-                    Print this document
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            </div>
-
-            <div className="hidden print:block">
-              <h1 className="text-2xl font-bold text-gray-900">Business Plan</h1>
-              <p className="mt-1 text-sm text-gray-600">Generated {generatedDateLabel}</p>
-            </div>
+          <div className="hidden border-b border-gray-200 px-6 py-4 print:block">
+            <h1 className="text-2xl font-bold text-gray-900">Business Plan</h1>
+            <p className="mt-1 text-sm text-gray-600">Generated {generatedDateLabel}</p>
           </div>
 
           {showBudgetForwardNav && (

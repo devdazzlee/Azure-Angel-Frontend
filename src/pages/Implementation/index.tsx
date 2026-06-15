@@ -25,6 +25,7 @@ import {
   useLazyGetContactProvidersQuery,
 } from '../../store/implementationApi';
 import { displayBusinessNameFromApi } from '../../utils/businessName';
+import VentureBrandMark from '../../components/layout/VentureBrandMark';
 import type { ServiceProviderRow } from '../../utils/serviceProvider';
 import { IMPLEMENTATION_RETURN_KEY } from '../ErrorBoundaryPage';
 import { BudgetDashboard } from '../../components/Budget';
@@ -813,7 +814,7 @@ const Implementation: React.FC<ImplementationProps> = ({
   const displayBusinessName =
     displayBusinessNameFromApi(
       businessContext.business_name || currentTask?.business_context.business_name,
-    ) || 'Your venture';
+    ) || 'Not specified';
   const displayIndustry =
     businessContext.industry?.trim() || currentTask?.business_context.industry || '';
   const displayLocation =
@@ -825,44 +826,88 @@ const Implementation: React.FC<ImplementationProps> = ({
       <header className="sticky top-0 z-40 border-b border-gray-200 bg-white shadow-sm">
         <div className="h-1 bg-gradient-to-r from-indigo-600 via-teal-600 to-violet-600" aria-hidden />
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex min-w-0 items-center gap-3 sm:gap-5">
+          {/* Mobile — logo + back, then title and progress badges */}
+          <div className="lg:hidden">
+            <div className="flex items-center gap-2">
+              <VentureBrandMark />
+              <button
+                type="button"
+                onClick={() => navigate(`/ventures/${sessionId}/roadmap`)}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-indigo-700"
+              >
+                <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
+                Back
+              </button>
+            </div>
+            <div className="mt-2.5 border-t border-gray-100 pt-2.5">
+              <h1 className="text-lg font-bold leading-tight tracking-tight text-gray-900">
+                Implementation
+              </h1>
+              <p className="mt-1 text-xs text-gray-500">
+                Execute your roadmap step by step with Angel
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {currentPhaseLabel && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-900">
+                    {getPhaseIcon(currentTask!.phase_name)}
+                    <span className="max-w-[12rem] truncate">{currentPhaseLabel}</span>
+                  </span>
+                )}
+                <div className="flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5">
+                  <div className="relative h-9 w-9 shrink-0">
+                    <svg className="h-9 w-9 -rotate-90" viewBox="0 0 36 36" aria-hidden>
+                      <circle cx="18" cy="18" r="15" fill="none" className="stroke-teal-100" strokeWidth="3" />
+                      <circle
+                        cx="18"
+                        cy="18"
+                        r="15"
+                        fill="none"
+                        className="stroke-teal-600"
+                        strokeWidth="3"
+                        strokeDasharray={`${progressPercent * 0.94} 100`}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-teal-800">
+                      {progressPercent}%
+                    </span>
+                  </div>
+                  <span className="text-xs font-medium text-teal-900">
+                    {completedMainTasks} of {totalTasks} tasks
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Desktop — brand + nav + title | phase + progress */}
+          <div className="hidden lg:flex lg:items-center lg:justify-between lg:gap-8">
+            <div className="flex min-w-0 flex-1 items-center gap-6">
+              <VentureBrandMark />
               <button
                 type="button"
                 onClick={() => navigate(`/ventures/${sessionId}/roadmap`)}
                 className="inline-flex shrink-0 items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-indigo-700"
               >
                 <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
-                <span className="hidden sm:inline">Back to Roadmap</span>
-                <span className="sm:hidden">Back</span>
+                Back to Roadmap
               </button>
-              <div className="hidden h-10 w-px shrink-0 bg-gray-200 sm:block" aria-hidden />
-              <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-                <div
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-teal-600 text-white shadow-sm sm:h-12 sm:w-12"
-                  aria-hidden
-                >
-                  <Rocket className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={2} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-teal-700 sm:text-xs">
-                    Founderport
-                  </p>
-                  <h1 className="truncate text-lg font-bold tracking-tight text-gray-900 sm:text-2xl">
-                    Implementation
-                  </h1>
-                  <p className="mt-0.5 truncate text-xs text-gray-500 sm:text-sm">
-                    Execute your roadmap step by step with Angel
-                  </p>
-                </div>
+              <div className="h-10 w-px shrink-0 bg-gray-200" aria-hidden />
+              <div className="min-w-0">
+                <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+                  Implementation
+                </h1>
+                <p className="mt-0.5 text-sm text-gray-500">
+                  Execute your roadmap step by step with Angel
+                </p>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 lg:max-w-xl lg:justify-end">
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-3">
               {currentPhaseLabel && (
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-900">
                   {getPhaseIcon(currentTask!.phase_name)}
-                  <span className="max-w-[12rem] truncate sm:max-w-none">{currentPhaseLabel}</span>
+                  <span className="max-w-none">{currentPhaseLabel}</span>
                 </span>
               )}
               <div className="flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5">
@@ -900,7 +945,9 @@ const Implementation: React.FC<ImplementationProps> = ({
             <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
               <div className="mb-3 flex items-center gap-2">
                 <Building2 className="h-4 w-4 text-teal-600" aria-hidden />
-                <h2 className="text-sm font-bold text-gray-900">Your venture</h2>
+                <h2 className="text-sm font-bold text-gray-900">
+                  {displayBusinessName !== 'Not specified' ? displayBusinessName : 'Your venture'}
+                </h2>
               </div>
               {businessContextLoading ? (
                 <div className="grid gap-3 sm:grid-cols-3 animate-pulse">

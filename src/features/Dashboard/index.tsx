@@ -16,7 +16,10 @@ const Layout = () => {
     }, [pathname]);
     
     const isVentureDetail = /^\/ventures\/[a-zA-Z0-9-]+$/.test(pathname);
-    const isVentureSubpage = /^\/ventures\/[a-zA-Z0-9-]+\/(roadmap|budget|business-plan)$/.test(pathname);
+    const isVentureSubpage =
+        /^\/ventures\/[a-zA-Z0-9-]+\/(roadmap|budget|business-plan|implementation-transition)$/.test(
+            pathname,
+        );
     const shouldHideHeader = isVentureDetail || isVentureSubpage;
 
     return (
