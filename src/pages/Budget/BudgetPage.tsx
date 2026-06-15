@@ -448,7 +448,7 @@ const BudgetPage: React.FC = () => {
                   ) : (
                     <Save className="h-3.5 w-3.5 shrink-0" />
                   )}
-                  <span className="truncate">{saving ? 'Saving…' : 'Save setup'}</span>
+                  <span className="truncate">{saving ? 'Saving…' : 'Save Inputs'}</span>
                 </Button>
               </div>
               <BudgetContinueToRoadmapCta
@@ -479,7 +479,7 @@ const BudgetPage: React.FC = () => {
                   className="flex items-center gap-2"
                 >
                   {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  {saving ? 'Saving...' : 'Complete Budget Setup'}
+                  {saving ? 'Saving...' : 'Save Inputs'}
                 </Button>
                 <BudgetContinueToRoadmapCta
                   variant="header"

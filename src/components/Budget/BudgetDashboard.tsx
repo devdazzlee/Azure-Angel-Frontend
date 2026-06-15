@@ -67,6 +67,8 @@ import { toast } from 'react-toastify';
 import BudgetChatModal from './BudgetChatModal';
 import AddLineItemModal from './AddLineItemModal'; 
 import RemoveItemModal from './RemoveItemModal'; 
+import MonthlyOperatingCostsChart from './MonthlyOperatingCostsChart';
+import { buildOperatingExpenseChartData } from '@/utils/budgetChartData';
 // Types
 type RevenueStream = {
   id: string;
@@ -693,13 +695,10 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       .filter((d) => Number.isFinite(d.value) && d.value > 0);
   }, [startupCostItems, getMonthlyValue]);
 
-  const monthlyChartData = useMemo(() => {
-    const entries = [
-      { name: 'Operating', value: operatingExpenseItems.reduce((sum, item) => sum + getMonthlyValue(item), 0) },
-    ];
-
-    return entries.filter((d) => Number.isFinite(d.value) && d.value > 0);
-  }, [operatingExpenseItems, getMonthlyValue]);
+  const monthlyChartData = useMemo(
+    () => buildOperatingExpenseChartData(operatingExpenseItems, getMonthlyValue),
+    [operatingExpenseItems, getMonthlyValue],
+  );
 
   const allBudgetItems = useMemo(() => {
     const itemsMap = new Map<string, BudgetItem>();
@@ -1375,27 +1374,8 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
             <BarChart3 className="w-5 h-5 text-blue-600" />
             <h3 className="font-bold text-gray-900">Monthly Costs Distribution</h3>
           </div>
-          <div className="p-6">
-            {monthlyChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={monthlyChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#9ca3af" />
-                  <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" tickFormatter={(v) => `${currency}${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip
-                    formatter={(value: any) => formatCurrency(Number(value), currency)}
-                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}
-                  />
-                  <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                    {monthlyChartData.map((_entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS.chart.monthly[index % COLORS.chart.monthly.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-56 text-gray-400 text-sm">No monthly cost data available</div>
-            )}
+          <div className="px-4 py-4 sm:px-5 sm:py-4">
+            <MonthlyOperatingCostsChart data={monthlyChartData} currency={currency} />
           </div>
         </div>
       </motion.div>

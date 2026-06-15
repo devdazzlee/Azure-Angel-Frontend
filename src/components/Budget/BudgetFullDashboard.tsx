@@ -30,6 +30,7 @@ import { BreakEvenAnalysis } from './BreakEvenAnalysis';
 import { toast } from 'react-toastify';
 import { budgetService } from '@/services/budgetService';
 import BudgetCharts from './BudgetCharts';
+import { buildOperatingExpenseChartData } from '@/utils/budgetChartData';
 import StartupCostsTable from './StartupCostsTable';
 import OperatingExpensesTable from './OperatingExpensesTable';
 import RevenueTable from './RevenueTable';
@@ -209,22 +210,10 @@ export const BudgetFullDashboard: React.FC<BudgetFullDashboardProps> = ({
   }, [startupCostItems, showActuals]);
 
   const monthlyChartData = React.useMemo(() => {
-    const data: { name: string; value: number }[] = [];
-    
-    const categories = [
-      { name: 'Operating', items: operatingExpenseItems },
-    ];
+    const resolveAmount = (item: (typeof operatingExpenseItems)[number]) =>
+      showActuals ? Number(item.actual_amount || 0) : Number(item.estimated_amount || 0);
 
-    categories.forEach(cat => {
-      const total = cat.items.reduce((sum, item) => 
-        sum + (showActuals ? (item.actual_amount || 0) : (item.estimated_amount || 0)), 0
-      );
-      if (total > 0) {
-        data.push({ name: cat.name, value: total });
-      }
-    });
-
-    return data;
+    return buildOperatingExpenseChartData(operatingExpenseItems, resolveAmount);
   }, [operatingExpenseItems, showActuals]);
 
   // Scroll to section

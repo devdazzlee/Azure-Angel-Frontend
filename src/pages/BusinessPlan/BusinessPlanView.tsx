@@ -642,35 +642,46 @@ const BusinessPlanView: React.FC = () => {
           </div>
 
           {showBudgetForwardNav && (
-            <div className="flex flex-col-reverse gap-2 border-b border-gray-100 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-end sm:gap-3 sm:px-6 print:hidden">
-              <button
-                type="button"
-                onClick={() => setShowModificationModal(true)}
-                disabled={actionLoading}
-                className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 bg-white px-5 text-sm font-medium text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label="Modify Plan"
-              >
-                Modify Plan
-              </button>
-              <button
-                type="button"
-                onClick={handleProceedToBudget}
-                disabled={actionLoading}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-teal-600 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label="Next: Budgeting"
-              >
-                {actionLoading ? (
-                  <svg className="h-4 w-4 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                ) : (
-                  <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
-                )}
-                Next: Budgeting
-              </button>
+            <div className="border-b border-teal-100 bg-gradient-to-r from-teal-50/90 via-white to-slate-50 px-4 py-4 sm:px-6 print:hidden">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 sm:max-w-md">
+                  <p className="text-sm font-semibold text-slate-900">What&apos;s next?</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                    When your plan looks good, continue to budgeting. Need changes? Pick the sections to revise.
+                  </p>
+                </div>
+
+                <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row sm:items-stretch sm:gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowModificationModal(true)}
+                    disabled={actionLoading}
+                    className="inline-flex h-11 min-w-[9.5rem] flex-1 items-center justify-center rounded-lg border border-slate-300 bg-white px-5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+                    aria-label="Modify Plan"
+                  >
+                    Modify Plan
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleProceedToBudget}
+                    disabled={actionLoading}
+                    className="inline-flex h-11 min-w-[9.5rem] flex-1 items-center justify-center gap-2 rounded-lg bg-teal-600 px-5 text-sm font-semibold text-white shadow-md transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+                    aria-label="Next: Budgeting"
+                  >
+                    {actionLoading ? (
+                      <svg className="h-4 w-4 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                    ) : (
+                      <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                      </svg>
+                    )}
+                    Next: Budgeting
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

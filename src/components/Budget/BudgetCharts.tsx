@@ -1,8 +1,10 @@
 import React from 'react';
-import { TrendingDown } from 'lucide-react';
+import { TrendingDown, BarChart3 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import BudgetPieChart from './BudgetPieChart';
+import MonthlyOperatingCostsChart from './MonthlyOperatingCostsChart';
 import type { BudgetCategory } from '@/types/apiTypes';
+import type { BudgetChartPoint } from '@/utils/budgetChartData';
 
 interface ChartData {
   name: string;
@@ -12,18 +14,17 @@ interface ChartData {
 
 interface BudgetChartsProps {
   startupChartData: ChartData[];
-  monthlyChartData: ChartData[];
+  monthlyChartData: ChartData[] | BudgetChartPoint[];
   currency: string;
 }
 
-// Transform ChartData to BudgetCategory
 const transformToBudgetCategory = (chartData: ChartData[]): BudgetCategory[] => {
-  return chartData.map(item => ({
+  return chartData.map((item) => ({
     name: item.name,
     estimated_total: item.value,
-    actual_total: 0, // ChartData doesn't have actual values
-    items: [], // ChartData doesn't have item details
-    color: item.color || '#3b82f6' // Default color if not provided
+    actual_total: 0,
+    items: [],
+    color: item.color || '#3b82f6',
   }));
 };
 
@@ -33,11 +34,11 @@ export const BudgetCharts: React.FC<BudgetChartsProps> = ({
   currency,
 }) => {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-      <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
+    <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-2">
+      <Card className="shadow-lg transition-shadow duration-300 hover:shadow-xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <TrendingDown className="w-5 h-5 text-red-500" />
+            <TrendingDown className="h-5 w-5 text-red-500" />
             Startup Costs Breakdown
           </CardTitle>
         </CardHeader>
@@ -50,29 +51,24 @@ export const BudgetCharts: React.FC<BudgetChartsProps> = ({
               showLegend={true}
             />
           ) : (
-            <p className="text-center text-gray-500 py-10">No startup costs to display.</p>
+            <p className="py-10 text-center text-gray-500">No startup costs to display.</p>
           )}
         </CardContent>
       </Card>
 
-      <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
+      <Card className="shadow-lg transition-shadow duration-300 hover:shadow-xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <TrendingDown className="w-5 h-5 text-red-500" />
-            Monthly Costs Breakdown
+            <BarChart3 className="h-5 w-5 text-blue-600" />
+            Monthly Costs Distribution
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          {monthlyChartData.length > 0 ? (
-            <BudgetPieChart
-              data={transformToBudgetCategory(monthlyChartData)}
-              currency={currency}
-              height={300}
-              showLegend={true}
-            />
-          ) : (
-            <p className="text-center text-gray-500 py-10">No monthly costs to display.</p>
-          )}
+        <CardContent className="px-4 py-4">
+          <MonthlyOperatingCostsChart
+            data={monthlyChartData}
+            currency={currency}
+            emptyMessage="No monthly operating expenses to display."
+          />
         </CardContent>
       </Card>
     </div>
