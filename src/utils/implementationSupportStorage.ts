@@ -4,6 +4,7 @@ export interface PersistedAngelMessage {
   content: string;
   timestamp: string;
   mode?: 'help' | 'draft' | 'brainstorm';
+  task_id?: string | null;
 }
 
 export interface PersistedResearchState {
@@ -12,13 +13,16 @@ export interface PersistedResearchState {
   selectedTopic: string | null;
 }
 
-const chatKey = (sessionId: string) => `angel:implementation:chat:${sessionId}`;
+const legacyChatKey = (sessionId: string) => `angel:implementation:chat:${sessionId}`;
 const researchKey = (sessionId: string) => `angel:implementation:research:${sessionId}`;
 
-export function loadImplementationChat(sessionId: string): PersistedAngelMessage[] {
+/** @deprecated Implementation chat is stored in Supabase. Used only for one-time migration. */
+export function loadLegacyImplementationChatFromLocalStorage(
+  sessionId: string,
+): PersistedAngelMessage[] {
   if (!sessionId || typeof window === 'undefined') return [];
   try {
-    const raw = window.localStorage.getItem(chatKey(sessionId));
+    const raw = window.localStorage.getItem(legacyChatKey(sessionId));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
@@ -27,20 +31,13 @@ export function loadImplementationChat(sessionId: string): PersistedAngelMessage
   }
 }
 
-export function saveImplementationChat(
-  sessionId: string,
-  messages: PersistedAngelMessage[],
-): void {
+/** Remove legacy browser chat after successful DB migration. */
+export function clearLegacyImplementationChatFromLocalStorage(sessionId: string): void {
   if (!sessionId || typeof window === 'undefined') return;
   try {
-    const key = chatKey(sessionId);
-    if (messages.length === 0) {
-      window.localStorage.removeItem(key);
-      return;
-    }
-    window.localStorage.setItem(key, JSON.stringify(messages));
+    window.localStorage.removeItem(legacyChatKey(sessionId));
   } catch {
-    /* private mode / quota */
+    /* ignore */
   }
 }
 

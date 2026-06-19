@@ -12,6 +12,7 @@ import {
   FileText,
   Upload,
   X,
+  ExternalLink,
   Target,
   TrendingUp,
   Shield,
@@ -19,10 +20,22 @@ import {
   Settings,
   Megaphone,
   ChevronRight,
+  ChevronDown,
   Circle
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import httpClient from '../api/httpClient';
+import { cn } from '@/lib/utils';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  fetchImplementationTaskDocuments,
+  refreshImplementationDocumentViewUrl,
+  type ImplementationTaskDocument,
+} from '../services/implementationDocumentsService';
 import {
   Select,
   SelectContent,
@@ -85,7 +98,11 @@ interface TaskCardProps {
   onComplete: (result?: TaskCompletionResult) => void;
   onGetServiceProviders: () => void;
   onGetHelp: () => void;
-  onUploadDocument: (file: File) => Promise<{ filename: string; file_id: string }>;
+  onUploadDocument: (file: File) => Promise<{
+    filename: string;
+    file_id: string;
+    view_url?: string | null;
+  }>;
   sessionId?: string;
   helpContent?: string;
   helpLoading?: boolean;
@@ -110,6 +127,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const [completionNotes, setCompletionNotes] = useState<string>('');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadedFileId, setUploadedFileId] = useState<string | null>(null);
+  const [uploadedViewUrl, setUploadedViewUrl] = useState<string | null>(null);
+  const [existingDocuments, setExistingDocuments] = useState<ImplementationTaskDocument[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+  const [documentsPickerOpen, setDocumentsPickerOpen] = useState(false);
+  const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -134,9 +157,81 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     setFocusedSubstepNumber(null);
     setUploadedFile(null);
     setUploadedFileId(null);
+    setUploadedViewUrl(null);
     setUploadState('idle');
     setUploadError(null);
-  }, [task.id]);
+    setSelectedDocumentId(null);
+    setDocumentsPickerOpen(false);
+    void loadExistingDocuments();
+  }, [task.id, sessionId]);
+
+  useEffect(() => {
+    if (existingDocuments.length === 0) {
+      setSelectedDocumentId(null);
+      return;
+    }
+    setSelectedDocumentId((current) =>
+      current && existingDocuments.some((doc) => doc.file_id === current)
+        ? current
+        : existingDocuments[0].file_id,
+    );
+  }, [existingDocuments]);
+
+  const loadExistingDocuments = async () => {
+    if (!sessionId || !task.id) {
+      setExistingDocuments([]);
+      return;
+    }
+    setDocumentsLoading(true);
+    try {
+      const docs = await fetchImplementationTaskDocuments(sessionId, task.id);
+      setExistingDocuments(docs);
+    } catch (err) {
+      console.error('Failed to load task documents:', err);
+      setExistingDocuments([]);
+    } finally {
+      setDocumentsLoading(false);
+    }
+  };
+
+  const formatDocumentDate = (value?: string) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const formatFileSize = (bytes?: number) => {
+    if (bytes == null || Number.isNaN(bytes)) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const openDocument = async (doc: ImplementationTaskDocument) => {
+    if (!sessionId || !task.id) return;
+    setOpeningDocumentId(doc.file_id);
+    try {
+      let url = doc.view_url;
+      if (!url) {
+        url = await refreshImplementationDocumentViewUrl(sessionId, task.id, doc.file_id);
+      }
+      if (!url) {
+        toast.error('Could not open this document. Please try again.');
+        return;
+      }
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      console.error('Failed to open document:', err);
+      toast.error('Could not open this document.');
+    } finally {
+      setOpeningDocumentId(null);
+    }
+  };
 
   const resolveActiveSubstepIndex = (): number => {
     if (!task.substeps?.length) return 0;
@@ -202,7 +297,18 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       const result = await onUploadDocument(file);
       setUploadedFile(file);
       setUploadedFileId(result.file_id);
+      setUploadedViewUrl(result.view_url ?? null);
       setUploadState('success');
+      setExistingDocuments((prev) => {
+        const nextDoc: ImplementationTaskDocument = {
+          file_id: result.file_id,
+          original_filename: result.filename,
+          view_url: result.view_url,
+          uploaded_at: new Date().toISOString(),
+        };
+        return [nextDoc, ...prev.filter((d) => d.file_id !== result.file_id)];
+      });
+      setSelectedDocumentId(result.file_id);
     } catch (err: unknown) {
       setUploadedFile(null);
       setUploadedFileId(null);
@@ -216,9 +322,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     }
   };
 
+  const openFilePicker = () => {
+    if (uploadState !== 'uploading' && uploadState !== 'success' && fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
   const clearUploadedFile = () => {
     setUploadedFile(null);
     setUploadedFileId(null);
+    setUploadedViewUrl(null);
     setUploadState('idle');
     setUploadError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -395,6 +508,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         return <Target className="h-5 w-5 text-gray-600" />;
     }
   };
+
+  const selectedDocument = existingDocuments.find((doc) => doc.file_id === selectedDocumentId);
+  const selectedDocumentMeta = selectedDocument
+    ? [formatDocumentDate(selectedDocument.uploaded_at), formatFileSize(selectedDocument.size_bytes)]
+        .filter(Boolean)
+        .join(' · ')
+    : '';
 
   return (
     <div className="relative w-full bg-white rounded-lg shadow-sm border border-gray-200">
@@ -750,13 +870,184 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             Upload documentation
             <span className="ml-1 font-normal text-gray-500">(optional)</span>
           </label>
+
+          {(documentsLoading || existingDocuments.length > 0) && (
+            <div className="mb-3 rounded-xl border border-gray-200 bg-gray-50/60 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Previously uploaded
+                </p>
+                {!documentsLoading && existingDocuments.length > 0 && (
+                  <span className="text-xs text-gray-400">
+                    {existingDocuments.length}{' '}
+                    {existingDocuments.length === 1 ? 'file' : 'files'}
+                  </span>
+                )}
+              </div>
+              {documentsLoading ? (
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  Loading documents…
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Popover open={documentsPickerOpen} onOpenChange={setDocumentsPickerOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex min-h-[3.25rem] min-w-0 flex-1 items-center gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-left shadow-sm transition-colors hover:border-gray-300 hover:bg-gray-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30"
+                        aria-label="Select uploaded document"
+                        aria-expanded={documentsPickerOpen}
+                      >
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-teal-600">
+                          <FileText className="h-4 w-4" aria-hidden />
+                        </span>
+                        <span className="min-w-0 flex-1 py-0.5">
+                          {selectedDocument ? (
+                            <>
+                              <span className="block truncate text-sm font-medium leading-snug text-gray-900">
+                                {selectedDocument.original_filename}
+                              </span>
+                              {selectedDocumentMeta ? (
+                                <span className="mt-1 block text-xs leading-relaxed text-gray-500">
+                                  {selectedDocumentMeta}
+                                </span>
+                              ) : null}
+                            </>
+                          ) : (
+                            <span className="block text-sm leading-snug text-gray-500">
+                              Choose a document…
+                            </span>
+                          )}
+                        </span>
+                        <ChevronDown
+                          className={cn(
+                            'h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200',
+                            documentsPickerOpen && 'rotate-180',
+                          )}
+                          aria-hidden
+                        />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      align="start"
+                      side="bottom"
+                      sideOffset={6}
+                      collisionPadding={12}
+                      className="z-[100] w-[var(--radix-popover-trigger-width)] overflow-hidden border border-gray-200 bg-white p-0 shadow-lg"
+                    >
+                      <div
+                        className="max-h-[min(16rem,var(--radix-popover-content-available-height,16rem))] overflow-y-auto overscroll-y-contain bg-white p-1.5 [-webkit-overflow-scrolling:touch]"
+                        onWheel={(event) => event.stopPropagation()}
+                      >
+                        <ul role="listbox" aria-label="Uploaded documents">
+                          {existingDocuments.map((doc) => {
+                            const meta = [
+                              formatDocumentDate(doc.uploaded_at),
+                              formatFileSize(doc.size_bytes),
+                            ]
+                              .filter(Boolean)
+                              .join(' · ');
+                            const isSelected = doc.file_id === selectedDocumentId;
+
+                            return (
+                              <li key={doc.file_id}>
+                                <button
+                                  type="button"
+                                  role="option"
+                                  aria-selected={isSelected}
+                                  onClick={() => {
+                                    setSelectedDocumentId(doc.file_id);
+                                    setDocumentsPickerOpen(false);
+                                  }}
+                                  className={cn(
+                                    'flex w-full items-start gap-3 rounded-md px-3 py-2.5 text-left transition-colors',
+                                    isSelected
+                                      ? 'bg-teal-50 ring-1 ring-inset ring-teal-200'
+                                      : 'hover:bg-gray-50',
+                                  )}
+                                >
+                                  <FileText
+                                    className="mt-0.5 h-4 w-4 shrink-0 text-teal-600"
+                                    aria-hidden
+                                  />
+                                  <span className="min-w-0 flex-1 py-0.5">
+                                    <span className="block truncate text-sm font-medium leading-snug text-gray-900">
+                                      {doc.original_filename}
+                                    </span>
+                                    {meta ? (
+                                      <span className="mt-1 block text-xs leading-relaxed text-gray-500">
+                                        {meta}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                  {isSelected ? (
+                                    <CheckCircle
+                                      className="mt-0.5 h-4 w-4 shrink-0 text-teal-600"
+                                      aria-hidden
+                                    />
+                                  ) : (
+                                    <span className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                                  )}
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedDocument) void openDocument(selectedDocument);
+                    }}
+                    disabled={
+                      !selectedDocumentId ||
+                      openingDocumentId === selectedDocumentId
+                    }
+                    className="inline-flex min-h-[3.25rem] shrink-0 items-center gap-1.5 rounded-lg border border-teal-200 bg-white px-3.5 text-xs font-semibold text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {openingDocumentId === selectedDocumentId ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                    ) : (
+                      <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                    )}
+                    View
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           <div
+            role={uploadState !== 'uploading' && uploadState !== 'success' ? 'button' : undefined}
+            tabIndex={uploadState !== 'uploading' && uploadState !== 'success' ? 0 : undefined}
+            aria-label={
+              uploadState !== 'uploading' && uploadState !== 'success'
+                ? 'Attach proof of completion'
+                : undefined
+            }
+            onClick={uploadState !== 'uploading' && uploadState !== 'success' ? openFilePicker : undefined}
+            onKeyDown={(event) => {
+              if (uploadState === 'uploading' || uploadState === 'success') return;
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openFilePicker();
+              }
+            }}
             className={`rounded-xl border-2 border-dashed p-4 transition-colors ${
               uploadState === 'error'
                 ? 'border-red-300 bg-red-50/50'
                 : uploadState === 'success'
                   ? 'border-green-300 bg-green-50/40'
                   : 'border-gray-200 bg-gray-50/60 hover:border-blue-300 hover:bg-blue-50/30'
+            } ${
+              uploadState !== 'uploading' && uploadState !== 'success'
+                ? 'cursor-pointer'
+                : uploadState === 'uploading'
+                  ? 'cursor-not-allowed'
+                  : ''
             }`}
           >
             {uploadState === 'success' && uploadedFile ? (
@@ -768,6 +1059,18 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-gray-900">{uploadedFile.name}</p>
                     <p className="mt-0.5 text-xs text-green-700">Uploaded successfully</p>
+                    {uploadedViewUrl && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          window.open(uploadedViewUrl, '_blank', 'noopener,noreferrer')
+                        }
+                        className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-900"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                        View uploaded document
+                      </button>
+                    )}
                     <p className="mt-1 text-[11px] text-gray-500">
                       PDF, DOC, DOCX, JPG, or PNG · max 10 MB
                     </p>
@@ -801,14 +1104,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  disabled={uploadState === 'uploading'}
-                  onClick={() => fileInputRef.current?.click()}
-                  className="mt-3 inline-flex shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 shadow-sm transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60 sm:mt-0"
-                >
+                <span className="mt-3 inline-flex shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 shadow-sm sm:mt-0">
                   Choose file
-                </button>
+                </span>
               </div>
             )}
             <input

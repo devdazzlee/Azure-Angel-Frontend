@@ -29,12 +29,17 @@ import {
   resolveActiveSubstepNumber,
 } from '../utils/implementationTaskContext';
 import {
-  loadImplementationChat,
-  saveImplementationChat,
+  clearLegacyImplementationChatFromLocalStorage,
+  loadLegacyImplementationChatFromLocalStorage,
   loadImplementationResearch,
   saveImplementationResearch,
-  type PersistedAngelMessage,
 } from '../utils/implementationSupportStorage';
+import {
+  clearImplementationChat,
+  fetchImplementationChat,
+  importImplementationChatMessages,
+  sendImplementationChatMessage,
+} from '../services/implementationChatService';
 import {
   implementationCachePolicy,
   useGetServiceProvidersQuery,
@@ -107,6 +112,7 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  const [chatHistoryLoading, setChatHistoryLoading] = useState(false);
   const [chatMode, setChatMode] = useState<'help' | 'draft' | 'brainstorm'>('help');
   // True for the period between loading a saved conversation for the
   // current task and the user either resuming it or starting fresh. While
@@ -117,33 +123,60 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
 
   const chatBoxRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const chatHydratedRef = useRef(false);
 
-  // Angel chat persists for the whole implementation venture (session), not
-  // just the current task or panel interaction. Task context is injected on
-  // each API call so answers stay step-aware while history carries forward.
+  const mapPersistedToMessage = (m: {
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: string;
+    mode?: 'help' | 'draft' | 'brainstorm';
+  }): Message => ({
+    ...m,
+    timestamp: new Date(m.timestamp),
+  });
+
+  // Angel chat persists per venture in Supabase (not localStorage).
   useEffect(() => {
     if (!sessionId) return;
-    const restored = loadImplementationChat(sessionId).map((m) => ({
-      ...m,
-      timestamp: new Date(m.timestamp),
-    }));
-    setMessages(restored);
-    setHasRestoredHistory(restored.length > 0);
-    chatHydratedRef.current = true;
-  }, [sessionId]);
 
-  useEffect(() => {
-    if (!sessionId || !chatHydratedRef.current) return;
-    const serializable: PersistedAngelMessage[] = messages.map((m) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content,
-      mode: m.mode,
-      timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : String(m.timestamp),
-    }));
-    saveImplementationChat(sessionId, serializable);
-  }, [messages, sessionId]);
+    let cancelled = false;
+    (async () => {
+      setChatHistoryLoading(true);
+      try {
+        let restored = await fetchImplementationChat(sessionId);
+
+        if (restored.length === 0) {
+          const legacy = loadLegacyImplementationChatFromLocalStorage(sessionId);
+          if (legacy.length > 0) {
+            const imported = await importImplementationChatMessages(sessionId, legacy);
+            if (imported > 0) {
+              restored = await fetchImplementationChat(sessionId);
+              clearLegacyImplementationChatFromLocalStorage(sessionId);
+            }
+          }
+        }
+
+        if (cancelled) return;
+        setMessages(restored.map(mapPersistedToMessage));
+        setHasRestoredHistory(restored.length > 0);
+      } catch (error) {
+        console.error('Failed to load implementation chat:', error);
+        if (!cancelled) {
+          toast.error('Could not load saved Angel chat. You can still start a new conversation.');
+          setMessages([]);
+          setHasRestoredHistory(false);
+        }
+      } finally {
+        if (!cancelled) {
+          setChatHistoryLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -278,63 +311,68 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
 
   const handleSendMessage = async (overrideContent?: string, modeOverride?: 'help' | 'draft' | 'brainstorm') => {
     const content = (overrideContent ?? chatInput).trim();
-    if (!content) return;
+    if (!content || chatLoading || chatHistoryLoading) return;
     const mode = modeOverride ?? chatMode;
 
+    const optimisticUserId = `temp-user-${Date.now()}`;
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: optimisticUserId,
       role: 'user',
       content,
-      timestamp: new Date()
+      timestamp: new Date(),
+      mode,
     };
 
-    // The conversation_history payload below needs to include the *current*
-    // user message *and* any prior turns, so capture the snapshot before
-    // appending instead of re-reading state (which is async and would
-    // miss this turn for the very first prompt).
-    const priorMessages = messages;
     setMessages(prev => [...prev, userMessage]);
     setChatInput('');
     setChatLoading(true);
-    // Once the user starts typing into a restored conversation, the
-    // "Continue / Start fresh" banner is no longer relevant — they've
-    // already chosen to continue.
     setHasRestoredHistory(false);
 
     try {
-      const token = localStorage.getItem('sb_access_token');
-      const response = await httpClient.post('/implementation/chat-with-angel', {
-        session_id: sessionId,
-        message: content,
-        mode,
-        business_context: businessContext,
-        task_context: buildTaskContext(),
-        conversation_history: priorMessages.slice(-10) // Last 10 messages for context
-      }, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if ((response.data as any)?.success) {
-        const assistantMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: (response.data as any).result?.response || 'No response received',
-          timestamp: new Date(),
+      const { assistantText, userMessage: savedUser, assistantMessage: savedAssistant } =
+        await sendImplementationChatMessage({
+          sessionId,
+          message: content,
           mode,
-        };
-        setMessages(prev => [...prev, assistantMessage]);
-      }
+          businessContext: businessContext as Record<string, unknown>,
+          taskContext: buildTaskContext(),
+          taskId: currentTask?.id,
+        });
+
+      setMessages(prev => {
+        const withoutOptimistic = prev.filter((m) => m.id !== optimisticUserId);
+        const next = [...withoutOptimistic];
+        if (savedUser) {
+          next.push(mapPersistedToMessage(savedUser));
+        } else {
+          next.push(userMessage);
+        }
+        if (savedAssistant) {
+          next.push(mapPersistedToMessage(savedAssistant));
+        } else {
+          next.push({
+            id: `temp-assistant-${Date.now()}`,
+            role: 'assistant',
+            content: assistantText,
+            timestamp: new Date(),
+            mode,
+          });
+        }
+        return next;
+      });
     } catch (error: any) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message');
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
-        timestamp: new Date(),
-        mode,
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages(prev => [
+        ...prev.filter((m) => m.id !== optimisticUserId),
+        {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: 'Sorry, I encountered an error. Please try again.',
+          timestamp: new Date(),
+          mode,
+        },
+      ]);
     } finally {
       setChatLoading(false);
     }
@@ -714,21 +752,21 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
                 <button
                   onClick={() => handleAngelHelpClick('Help me better understand this step', 'help')}
                   className="w-full text-left p-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs transition-colors border border-blue-200"
-                  disabled={chatLoading}
+                  disabled={chatLoading || chatHistoryLoading}
                 >
                   💬 Help me better understand this step
                 </button>
                 <button
                   onClick={() => handleAngelHelpClick('Draft the required document for this step', 'draft')}
                   className="w-full text-left p-2 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg text-xs transition-colors border border-green-200"
-                  disabled={chatLoading}
+                  disabled={chatLoading || chatHistoryLoading}
                 >
                   ✍️ Draft the required document for this step
                 </button>
                 <button
                   onClick={() => handleAngelHelpClick('Brainstorm ideas for me to consider', 'brainstorm')}
                   className="w-full text-left p-2 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-lg text-xs transition-colors border border-orange-200"
-                  disabled={chatLoading}
+                  disabled={chatLoading || chatHistoryLoading}
                 >
                   💭 Brainstorm ideas for me to consider
                 </button>
@@ -743,7 +781,7 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
             {hasRestoredHistory && messages.length > 0 && (
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2">
                 <span className="text-xs text-teal-900">
-                  Your Angel conversation is saved for this venture across tasks and refreshes
+                  Your Angel conversation is saved to your venture and syncs across devices
                   ({messages.length} message{messages.length === 1 ? '' : 's'}).
                 </span>
                 <div className="flex items-center gap-2">
@@ -756,10 +794,16 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      setMessages([]);
-                      setHasRestoredHistory(false);
-                      saveImplementationChat(sessionId, []);
+                    onClick={async () => {
+                      try {
+                        await clearImplementationChat(sessionId);
+                        clearLegacyImplementationChatFromLocalStorage(sessionId);
+                        setMessages([]);
+                        setHasRestoredHistory(false);
+                      } catch (error) {
+                        console.error('Failed to clear implementation chat:', error);
+                        toast.error('Could not clear chat. Please try again.');
+                      }
                     }}
                     className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded px-2.5 py-1 transition-colors"
                   >
@@ -775,7 +819,12 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
               className="flex-1 overflow-y-auto bg-gray-50 rounded-lg p-2 sm:p-3 border border-gray-200 space-y-2 sm:space-y-3"
               style={{ maxHeight: '400px', minHeight: '150px' }}
             >
-              {messages.length === 0 ? (
+              {chatHistoryLoading ? (
+                <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500">
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  Loading your saved conversation…
+                </div>
+              ) : messages.length === 0 ? (
                 <p className="text-sm text-gray-500 text-center py-4">
                   Start a conversation with Angel...
                 </p>
@@ -877,11 +926,11 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
                 }
                 className="flex-1 p-2 border border-gray-300 rounded-lg text-sm resize-none"
                 rows={2}
-                disabled={chatLoading}
+                disabled={chatLoading || chatHistoryLoading}
               />
               <button
                 onClick={() => handleSendMessage()}
-                disabled={chatLoading || !chatInput.trim()}
+                disabled={chatLoading || chatHistoryLoading || !chatInput.trim()}
                 className="px-2 sm:px-3 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
               >
                 <Send className="h-4 w-4" />

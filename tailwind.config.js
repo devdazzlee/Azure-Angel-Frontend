@@ -18,6 +18,10 @@ module.exports = {
         },
         border: 'hsl(var(--border))',
         ring: 'hsl(var(--ring))',
+        popover: {
+          DEFAULT: 'hsl(var(--popover))',
+          foreground: 'hsl(var(--popover-foreground))',
+        },
       },
       animation: {
         'shimmer': 'shimmer 2s infinite',

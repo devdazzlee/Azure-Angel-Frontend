@@ -12,6 +12,7 @@ import ImplementationRoadmapNavigator from '../../components/ImplementationRoadm
 import ImplementationCompletionModal from '../../components/ImplementationCompletionModal';
 import type { ImplementationCatalogPhase } from '../../types/implementationNavigation';
 import httpClient from '../../api/httpClient';
+import { uploadImplementationTaskDocument } from '../../services/implementationDocumentsService';
 import { useBusinessContext } from '../../hooks/useBusinessContext';
 import { useAppDispatch } from '../../store';
 import {
@@ -705,32 +706,26 @@ const Implementation: React.FC<ImplementationProps> = ({
     }
   }, [pendingHelpModal, helpContent]);
 
-  const handleUploadDocument = async (file: File): Promise<{ filename: string; file_id: string }> => {
+  const handleUploadDocument = async (file: File): Promise<{
+    filename: string;
+    file_id: string;
+    view_url?: string | null;
+  }> => {
     if (!activeSupportTask) {
       throw new Error('No active task selected');
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const { data } = await httpClient.post<{
-      success: boolean;
-      message?: string;
-      filename?: string;
-      file_id?: string;
-    }>(
-      `/implementation/sessions/${sessionId}/tasks/${activeSupportTask.id}/upload-document`,
-      formData,
+    const document = await uploadImplementationTaskDocument(
+      sessionId!,
+      activeSupportTask.id,
+      file,
     );
-
-    if (!data.success || !data.file_id) {
-      throw new Error(data.message || 'Failed to upload document');
-    }
 
     toast.success('Document uploaded successfully');
     return {
-      filename: data.filename || file.name,
-      file_id: data.file_id,
+      filename: document.original_filename || file.name,
+      file_id: document.file_id,
+      view_url: document.view_url,
     };
   };
 
