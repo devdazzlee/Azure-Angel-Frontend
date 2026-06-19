@@ -357,7 +357,6 @@ const RoadmapPage: React.FC = () => {
                     );
 
                     if (data.success) {
-                      toast.success("Implementation transition prepared!");
                       navigate(`/ventures/${sessionId}/implementation-transition`);
                     } else {
                       if (data.requires_subscription) {

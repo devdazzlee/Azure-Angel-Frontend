@@ -74,7 +74,6 @@ const RoadmapToImplementationPage: React.FC = () => {
       }>(`/angel/sessions/${sessionId}/start-implementation`, {});
 
       if (data.success) {
-        toast.success('Implementation phase activated!');
         navigate(`/ventures/${sessionId}`, { replace: true });
       } else if (data.requires_subscription) {
         toast.error(data.message || 'Subscription required to proceed to Implementation');

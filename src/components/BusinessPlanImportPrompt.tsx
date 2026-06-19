@@ -1,5 +1,13 @@
 import React from "react";
 import { motion } from "framer-motion";
+import {
+  ClipboardPaste,
+  FileText,
+  FileUp,
+  Search,
+  Shield,
+  Sparkles,
+} from "lucide-react";
 
 interface BusinessPlanImportPromptProps {
   onUpload: () => void;
@@ -27,7 +35,8 @@ const BusinessPlanImportPrompt: React.FC<BusinessPlanImportPromptProps> = ({
           <div className="flex flex-col gap-8 p-8 md:p-12">
             <div>
               <span className="inline-flex items-center gap-2 rounded-full bg-indigo-100/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-indigo-600">
-                📄 Already prepared?
+                <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                Already prepared?
               </span>
               <h2 className="mt-4 text-3xl font-black leading-snug text-slate-900 md:text-4xl">
                 Upload or paste your business plan before the Business Planning phase begins.
@@ -40,17 +49,17 @@ const BusinessPlanImportPrompt: React.FC<BusinessPlanImportPromptProps> = ({
             <div className="space-y-3 text-sm text-slate-600">
               {[
                 {
-                  icon: "🔍",
+                  Icon: Search,
                   title: "Intelligent extraction",
                   description: "Angel maps your existing content to each Business Plan section automatically.",
                 },
                 {
-                  icon: "⚡",
+                  Icon: Sparkles,
                   title: "Skip retyping",
                   description: "We’ll only ask you about gaps—no duplicate data entry or repetitive answers.",
                 },
                 {
-                  icon: "🛡️",
+                  Icon: Shield,
                   title: "Secure handling",
                   description: "Your upload is processed instantly and used solely to prepare your personalized roadmap.",
                 },
@@ -59,8 +68,8 @@ const BusinessPlanImportPrompt: React.FC<BusinessPlanImportPromptProps> = ({
                   key={item.title}
                   className="flex items-start gap-4 rounded-2xl border border-indigo-100 bg-white/70 p-4 shadow-sm transition-all duration-300 hover:border-indigo-200 hover:shadow-md"
                 >
-                  <span className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/10 text-lg text-indigo-600">
-                    {item.icon}
+                  <span className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600">
+                    <item.Icon className="h-4 w-4 shrink-0" aria-hidden />
                   </span>
                   <div>
                     <p className="text-base font-semibold text-slate-900">{item.title}</p>
@@ -75,14 +84,14 @@ const BusinessPlanImportPrompt: React.FC<BusinessPlanImportPromptProps> = ({
                 onClick={onUpload}
                 className="group inline-flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-7 py-4 text-base font-semibold text-white shadow-lg transition-all duration-300 hover:scale-[1.02] hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-indigo-300"
               >
-                <span className="text-xl">⬆️</span>
+                <FileUp className="h-5 w-5 shrink-0" aria-hidden />
                 Upload document
               </button>
               <button
                 onClick={onPaste}
                 className="inline-flex items-center justify-center gap-3 rounded-2xl border border-indigo-200 bg-white/80 px-7 py-4 text-base font-semibold text-indigo-600 shadow-sm transition-all hover:border-indigo-300 hover:text-indigo-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-200"
               >
-                <span className="text-xl">📋</span>
+                <ClipboardPaste className="h-5 w-5 shrink-0" aria-hidden />
                 Paste plan text
               </button>
               <button
@@ -116,13 +125,13 @@ const BusinessPlanImportPrompt: React.FC<BusinessPlanImportPromptProps> = ({
               </p>
               <div className="mt-4 flex flex-wrap items-center gap-3 text-sm font-medium text-white">
                 <span className="inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1">
-                  <span className="text-base">📄</span> PDF
+                  <FileText className="h-4 w-4 shrink-0" aria-hidden /> PDF
                 </span>
                 <span className="inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1">
-                  <span className="text-base">📝</span> Word
+                  <FileText className="h-4 w-4 shrink-0" aria-hidden /> Word
                 </span>
                 <span className="inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1">
-                  <span className="text-base">📃</span> Text
+                  <ClipboardPaste className="h-4 w-4 shrink-0" aria-hidden /> Text
                 </span>
               </div>
             </div>

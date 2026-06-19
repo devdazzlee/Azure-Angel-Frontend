@@ -103,6 +103,8 @@ interface BudgetDashboardProps {
   embeddedInSetup?: boolean;
   /** Embedded in Implementation (or similar): no extra page chrome / nested cards */
   embeddedInParent?: boolean;
+  /** Block edits while parent runs async work (e.g. budget → roadmap transition) */
+  interactionLocked?: boolean;
 };
 
 // Modern Color Palette — consistent teal / blue / emerald theme
@@ -134,6 +136,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   onRegisterExportActions,
   embeddedInSetup = false,
   embeddedInParent = false,
+  interactionLocked = false,
 }) => {
   const tableSectionClass = embeddedInParent
     ? 'rounded-xl border border-gray-200 bg-white overflow-hidden'
@@ -174,6 +177,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
 
   // Helper Functions
   const openAddLineItemModal = (category: 'startup_cost' | 'operating_expense' | 'revenue') => {
+    if (interactionLocked) return;
     setAddLineItemCategory(category);
     setIsAddLineItemModalOpen(true);
   };
@@ -184,6 +188,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   };
 
   const openRemoveModal = (itemId: string, itemName: string, isCustom: boolean = false) => {
+    if (interactionLocked) return;
     setRemoveModalState({
       isOpen: true,
       itemId,
@@ -354,10 +359,11 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   }, [sessionId, businessType, budget.items]);
 
   const handleRevenueStreamsChange = useCallback((updatedStreams: RevenueStream[]) => {
+    if (interactionLocked) return;
     setDynamicRevenueStreams(updatedStreams);
     // Save to DB (debounced to avoid hammering on every keystroke)
     saveRevenueStreamsDebounced(updatedStreams);
-  }, [saveRevenueStreamsDebounced]);
+  }, [interactionLocked, saveRevenueStreamsDebounced]);
 
   // Direct DB save for revenue streams (non-debounced, for add/remove)
   const saveRevenueStreamsDirect = useCallback(async (streams: RevenueStream[]) => {
@@ -816,6 +822,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   // debounces a full save to DB whenever handleUpdateBudget is called.
   // Revenue streams are saved separately via saveRevenueStreams API.
   const handleBudgetUpdate = useCallback((updates: Partial<Budget>) => {
+    if (interactionLocked) return;
     onUpdateBudget(updates);
 
     // If initial_investment changed, also persist it via a direct PATCH call
@@ -824,7 +831,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         (err) => console.error('Failed to save initial investment:', err)
       );
     }
-  }, [onUpdateBudget, sessionId]);
+  }, [interactionLocked, onUpdateBudget, sessionId]);
 
   // Add this function to BudgetDashboard
   const handleExportExcel = useCallback(async () => {
@@ -1369,6 +1376,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       {/* Header Section */}
       <BudgetDashboardHeader
         compact={embeddedInSetup || embeddedInParent}
+        disabled={interactionLocked}
         onChatWithAngel={() => setIsChatModalOpen(true)}
         onOpenExport={onRegisterExportActions ? undefined : () => setShowExportModal(true)}
       />
@@ -1387,12 +1395,17 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         {startupBudgetSummaryEl}
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => {
+            if (!interactionLocked) setActiveTab(value);
+          }}
+          className="w-full min-w-0"
+        >
           <div className="w-full min-w-0 overflow-hidden">
             <TabsList className="grid h-auto w-full max-w-full grid-cols-3 gap-1 overflow-hidden rounded-xl border border-gray-200/70 bg-gray-100/90 p-1 shadow-sm">
             <UITooltip>
               <TooltipTrigger asChild>
-                <span className="contents min-w-0">
                   <TabsTrigger
                     value="overview"
                     className="flex h-9 w-full min-w-0 flex-none items-center justify-center gap-1.5 rounded-lg border-0 px-2 text-xs font-medium text-gray-600 transition-colors hover:text-gray-900 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-600 data-[state=active]:to-cyan-600 data-[state=active]:!text-white data-[state=active]:shadow-none data-[state=active]:[&_svg]:text-white sm:px-3 sm:text-sm"
@@ -1400,13 +1413,11 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                     <PieChartIcon className="h-4 w-4 shrink-0" />
                     <span className="truncate">Overview</span>
                   </TabsTrigger>
-                </span>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Budget summary, charts, and break-even analysis at a glance</TooltipContent>
+              <TooltipContent side="bottom" sideOffset={6}>Budget summary, charts, and break-even analysis at a glance</TooltipContent>
             </UITooltip>
             <UITooltip>
               <TooltipTrigger asChild>
-                <span className="contents min-w-0">
                   <TabsTrigger
                     value="manage"
                     className="flex h-9 w-full min-w-0 flex-none items-center justify-center gap-1.5 rounded-lg border-0 px-2 text-xs font-medium text-gray-600 transition-colors hover:text-gray-900 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-600 data-[state=active]:to-cyan-600 data-[state=active]:!text-white data-[state=active]:shadow-none data-[state=active]:[&_svg]:text-white sm:px-3 sm:text-sm"
@@ -1414,13 +1425,11 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                     <Edit2 className="h-4 w-4 shrink-0" />
                     <span className="truncate">Manage Items</span>
                   </TabsTrigger>
-                </span>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Add, edit, and remove budget line items across all categories</TooltipContent>
+              <TooltipContent side="bottom" sideOffset={6}>Add, edit, and remove budget line items across all categories</TooltipContent>
             </UITooltip>
             <UITooltip>
               <TooltipTrigger asChild>
-                <span className="contents min-w-0">
                   <TabsTrigger
                     value="analysis"
                     className="flex h-9 w-full min-w-0 flex-none items-center justify-center gap-1.5 rounded-lg border-0 px-2 text-xs font-medium text-gray-600 transition-colors hover:text-gray-900 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-600 data-[state=active]:to-cyan-600 data-[state=active]:!text-white data-[state=active]:shadow-none data-[state=active]:[&_svg]:text-white sm:px-3 sm:text-sm"
@@ -1428,9 +1437,8 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                     <BarChart3 className="h-4 w-4 shrink-0" />
                     <span className="truncate">Analysis</span>
                   </TabsTrigger>
-                </span>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Break-even timeline, charts, and 2-year financial projections</TooltipContent>
+              <TooltipContent side="bottom" sideOffset={6}>Break-even timeline, charts, and 2-year financial projections</TooltipContent>
             </UITooltip>
           </TabsList>
           </div>

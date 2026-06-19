@@ -1504,14 +1504,12 @@ export default function ChatPage() {
   const handleStartImplementation = async () => {
     try {
       setLoading(true);
-      toast.info("Preparing implementation transition...");
       
       const { data } = await httpClient.post<any>(
         `/angel/sessions/${sessionId}/roadmap-to-implementation-transition`
       );
       
       if (data.success) {
-        toast.success("Implementation transition prepared!");
         setRoadmapData(null);
         if (data.result?.progress) {
           applyProgressUpdate(data.result.progress);
@@ -4070,7 +4068,6 @@ export default function ChatPage() {
           if (data.result?.progress) {
             applyProgressUpdate(data.result.progress);
           }
-          toast.success("Proceeding to budget setup");
         } else {
           // Transition to roadmap
           setTransitionData(null);

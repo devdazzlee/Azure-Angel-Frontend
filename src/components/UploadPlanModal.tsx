@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'react-toastify';
+import { Building2, Check, ClipboardList, ClipboardPaste, FileUp, X } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import PlanAnalysisModal from './PlanAnalysisModal';
 import {
   uploadPlanFile,
@@ -87,28 +89,28 @@ const PLAN_CONTENT_SECTIONS: { title: string; items: string[] }[] = [
 const IMPORT_METHOD_TABS: {
   id: UploadMode;
   label: string;
-  icon: string;
+  Icon: LucideIcon;
   activeClass: string;
   idleClass: string;
 }[] = [
   {
     id: 'upload',
     label: 'Upload file',
-    icon: '📄',
+    Icon: FileUp,
     activeClass: 'border-blue-300 bg-white text-blue-900 shadow-sm ring-1 ring-blue-100',
     idleClass: 'border-transparent bg-transparent text-slate-600 hover:bg-white/70 hover:text-slate-900',
   },
   {
     id: 'paste',
     label: 'Paste plan text',
-    icon: '📋',
+    Icon: ClipboardPaste,
     activeClass: 'border-indigo-300 bg-white text-indigo-900 shadow-sm ring-1 ring-indigo-100',
     idleClass: 'border-transparent bg-transparent text-slate-600 hover:bg-white/70 hover:text-slate-900',
   },
   {
     id: 'session',
     label: 'Another venture',
-    icon: '🔄',
+    Icon: Building2,
     activeClass: 'border-teal-300 bg-white text-teal-900 shadow-sm ring-1 ring-teal-100',
     idleClass: 'border-transparent bg-transparent text-slate-600 hover:bg-white/70 hover:text-slate-900',
   },
@@ -138,9 +140,7 @@ function ImportMethodTab({
         isActive ? tab.activeClass : tab.idleClass
       }`}
     >
-      <span className="text-base leading-none" aria-hidden>
-        {tab.icon}
-      </span>
+      <tab.Icon className="h-4 w-4 shrink-0" aria-hidden />
       <span className="text-center leading-tight">{tab.label}</span>
     </button>
   );
@@ -184,9 +184,7 @@ function PlanRequirementsPanel({ mode }: { mode: UploadMode }) {
   return (
     <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-3.5">
       <div className="flex items-start gap-2">
-        <span className="mt-0.5 text-base leading-none" aria-hidden="true">
-          📋
-        </span>
+        <ClipboardList className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden />
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-950">
             What to include {mode === 'upload' ? 'in your document' : 'in your text'}
@@ -571,8 +569,8 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
                   transition={{ delay: 0.38, duration: 0.35, ease: 'easeOut' }}
                   className="mx-6 mt-5 flex items-center gap-2 rounded-full border border-teal-200/80 bg-gradient-to-r from-teal-50 to-cyan-50 px-4 py-2 text-sm text-teal-900 shadow-sm"
                 >
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-600 text-xs font-bold text-white">
-                    ✓
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-600 text-white">
+                    <Check className="h-3.5 w-3.5" aria-hidden />
                   </span>
                   <span>
                     <span className="font-semibold">Tour complete.</span>{' '}
@@ -587,7 +585,8 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
             id="upload-plan-modal-title"
             className="text-2xl font-bold text-gray-900 flex items-center gap-2"
           >
-            📄 Upload Business Plan
+            <FileUp className="h-6 w-6 text-blue-600 shrink-0" aria-hidden />
+            Upload Business Plan
           </h2>
           <button
             onClick={onClose}
@@ -595,9 +594,7 @@ const UploadPlanModal: React.FC<UploadPlanModalProps> = ({
             className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed p-1 hover:bg-gray-100 rounded-full"
             aria-label="Close modal"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X className="w-6 h-6" aria-hidden />
           </button>
         </div>
 

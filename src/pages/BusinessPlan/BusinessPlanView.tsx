@@ -453,7 +453,6 @@ const BusinessPlanView: React.FC = () => {
         return;
       }
 
-      toast.success('Proceeding to budget setup');
       navigate(`/ventures/${sessionId}/budget`, { state: { fromTransition: true } });
     } catch (error) {
       console.error('Failed to proceed to budget:', error);

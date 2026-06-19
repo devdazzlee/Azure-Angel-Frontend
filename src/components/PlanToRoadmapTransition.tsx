@@ -296,6 +296,18 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
     decisionSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
+  const handleContinueForward = () => {
+    if (nextStep === 'roadmap' && !hasPaid) {
+      setShowPaymentModal(true);
+      toast.info('Subscription required to proceed to Roadmap phase');
+      return;
+    }
+    setPendingAction('forward');
+    onApprove();
+  };
+
+  const hasFullBusinessPlanArtifact = Boolean(businessPlanArtifact?.trim());
+
   const continueButtonTooltip = useMemo(() => {
     if (nextStep === 'budget') {
       return 'Confirm your business plan summary is accurate, then continue to the budget workspace to plan costs, revenue, and cash flow.';
@@ -469,11 +481,6 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
           artifact: data.result.business_plan_artifact,
           summary: actualSummary || businessPlanSummary,
         }));
-
-        toast.success('✅ Full Business Plan generated successfully!', {
-          position: 'top-center',
-          autoClose: 3000,
-        });
 
         // Navigate to view the plan
         navigate(`/ventures/${sessionId}/business-plan`, {
@@ -691,8 +698,8 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
           </div>
         </header>
 
-        <div className="mx-auto w-full max-w-4xl px-3 py-4 sm:px-6 sm:py-6">
-        <div className="w-full bg-white/90 backdrop-blur-xl border border-white/30 shadow-2xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8">
+        <div className="mx-auto w-full max-w-6xl px-3 py-4 sm:px-6 sm:py-6">
+        <div className="w-full min-w-0 bg-white/90 backdrop-blur-xl border border-white/30 shadow-2xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8">
         <header className="relative mb-6 sm:mb-8 overflow-hidden border-b border-slate-200/70 pb-5 sm:pb-6">
           <motion.div
             aria-hidden="true"
@@ -771,12 +778,14 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
               }}
               className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-slate-500 md:text-base"
             >
-              Review your summary below, then continue or generate your full plan.
+              {nextStep === 'budget'
+                ? 'Review your summary below, then continue to budget or generate your full plan.'
+                : 'Review your summary below, then continue or generate your full plan.'}
             </motion.p>
           </motion.div>
         </header>
-        {/* Info Banner - How to Generate Full Plan */}
-        {!businessPlanArtifact && !isGeneratingArtifact && (
+        {/* Info Banner - summary vs full plan */}
+        {!isGeneratingArtifact && (
           <div className="mb-6 rounded-lg border-l-4 border-blue-500 bg-blue-50 p-3 sm:p-4">
             <div className="flex items-start gap-3">
               <svg className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -785,7 +794,15 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
               <div>
                 <h3 className="font-semibold text-blue-900 mb-1">📄 Full Business Plan Available</h3>
                 <p className="text-sm text-blue-800">
-                  This is a high-level summary. Click the <strong>"Generate Full Business Plan"</strong> button above to create your complete, detailed business plan document. <strong>Payment is required</strong> to generate the full business plan (typically takes 30-60 seconds).
+                  {hasFullBusinessPlanArtifact ? (
+                    <>
+                      This is a high-level summary. Click the <strong>&quot;View Full Business Plan&quot;</strong> button below to open your complete, detailed business plan document.
+                    </>
+                  ) : (
+                    <>
+                      This is a high-level summary. Click the <strong>&quot;Generate Full Business Plan&quot;</strong> button below to create your complete, detailed business plan document. <strong>Payment is required</strong> to generate the full business plan (typically takes 30–60 seconds).
+                    </>
+                  )}
                 </p>
               </div>
             </div>
@@ -794,15 +811,33 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
 
         {/* Business Plan Summary Overview */}
         <div className="mb-6 sm:mb-8" ref={contentRef} id="business-plan-summary-content">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-            <h2 className="text-lg font-bold text-gray-900 sm:text-xl md:text-2xl">
+          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
+            <h2 className="min-w-0 shrink-0 text-lg font-bold text-gray-900 sm:text-xl md:text-2xl">
               Business Plan Summary Overview
             </h2>
+            <div className="flex min-w-0 w-full flex-wrap items-stretch justify-start gap-2 sm:justify-end lg:max-w-[520px] lg:flex-1 lg:justify-end">
+            {nextStep === 'budget' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={handleContinueForward}
+                    className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none sm:px-5"
+                  >
+                    {loading ? 'Setting up budget…' : 'Continue to budget'}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={8} className="max-w-[280px] text-sm leading-snug">
+                  {continueButtonTooltip}
+                </TooltipContent>
+              </Tooltip>
+            )}
             <button
               type="button"
               disabled={isGeneratingArtifact}
               onClick={() => {
-                if (businessPlanArtifact) {
+                if (hasFullBusinessPlanArtifact) {
                   navigate(`/ventures/${sessionId}/business-plan`, {
                     state: {
                       businessPlan: businessPlanArtifact,
@@ -815,8 +850,8 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
                   handleGenerateArtifact();
                 }
               }}
-              className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-md transition-colors hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-500 sm:w-auto sm:px-5 sm:text-base"
-              title={businessPlanArtifact ? 'View your complete business plan' : 'Click to generate your full business plan'}
+              className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-colors hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-500 sm:flex-none sm:px-5"
+              title={hasFullBusinessPlanArtifact ? 'View your complete business plan' : 'Click to generate your full business plan'}
             >
               {isGeneratingArtifact ? (
                 <>
@@ -831,10 +866,11 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
                   <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
-                  <span>{businessPlanArtifact ? 'View Full Business Plan' : 'Generate Full Business Plan'}</span>
+                  <span>{hasFullBusinessPlanArtifact ? 'View Full Business Plan' : 'Generate Full Business Plan'}</span>
                 </>
               )}
             </button>
+            </div>
           </div>
           
           {/* Full Viewable Business Plan Summary - No Height Restriction */}
@@ -1149,15 +1185,7 @@ const PlanToRoadmapTransition: React.FC<PlanToRoadmapTransitionProps> = ({
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (nextStep === 'roadmap' && !hasPaid) {
-                      setShowPaymentModal(true);
-                      toast.info('Subscription required to proceed to Roadmap phase');
-                      return;
-                    }
-                    setPendingAction('forward');
-                    onApprove();
-                  }}
+                  onClick={handleContinueForward}
                   disabled={loading || (nextStep === 'roadmap' && !hasPaid)}
                   className="inline-flex min-h-[52px] w-full items-center justify-center gap-2.5 rounded-xl bg-emerald-600 px-8 py-3.5 text-base font-semibold text-white shadow-md transition-colors hover:bg-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-[240px] sm:flex-1"
                 >

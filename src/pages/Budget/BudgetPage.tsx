@@ -1,57 +1,54 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Download, ArrowLeft, RefreshCw, Save } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { motion } from "framer-motion";
+import { Download, ArrowLeft, RefreshCw, Save, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 
 // Import all budget components
-import StartupBudgetSummary from '@/components/Budget/StartupBudgetSummary';
-import StartupCostsTable from '@/components/Budget/StartupCostsTable';
-import OperatingExpensesTable from '@/components/Budget/OperatingExpensesTable';
-import PayrollCostsTable from '@/components/Budget/PayrollCostsTable';
-import COGSTable from '@/components/Budget/COGSTable';
-import RevenueTable from '@/components/Budget/RevenueTable';
-import { BudgetSummaryCards } from '@/components/Budget/BudgetSummaryCards';
-import { BreakEvenAnalysis } from '@/components/Budget/BreakEvenAnalysis';
-import { BudgetCharts } from '@/components/Budget/BudgetCharts';
-import { formatCurrency } from '@/lib/formatters';
-import { toast } from 'react-toastify';
-import { budgetService } from '@/services/budgetService';
-import BudgetDashboard from '@/components/Budget/BudgetDashboard';
-import BudgetContinueToRoadmapCta from '@/components/Budget/BudgetContinueToRoadmapCta';
-import DocumentExportModal from '@/components/DocumentExportModal';
-import VentureBrandMark from '@/components/layout/VentureBrandMark';
-import type { BudgetExportActions } from '@/components/Budget/budgetExportActions';
-import httpClient from '@/api/httpClient';
+import StartupBudgetSummary from "@/components/Budget/StartupBudgetSummary";
+import StartupCostsTable from "@/components/Budget/StartupCostsTable";
+import OperatingExpensesTable from "@/components/Budget/OperatingExpensesTable";
+import PayrollCostsTable from "@/components/Budget/PayrollCostsTable";
+import COGSTable from "@/components/Budget/COGSTable";
+import RevenueTable from "@/components/Budget/RevenueTable";
+import { BudgetSummaryCards } from "@/components/Budget/BudgetSummaryCards";
+import { BreakEvenAnalysis } from "@/components/Budget/BreakEvenAnalysis";
+import { BudgetCharts } from "@/components/Budget/BudgetCharts";
+import { formatCurrency } from "@/lib/formatters";
+import { toast } from "react-toastify";
+import { budgetService } from "@/services/budgetService";
+import BudgetDashboard from "@/components/Budget/BudgetDashboard";
+import BudgetContinueToRoadmapCta from "@/components/Budget/BudgetContinueToRoadmapCta";
+import DocumentExportModal from "@/components/DocumentExportModal";
+import VentureBrandMark from "@/components/layout/VentureBrandMark";
+import type { BudgetExportActions } from "@/components/Budget/budgetExportActions";
+import httpClient from "@/api/httpClient";
 
-import type { Budget, BudgetItem, RevenueStream } from '@/types/apiTypes';
-import { useBusinessContext } from '@/hooks/useBusinessContext';
+import type { Budget, BudgetItem, RevenueStream } from "@/types/apiTypes";
+import { useBusinessContext } from "@/hooks/useBusinessContext";
 import {
   isBudgetSetupPhase,
   isRoadmapReadyPhase,
   resolveSessionPhase,
-} from '@/utils/budgetPageMode';
+} from "@/utils/budgetPageMode";
 
-/** Stable IDs so duplicate effect runs (e.g. React Strict Mode) do not stack the same toast. */
-const TOAST_BUDGET_ANALYZING = 'budget-prepop-analyzing-from-plan';
-const TOAST_BUDGET_GENERATED = 'budget-prepop-generated-from-plan';
-
-async function prepopulateExpenseItemsFromPlan(sessionId: string, currentBudget: Budget): Promise<Budget> {
+/** Pre-populate expense line items from the business plan when the budget has none yet. */
+async function prepopulateExpenseItemsFromPlan(
+  sessionId: string,
+  currentBudget: Budget,
+): Promise<Budget> {
   const existingExpenses = currentBudget.items
-    ? currentBudget.items.filter((i: BudgetItem) => i.category === 'expense')
+    ? currentBudget.items.filter((i: BudgetItem) => i.category === "expense")
     : [];
   if (existingExpenses.length > 0) {
     return currentBudget;
   }
 
   try {
-    toast.info('Analyzing business plan to generate your budget...', {
-      toastId: TOAST_BUDGET_ANALYZING,
-      autoClose: 3000,
-    });
     const estimates = await budgetService.generateEstimatedExpenses(sessionId);
 
     if (estimates.success && estimates.result && estimates.result.length > 0) {
@@ -62,14 +59,11 @@ async function prepopulateExpenseItemsFromPlan(sessionId: string, currentBudget:
 
       const saved = await budgetService.saveBudget(sessionId, updatedBudget);
       if (saved.success) {
-        toast.success('Budget items generated from your business plan!', {
-          toastId: TOAST_BUDGET_GENERATED,
-        });
         return saved.result;
       }
     }
   } catch (err) {
-    console.error('Failed to pre-populate budget items:', err);
+    console.error("Failed to pre-populate budget items:", err);
   }
 
   return currentBudget;
@@ -80,7 +74,8 @@ const BudgetPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const fromTransitionNav =
-    (location.state as { fromTransition?: boolean } | null)?.fromTransition === true;
+    (location.state as { fromTransition?: boolean } | null)?.fromTransition ===
+    true;
   const [sessionPhase, setSessionPhase] = useState<string | null>(null);
   const [budget, setBudget] = useState<Budget | null>(null);
   const [loading, setLoading] = useState(true);
@@ -102,9 +97,9 @@ const BudgetPage: React.FC = () => {
     let cancelled = false;
     (async () => {
       try {
-        const { data } = await httpClient.get<{ result?: { progress?: { phase?: string }; current_phase?: string } }>(
-          `/angel/sessions/${id}`,
-        );
+        const { data } = await httpClient.get<{
+          result?: { progress?: { phase?: string }; current_phase?: string };
+        }>(`/angel/sessions/${id}`);
         if (cancelled) return;
         setSessionPhase(resolveSessionPhase(data?.result ?? null));
       } catch {
@@ -120,13 +115,44 @@ const BudgetPage: React.FC = () => {
     fromTransitionNav || isBudgetSetupPhase(sessionPhase);
   const roadmapAlreadyReady = isRoadmapReadyPhase(sessionPhase);
 
+  /** Lock page scroll while roadmap transition runs — loader stays centered in viewport. */
+  useEffect(() => {
+    if (!isBudgetSetupFlow || !transitioning) return;
+
+    const scrollY = window.scrollY;
+    const { overflow, position, top, width, paddingRight } =
+      document.body.style;
+    const scrollbarWidth =
+      window.innerWidth - document.documentElement.clientWidth;
+
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
+    return () => {
+      document.body.style.overflow = overflow;
+      document.body.style.position = position;
+      document.body.style.top = top;
+      document.body.style.width = width;
+      document.body.style.paddingRight = paddingRight;
+      window.scrollTo(0, scrollY);
+    };
+  }, [isBudgetSetupFlow, transitioning]);
+
   const fetchBudget = async () => {
     try {
       setLoading(true);
       const response = await budgetService.getBudget(id!);
       if (response.success) {
         let currentBudget = response.result;
-        currentBudget = await prepopulateExpenseItemsFromPlan(id!, currentBudget);
+        currentBudget = await prepopulateExpenseItemsFromPlan(
+          id!,
+          currentBudget,
+        );
         setBudget(currentBudget);
       } else {
         // If no budget exists, create an empty one via API so the UI stays API-driven
@@ -139,16 +165,19 @@ const BudgetPage: React.FC = () => {
         });
         if (created.success) {
           let currentBudget = created.result;
-          currentBudget = await prepopulateExpenseItemsFromPlan(id!, currentBudget);
+          currentBudget = await prepopulateExpenseItemsFromPlan(
+            id!,
+            currentBudget,
+          );
           setBudget(currentBudget);
         } else {
-          toast.error(created.message || 'Failed to initialize budget');
+          toast.error(created.message || "Failed to initialize budget");
           setBudget(null);
         }
       }
     } catch (error) {
-      console.error('Error fetching budget:', error);
-      toast.error('Failed to load budget');
+      console.error("Error fetching budget:", error);
+      toast.error("Failed to load budget");
 
       try {
         const created = await budgetService.saveBudget(id!, {
@@ -172,73 +201,103 @@ const BudgetPage: React.FC = () => {
   };
 
   const saveBudget = async () => {
-    if (!budget) return;
-    
+    if (!budget || transitioning) return;
+
     try {
       setSaving(true);
       const response = await budgetService.saveBudget(id!, budget);
       if (response.success) {
         setBudget(response.result);
-        toast.success('Budget saved successfully');
+        toast.success("Budget saved successfully");
       } else {
-        toast.error('Failed to save budget');
+        toast.error("Failed to save budget");
       }
     } catch (error) {
-      console.error('Error saving budget:', error);
-      toast.error('Failed to save budget');
+      console.error("Error saving budget:", error);
+      toast.error("Failed to save budget");
     } finally {
       setSaving(false);
     }
   };
 
   const handleUpdateBudget = (updates: Partial<Budget>) => {
-    if (!budget) return;
-    
-    const updatedBudget = { ...budget, ...updates, updated_at: new Date().toISOString() };
-    
+    if (!budget || transitioning) return;
+
+    const updatedBudget = {
+      ...budget,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+
     // Recalculate totals
-    const expenses = updatedBudget.items.filter(item => item.category === 'expense');
-    const revenues = updatedBudget.items.filter(item => item.category === 'revenue');
-    
-    updatedBudget.total_estimated_expenses = expenses.reduce((sum, item) => sum + item.estimated_amount, 0);
-    updatedBudget.total_estimated_revenue = revenues.reduce((sum, item) => sum + item.estimated_amount, 0);
-    updatedBudget.total_actual_expenses = expenses.reduce((sum, item) => sum + (item.actual_amount || 0), 0);
-    updatedBudget.total_actual_revenue = revenues.reduce((sum, item) => sum + (item.actual_amount || 0), 0);
-    
+    const expenses = updatedBudget.items.filter(
+      (item) => item.category === "expense",
+    );
+    const revenues = updatedBudget.items.filter(
+      (item) => item.category === "revenue",
+    );
+
+    updatedBudget.total_estimated_expenses = expenses.reduce(
+      (sum, item) => sum + item.estimated_amount,
+      0,
+    );
+    updatedBudget.total_estimated_revenue = revenues.reduce(
+      (sum, item) => sum + item.estimated_amount,
+      0,
+    );
+    updatedBudget.total_actual_expenses = expenses.reduce(
+      (sum, item) => sum + (item.actual_amount || 0),
+      0,
+    );
+    updatedBudget.total_actual_revenue = revenues.reduce(
+      (sum, item) => sum + (item.actual_amount || 0),
+      0,
+    );
+
     setBudget(updatedBudget);
   };
 
-  const handleUpdateItem = async (itemId: string, updates: Partial<BudgetItem>) => {
-    if (!id) return;
+  const handleUpdateItem = async (
+    itemId: string,
+    updates: Partial<BudgetItem>,
+  ) => {
+    if (!id || transitioning) return;
     try {
-      const response = await budgetService.updateBudgetItem(id, itemId, updates);
+      const response = await budgetService.updateBudgetItem(
+        id,
+        itemId,
+        updates,
+      );
       if (response.success) {
         setBudget(response.result);
       } else {
-        toast.error(response.message || 'Failed to update item');
+        toast.error(response.message || "Failed to update item");
       }
     } catch (error) {
-      console.error('Error updating budget item:', error);
-      toast.error('Failed to update item');
+      console.error("Error updating budget item:", error);
+      toast.error("Failed to update item");
     }
   };
 
-  const handleRegisterBudgetExports = useCallback((actions: BudgetExportActions) => {
-    budgetExportsRef.current = actions;
-  }, []);
+  const handleRegisterBudgetExports = useCallback(
+    (actions: BudgetExportActions) => {
+      budgetExportsRef.current = actions;
+    },
+    [],
+  );
 
   const handleDeleteItem = async (itemId: string) => {
-    if (!id) return;
+    if (!id || transitioning) return;
     try {
       const response = await budgetService.deleteBudgetItem(id, itemId);
       if (response.success) {
         setBudget(response.result);
       } else {
-        toast.error(response.message || 'Failed to delete item');
+        toast.error(response.message || "Failed to delete item");
       }
     } catch (error) {
-      console.error('Error deleting budget item:', error);
-      toast.error('Failed to delete item');
+      console.error("Error deleting budget item:", error);
+      toast.error("Failed to delete item");
     }
   };
 
@@ -253,21 +312,32 @@ const BudgetPage: React.FC = () => {
         navigate(`/ventures/${id}/roadmap`);
         return;
       }
-      const response = await httpClient.post(`/angel/sessions/${id}/transition-decision`, {
-        decision: 'approve',
-        transition_type: 'budget_to_roadmap',
-      });
-      const data = response.data as { success?: boolean; message?: string; requires_subscription?: boolean };
+      const response = await httpClient.post(
+        `/angel/sessions/${id}/transition-decision`,
+        {
+          decision: "approve",
+          transition_type: "budget_to_roadmap",
+        },
+      );
+      const data = response.data as {
+        success?: boolean;
+        message?: string;
+        requires_subscription?: boolean;
+      };
       if (data.success) {
         navigate(`/ventures/${id}/roadmap`);
       } else if (data.requires_subscription) {
-        toast.error(data.message || 'Subscription required to proceed to Roadmap phase');
+        toast.error(
+          data.message || "Subscription required to proceed to Roadmap phase",
+        );
       } else {
-        toast.error(data.message || 'Failed to proceed to roadmap. Please try again.');
+        toast.error(
+          data.message || "Failed to proceed to roadmap. Please try again.",
+        );
       }
     } catch (error) {
-      console.error('Failed to proceed to roadmap:', error);
-      toast.error('Failed to proceed to roadmap. Please try again.');
+      console.error("Failed to proceed to roadmap:", error);
+      toast.error("Failed to proceed to roadmap. Please try again.");
     } finally {
       setTransitioning(false);
     }
@@ -290,7 +360,10 @@ const BudgetPage: React.FC = () => {
         <Card>
           <CardContent className="p-6">
             <p className="text-gray-600">Budget not found</p>
-            <Button onClick={() => navigate(`/ventures/${id}`)} className="mt-4">
+            <Button
+              onClick={() => navigate(`/ventures/${id}`)}
+              className="mt-4"
+            >
               Go Back
             </Button>
           </CardContent>
@@ -314,26 +387,28 @@ const BudgetPage: React.FC = () => {
             <div className="flex items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2">
                 <VentureBrandMark />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() =>
-                  navigate(`/ventures/${id}`, {
-                    state: {
-                      restorePlanSummaryOverview: true,
-                      preferVentureChat: true,
-                    },
-                  })
-                }
-                className="-ml-2 h-9 shrink-0 gap-1.5 px-2 text-gray-600"
-              >
-                <ArrowLeft className="h-4 w-4 shrink-0" />
-                Back
-              </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={transitioning}
+                  onClick={() =>
+                    navigate(`/ventures/${id}`, {
+                      state: {
+                        restorePlanSummaryOverview: true,
+                        preferVentureChat: true,
+                      },
+                    })
+                  }
+                  className="-ml-2 h-9 shrink-0 gap-1.5 px-2 text-gray-600"
+                >
+                  <ArrowLeft className="h-4 w-4 shrink-0" />
+                  Back
+                </Button>
               </div>
               <Button
                 variant="outline"
                 size="sm"
+                disabled={transitioning}
                 onClick={() => setShowExportModal(true)}
                 className="h-9 shrink-0 gap-1.5 px-3"
               >
@@ -343,12 +418,12 @@ const BudgetPage: React.FC = () => {
             </div>
             <div className="mt-2.5 border-t border-gray-100 pt-2.5">
               <h1 className="text-lg font-bold leading-tight tracking-tight text-gray-900">
-                {isBudgetSetupFlow ? 'Budget Setup' : 'Budget Tracking'}
+                {isBudgetSetupFlow ? "Budget Setup" : "Budget Tracking"}
               </h1>
               <p className="mt-1 text-xs leading-relaxed text-gray-500">
                 {isBudgetSetupFlow
-                  ? 'Set up your startup budget, then continue to your roadmap'
-                  : 'Manage your business finances'}
+                  ? "Set up your startup budget, then continue to your roadmap"
+                  : "Manage your business finances"}
               </p>
             </div>
           </div>
@@ -359,6 +434,7 @@ const BudgetPage: React.FC = () => {
               <VentureBrandMark />
               <Button
                 variant="ghost"
+                disabled={transitioning}
                 onClick={() =>
                   navigate(`/ventures/${id}`, {
                     state: {
@@ -375,18 +451,19 @@ const BudgetPage: React.FC = () => {
               <div className="h-10 w-px shrink-0 bg-gray-200" aria-hidden />
               <div className="min-w-0">
                 <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-                  {isBudgetSetupFlow ? 'Budget Setup' : 'Budget Tracking'}
+                  {isBudgetSetupFlow ? "Budget Setup" : "Budget Tracking"}
                 </h1>
                 <p className="mt-0.5 text-sm text-gray-500">
                   {isBudgetSetupFlow
-                    ? 'Set up your startup budget, then continue to your roadmap'
-                    : 'Manage your business finances'}
+                    ? "Set up your startup budget, then continue to your roadmap"
+                    : "Manage your business finances"}
                 </p>
               </div>
             </div>
             <Button
               variant="outline"
               size="sm"
+              disabled={transitioning}
               onClick={() => setShowExportModal(true)}
               className="shrink-0 gap-2"
             >
@@ -399,9 +476,11 @@ const BudgetPage: React.FC = () => {
 
       {/* Main Content — extra bottom pad only on desktop where footer is fixed */}
       <div
-        className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 min-w-0 ${
-          isBudgetSetupFlow ? 'pb-4 md:pb-28' : 'pb-20 md:pb-24'
+        className={`relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 min-w-0 ${
+          isBudgetSetupFlow ? "pb-4 md:pb-28" : "pb-20 md:pb-24"
         }`}
+        {...(transitioning ? { inert: true } : {})}
+        aria-busy={transitioning}
       >
         <BudgetDashboard
           budget={budget}
@@ -412,6 +491,7 @@ const BudgetPage: React.FC = () => {
           sessionId={id!}
           businessContext={businessContext}
           embeddedInSetup={isBudgetSetupFlow}
+          interactionLocked={transitioning}
           onRegisterExportActions={handleRegisterBudgetExports}
         />
       </div>
@@ -448,7 +528,9 @@ const BudgetPage: React.FC = () => {
                   ) : (
                     <Save className="h-3.5 w-3.5 shrink-0" />
                   )}
-                  <span className="truncate">{saving ? 'Saving…' : 'Save Inputs'}</span>
+                  <span className="truncate">
+                    {saving ? "Saving…" : "Save Inputs"}
+                  </span>
                 </Button>
               </div>
               <BudgetContinueToRoadmapCta
@@ -478,8 +560,12 @@ const BudgetPage: React.FC = () => {
                   variant="outline"
                   className="flex items-center gap-2"
                 >
-                  {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  {saving ? 'Saving...' : 'Save Inputs'}
+                  {saving ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4" />
+                  )}
+                  {saving ? "Saving..." : "Save Inputs"}
                 </Button>
                 <BudgetContinueToRoadmapCta
                   variant="header"
@@ -493,12 +579,42 @@ const BudgetPage: React.FC = () => {
         </footer>
       )}
 
-      {isBudgetSetupFlow && transitioning && (
-        <div
-          className="fixed inset-0 z-[25] bg-slate-900/15 backdrop-blur-[1px] pointer-events-none"
-          aria-hidden
-        />
-      )}
+      {isBudgetSetupFlow &&
+        transitioning &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/20 backdrop-blur-[2px] p-4 pointer-events-auto"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="budget-roadmap-loader-title"
+            aria-describedby="budget-roadmap-loader-desc"
+          >
+            <div
+              className="flex w-full max-w-md flex-col items-center rounded-2xl border border-violet-100 bg-white px-8 py-10 text-center shadow-2xl"
+              role="status"
+              aria-live="polite"
+            >
+              <Loader2
+                className="h-11 w-11 animate-spin text-violet-600"
+                aria-hidden
+              />
+              <p
+                id="budget-roadmap-loader-title"
+                className="mt-5 text-lg font-semibold text-gray-900"
+              >
+                Building your roadmap…
+              </p>
+              <p
+                id="budget-roadmap-loader-desc"
+                className="mt-2 text-sm leading-relaxed text-gray-500"
+              >
+                Saving your budget and preparing your launch roadmap. Please
+                wait this only takes a moment.
+              </p>
+            </div>
+          </div>,
+          document.body,
+        )}
 
       <DocumentExportModal
         isOpen={showExportModal}
@@ -508,21 +624,21 @@ const BudgetPage: React.FC = () => {
         showSuccessToast={false}
         onExportPdf={async () => {
           if (!budgetExportsRef.current) {
-            toast.error('Budget is still loading. Please try again.');
+            toast.error("Budget is still loading. Please try again.");
             return;
           }
           await budgetExportsRef.current.exportPdf();
         }}
         onExportExcel={async () => {
           if (!budgetExportsRef.current) {
-            toast.error('Budget is still loading. Please try again.');
+            toast.error("Budget is still loading. Please try again.");
             return;
           }
           await budgetExportsRef.current.exportExcel();
         }}
         onExportDocx={async () => {
           if (!budgetExportsRef.current) {
-            toast.error('Budget is still loading. Please try again.');
+            toast.error("Budget is still loading. Please try again.");
             return;
           }
           await budgetExportsRef.current.exportDocx();
