@@ -27,13 +27,15 @@ import { toast } from 'react-toastify';
 import httpClient from '../api/httpClient';
 import { cn } from '@/lib/utils';
 import {
+  useGetTaskDocumentsQuery,
+  implementationCachePolicy,
+} from '../store/implementationApi';
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
 import {
-  fetchImplementationTaskDocuments,
-  invalidateImplementationTaskDocuments,
   refreshImplementationDocumentViewUrl,
   type ImplementationTaskDocument,
 } from '../services/implementationDocumentsService';
@@ -135,18 +137,21 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadedFileId, setUploadedFileId] = useState<string | null>(null);
   const [uploadedViewUrl, setUploadedViewUrl] = useState<string | null>(null);
-  const [existingDocuments, setExistingDocuments] = useState<ImplementationTaskDocument[]>([]);
-  const [documentsLoading, setDocumentsLoading] = useState(false);
+  const { data: existingDocuments = [], isLoading: documentsLoading } = useGetTaskDocumentsQuery(
+    { sessionId: sessionId!, taskId: task.id },
+    {
+      skip: !sessionId || !task.id,
+      ...implementationCachePolicy.taskDocuments,
+    },
+  );
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [documentsPickerOpen, setDocumentsPickerOpen] = useState(false);
   const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const documentsRequestKeyRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mentorInsights, setMentorInsights] = useState<string>('');
   const [showSubstepModal, setShowSubstepModal] = useState(false);
   const [substepToComplete, setSubstepToComplete] = useState<ImplementationSubstep | null>(null);
   const [substepNote, setSubstepNote] = useState<string>('');
@@ -166,7 +171,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     !isProgressLoading && (isTaskCompleted || taskCompletionLocked);
 
   useEffect(() => {
-    loadTaskInsights();
     setFocusedSubstepNumber(null);
     setTaskCompletionLocked(false);
     setUploadedFile(null);
@@ -176,8 +180,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     setUploadError(null);
     setSelectedDocumentId(null);
     setDocumentsPickerOpen(false);
-    documentsRequestKeyRef.current = null;
-    void loadExistingDocuments();
   }, [task.id, sessionId]);
 
   useEffect(() => {
@@ -191,30 +193,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         : existingDocuments[0].file_id,
     );
   }, [existingDocuments]);
-
-  const loadExistingDocuments = async (options?: { force?: boolean }) => {
-    if (!sessionId || !task.id) {
-      setExistingDocuments([]);
-      return;
-    }
-
-    const requestKey = `${sessionId}:${task.id}`;
-    if (!options?.force && documentsRequestKeyRef.current === requestKey) {
-      return;
-    }
-
-    documentsRequestKeyRef.current = requestKey;
-    setDocumentsLoading(true);
-    try {
-      const docs = await fetchImplementationTaskDocuments(sessionId, task.id, options);
-      setExistingDocuments(docs);
-    } catch (err) {
-      console.error('Failed to load task documents:', err);
-      setExistingDocuments([]);
-    } finally {
-      setDocumentsLoading(false);
-    }
-  };
 
   const formatDocumentDate = (value?: string) => {
     if (!value) return '';
@@ -288,30 +266,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     onSubstepFocus?.(substep.step_number);
   };
 
-  const loadTaskInsights = async () => {
-    try {
-      const token = localStorage.getItem('sb_access_token');
-      if (!token) return;
-
-      // Load mentor insights for this task
-      const response = await httpClient.post('/specialized-agents/agent-guidance', {
-        question: `Provide expert guidance for implementation task: ${task.title}`,
-        agent_type: 'comprehensive',
-        business_context: task.business_context
-      }, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if ((response.data as any).success) {
-        setMentorInsights((response.data as any).result.guidance || 'Expert guidance will be provided as you work through this task.');
-      }
-    } catch (err) {
-      console.error('Error loading task insights:', err);
-    }
-  };
-
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -325,17 +279,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       setUploadedFileId(result.file_id);
       setUploadedViewUrl(result.view_url ?? null);
       setUploadState('success');
-      setExistingDocuments((prev) => {
-        const nextDoc: ImplementationTaskDocument = {
-          file_id: result.file_id,
-          original_filename: result.filename,
-          view_url: result.view_url,
-          uploaded_at: new Date().toISOString(),
-        };
-        return [nextDoc, ...prev.filter((d) => d.file_id !== result.file_id)];
-      });
       setSelectedDocumentId(result.file_id);
-      invalidateImplementationTaskDocuments(sessionId, task.id);
     } catch (err: unknown) {
       setUploadedFile(null);
       setUploadedFileId(null);

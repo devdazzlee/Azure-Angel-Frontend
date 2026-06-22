@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { toast } from 'react-toastify';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -12,7 +12,6 @@ import ImplementationRoadmapNavigator from '../../components/ImplementationRoadm
 import ImplementationCompletionModal from '../../components/ImplementationCompletionModal';
 import type { ImplementationCatalogPhase } from '../../types/implementationNavigation';
 import httpClient from '../../api/httpClient';
-import { uploadImplementationTaskDocument, invalidateImplementationTaskDocuments } from '../../services/implementationDocumentsService';
 import { useBusinessContext } from '../../hooks/useBusinessContext';
 import { useAppDispatch } from '../../store';
 import {
@@ -20,10 +19,11 @@ import {
   implementationCachePolicy,
   useGetBudgetQuery,
   useGetImplementationTasksQuery,
-  useLazyGetImplementationTaskDetailQuery,
+  useGetImplementationTaskDetailQuery,
   useGetRoadmapPlanQuery,
   useGetTaskHelpQuery,
   useLazyGetContactProvidersQuery,
+  useUploadTaskDocumentMutation,
 } from '../../store/implementationApi';
 import { displayBusinessNameFromApi } from '../../utils/businessName';
 import VentureBrandMark from '../../components/layout/VentureBrandMark';
@@ -171,8 +171,7 @@ const Implementation: React.FC<ImplementationProps> = ({
   const [taskCatalog, setTaskCatalog] = useState<ImplementationCatalogPhase[]>([]);
   const [nextTaskId, setNextTaskId] = useState<string | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
-  const [panelTask, setPanelTask] = useState<ImplementationTask | null>(null);
-  const [loadingPanelTaskId, setLoadingPanelTaskId] = useState<string | null>(null);
+  const [optimisticPanelTask, setOptimisticPanelTask] = useState<ImplementationTask | null>(null);
   const [showRoadmapDocument, setShowRoadmapDocument] = useState(false);
   const autoExpandQueuedRef = useRef(false);
   const budgetLoadedRef = useRef(false);
@@ -195,9 +194,39 @@ const Implementation: React.FC<ImplementationProps> = ({
   const [fetchContactProviders, { isLoading: contactProvidersLoading }] =
     useLazyGetContactProvidersQuery();
 
-  const activeSupportTask = panelTask ?? currentTask;
+  const [uploadTaskDocument] = useUploadTaskDocumentMutation();
 
-  const [fetchTaskDetail] = useLazyGetImplementationTaskDetailQuery();
+  const shouldFetchExpandedDetail = Boolean(
+    sessionId && expandedTaskId && expandedTaskId !== currentTask?.id,
+  );
+
+  const {
+    data: expandedTaskPayload,
+    isLoading: expandedTaskLoading,
+    isFetching: expandedTaskFetching,
+  } = useGetImplementationTaskDetailQuery(
+    { sessionId: sessionId!, taskId: expandedTaskId! },
+    {
+      skip: !shouldFetchExpandedDetail,
+      ...implementationCachePolicy.tasks,
+    },
+  );
+
+  const basePanelTask = useMemo((): ImplementationTask | null => {
+    if (!expandedTaskId) return null;
+    if (currentTask?.id === expandedTaskId) return currentTask;
+    if (expandedTaskPayload?.task) {
+      return expandedTaskPayload.task as unknown as ImplementationTask;
+    }
+    return null;
+  }, [expandedTaskId, currentTask, expandedTaskPayload]);
+
+  const panelTask = useMemo(() => {
+    if (optimisticPanelTask?.id === expandedTaskId) return optimisticPanelTask;
+    return basePanelTask;
+  }, [optimisticPanelTask, expandedTaskId, basePanelTask]);
+
+  const activeSupportTask = panelTask ?? currentTask;
 
   const { data: helpPayload, isLoading: helpLoading, isFetching: helpFetching } =
     useGetTaskHelpQuery(
@@ -249,12 +278,7 @@ const Implementation: React.FC<ImplementationProps> = ({
         { type: 'ImplementationTasks', id: sessionId },
       ];
       if (taskId) {
-        tags.push(
-          { type: 'ImplementationTasks', id: `${sessionId}:${taskId}` },
-          { type: 'ServiceProviders', id: `${sessionId}:${taskId}` },
-          { type: 'ServiceProviders', id: `${sessionId}:${taskId}:contact` },
-          { type: 'TaskHelp', id: `${sessionId}:${taskId}` },
-        );
+        tags.push({ type: 'ImplementationTasks', id: `${sessionId}:${taskId}` });
       }
       dispatch(implementationApi.util.invalidateTags(tags));
     },
@@ -319,64 +343,36 @@ const Implementation: React.FC<ImplementationProps> = ({
     }
   }, [budgetPayload]);
 
-  const loadPanelTask = useCallback(
-    async (taskId: string) => {
-      if (currentTask?.id === taskId) {
-        setPanelTask(currentTask);
-        return;
-      }
-      setLoadingPanelTaskId(taskId);
-      try {
-        const data = await fetchTaskDetail({ sessionId, taskId }).unwrap();
-        if (data.success && data.task) {
-          setPanelTask(data.task as unknown as ImplementationTask);
-        } else {
-          throw new Error(data.message || 'Task not found');
-        }
-      } catch (err) {
-        console.error('Failed to load task detail:', err);
-        toast.error('Could not load this task. Please try again.');
-        setExpandedTaskId(null);
-        setPanelTask(null);
-      } finally {
-        setLoadingPanelTaskId(null);
-      }
-    },
-    [sessionId, fetchTaskDetail, currentTask],
-  );
-
   const handleSelectTask = useCallback(
     (taskId: string) => {
       if (expandedTaskId === taskId) {
         setExpandedTaskId(null);
-        setPanelTask(null);
-        setLoadingPanelTaskId(null);
+        setOptimisticPanelTask(null);
         return;
       }
       setExpandedTaskId(taskId);
-      setPanelTask(null);
-      void loadPanelTask(taskId);
+      setOptimisticPanelTask(null);
     },
-    [expandedTaskId, loadPanelTask],
+    [expandedTaskId],
   );
 
   useEffect(() => {
     if (autoExpandQueuedRef.current || !nextTaskId || expandedTaskId) return;
     autoExpandQueuedRef.current = true;
     setExpandedTaskId(nextTaskId);
-    void loadPanelTask(nextTaskId);
-  }, [nextTaskId, expandedTaskId, loadPanelTask]);
+  }, [nextTaskId, expandedTaskId]);
 
   useEffect(() => {
-    if (!expandedTaskId || !currentTask || currentTask.id !== expandedTaskId) return;
-    setPanelTask((prev) => (prev?.id === expandedTaskId ? currentTask : prev));
-  }, [currentTask, expandedTaskId]);
+    if (!tasksFetching) {
+      setOptimisticPanelTask(null);
+    }
+  }, [tasksPayload, tasksFetching]);
 
   useEffect(() => {
     setMountedTabs({ implementation: true });
     setRoadmapContent('');
     setExpandedTaskId(null);
-    setPanelTask(null);
+    setOptimisticPanelTask(null);
     autoExpandQueuedRef.current = false;
     setExtractionAttempted(false);
     setLocalBusinessContext(null);
@@ -578,20 +574,26 @@ const Implementation: React.FC<ImplementationProps> = ({
 
   const showPanelLoader = Boolean(
     expandedTaskId &&
-      (loadingPanelTaskId === expandedTaskId ||
+      (
         !panelTask ||
-        panelTask.id !== expandedTaskId),
+        panelTask.id !== expandedTaskId ||
+        (shouldFetchExpandedDetail && expandedTaskLoading) ||
+        (expandedTaskId === currentTask?.id && tasksLoading && !currentTask)
+      ),
   );
 
   const panelTaskProgressLoading = Boolean(
     showPanelLoader ||
-      (loading && expandedTaskId != null) ||
+      (tasksLoading && expandedTaskId != null) ||
       (isRefreshingTask &&
         panelTask &&
         currentTask &&
         panelTask.id === currentTask.id &&
         panelTask.id === expandedTaskId),
   );
+
+  const expandedPanelLoadingTaskId =
+    shouldFetchExpandedDetail && expandedTaskFetching ? expandedTaskId : null;
 
   const loadImplementationData = async (_options?: { silent?: boolean }) => {
     await refetchTasks();
@@ -665,7 +667,10 @@ const Implementation: React.FC<ImplementationProps> = ({
 
     if (substepNumber != null || taskId) {
       setCurrentTask(applyToTask);
-      setPanelTask((prev) => (prev ? applyToTask(prev) : prev));
+      setOptimisticPanelTask((prev) => {
+        const next = applyToTask(prev ?? basePanelTask);
+        return next ?? prev;
+      });
     }
   };
 
@@ -690,7 +695,6 @@ const Implementation: React.FC<ImplementationProps> = ({
 
         // CRITICAL: Reload implementation data to get next task or completion status
         invalidateTaskScopedCache(currentTask.id);
-        await loadImplementationData({ silent: true });
         await refreshCompletedRoadmapStepKeys();
         setShowCompletionModal(false);
       } else {
@@ -710,11 +714,7 @@ const Implementation: React.FC<ImplementationProps> = ({
     if (taskId) {
       invalidateTaskScopedCache(taskId);
     }
-    await loadImplementationData({ silent: true });
-    if (expandedTaskId) {
-      await loadPanelTask(expandedTaskId);
-    }
-    await refreshCompletedRoadmapStepKeys();
+    void refreshCompletedRoadmapStepKeys();
   };
 
   const handleGetServiceProviders = async () => {
@@ -765,14 +765,13 @@ const Implementation: React.FC<ImplementationProps> = ({
       throw new Error('No active task selected');
     }
 
-    const document = await uploadImplementationTaskDocument(
-      sessionId!,
-      activeSupportTask.id,
+    const document = await uploadTaskDocument({
+      sessionId: sessionId!,
+      taskId: activeSupportTask.id,
       file,
-    );
+    }).unwrap();
 
     toast.success('Document uploaded successfully');
-    invalidateImplementationTaskDocuments(sessionId!, activeSupportTask.id);
     return {
       filename: document.original_filename || file.name,
       file_id: document.file_id,
@@ -1157,7 +1156,7 @@ const Implementation: React.FC<ImplementationProps> = ({
                     phases={taskCatalog}
                     expandedTaskId={expandedTaskId}
                     nextTaskId={nextTaskId}
-                    loadingTaskId={loadingPanelTaskId}
+                    loadingTaskId={expandedPanelLoadingTaskId}
                     onSelectTask={handleSelectTask}
                     expandedPanel={
                       showPanelLoader ? (
@@ -1177,7 +1176,7 @@ const Implementation: React.FC<ImplementationProps> = ({
                           onSubstepFocus={(stepNumber) => {
                             const patch = (prev: ImplementationTask | null) =>
                               prev ? { ...prev, current_substep: stepNumber } : prev;
-                            setPanelTask(patch);
+                            setOptimisticPanelTask(patch);
                             if (currentTask?.id === panelTask.id) {
                               setCurrentTask(patch);
                             }

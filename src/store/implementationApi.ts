@@ -10,6 +10,22 @@ const STALE_SERVICE_PROVIDERS_MS = 10 * 60_000;
 const STALE_ROADMAP_MS = 15 * 60_000;
 const STALE_TASK_HELP_MS = 10 * 60_000;
 const STALE_BUDGET_MS = 60_000;
+const STALE_TASK_DOCUMENTS_MS = 5 * 60_000;
+
+export interface ImplementationTaskDocument {
+  id?: string;
+  file_id: string;
+  original_filename: string;
+  content_type?: string;
+  size_bytes?: number;
+  uploaded_at?: string;
+  view_url?: string | null;
+}
+
+export interface TaskDocumentsQueryArgs {
+  sessionId: string;
+  taskId: string;
+}
 
 export interface ImplementationTasksResponse {
   success: boolean;
@@ -74,7 +90,14 @@ export interface ContactProvidersResponse {
 export const implementationApi = createApi({
   reducerPath: 'implementationApi',
   baseQuery: axiosBaseQuery,
-  tagTypes: ['ImplementationTasks', 'ServiceProviders', 'TaskHelp', 'Roadmap', 'Budget'],
+  tagTypes: [
+    'ImplementationTasks',
+    'ServiceProviders',
+    'TaskHelp',
+    'Roadmap',
+    'Budget',
+    'TaskDocuments',
+  ],
   endpoints: (builder) => ({
     getImplementationTasks: builder.query<ImplementationTasksResponse, string>({
       query: (sessionId) => ({
@@ -163,6 +186,63 @@ export const implementationApi = createApi({
       ],
       keepUnusedDataFor: 300,
     }),
+
+    getTaskDocuments: builder.query<ImplementationTaskDocument[], TaskDocumentsQueryArgs>({
+      query: ({ sessionId, taskId }) => ({
+        url: `/implementation/sessions/${sessionId}/tasks/${taskId}/documents`,
+        method: 'GET',
+      }),
+      transformResponse: (response: {
+        success?: boolean;
+        result?: { documents?: ImplementationTaskDocument[] };
+      }) => response.result?.documents ?? [],
+      providesTags: (_result, _error, { sessionId, taskId }) => [
+        { type: 'TaskDocuments', id: `${sessionId}:${taskId}` },
+      ],
+      keepUnusedDataFor: 300,
+    }),
+
+    uploadTaskDocument: builder.mutation<
+      ImplementationTaskDocument,
+      TaskDocumentsQueryArgs & { file: File }
+    >({
+      query: ({ sessionId, taskId, file }) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return {
+          url: `/implementation/sessions/${sessionId}/tasks/${taskId}/upload-document`,
+          method: 'POST',
+          data: formData,
+        };
+      },
+      transformResponse: (
+        response: {
+          success?: boolean;
+          message?: string;
+          filename?: string;
+          file_id?: string;
+          view_url?: string | null;
+          document?: ImplementationTaskDocument;
+        },
+        _meta,
+        { file },
+      ) => {
+        if (!response.success || !response.file_id) {
+          throw new Error(response.message || 'Failed to upload document');
+        }
+        return (
+          response.document ?? {
+            file_id: response.file_id,
+            original_filename: response.filename || file.name,
+            view_url: response.view_url,
+            uploaded_at: new Date().toISOString(),
+          }
+        );
+      },
+      invalidatesTags: (_result, _error, { sessionId, taskId }) => [
+        { type: 'TaskDocuments', id: `${sessionId}:${taskId}` },
+      ],
+    }),
   }),
 });
 
@@ -175,6 +255,8 @@ export const {
   useLazyGetContactProvidersQuery,
   useGetRoadmapPlanQuery,
   useGetBudgetQuery,
+  useGetTaskDocumentsQuery,
+  useUploadTaskDocumentMutation,
 } = implementationApi;
 
 /** Per-endpoint stale times (RTK Query v2+ supports endpoint-level override via hook options). */
@@ -184,4 +266,5 @@ export const implementationCachePolicy = {
   roadmap: { staleTime: STALE_ROADMAP_MS },
   taskHelp: { staleTime: STALE_TASK_HELP_MS },
   budget: { staleTime: STALE_BUDGET_MS },
+  taskDocuments: { staleTime: STALE_TASK_DOCUMENTS_MS },
 } as const;
