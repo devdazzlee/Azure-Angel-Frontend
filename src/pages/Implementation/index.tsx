@@ -12,7 +12,7 @@ import ImplementationRoadmapNavigator from '../../components/ImplementationRoadm
 import ImplementationCompletionModal from '../../components/ImplementationCompletionModal';
 import type { ImplementationCatalogPhase } from '../../types/implementationNavigation';
 import httpClient from '../../api/httpClient';
-import { uploadImplementationTaskDocument } from '../../services/implementationDocumentsService';
+import { uploadImplementationTaskDocument, invalidateImplementationTaskDocuments } from '../../services/implementationDocumentsService';
 import { useBusinessContext } from '../../hooks/useBusinessContext';
 import { useAppDispatch } from '../../store';
 import {
@@ -276,11 +276,11 @@ const Implementation: React.FC<ImplementationProps> = ({
           const next = tasksPayload.current_task as unknown as ImplementationTask;
           if (!prev || prev.id !== next.id) return next;
           const focused = prev.current_substep;
-          if (
-            focused != null &&
-            next.substeps?.some((s) => s.step_number === focused)
-          ) {
-            return { ...next, current_substep: focused };
+          if (focused != null) {
+            const focusedSub = next.substeps?.find((s) => s.step_number === focused);
+            if (focusedSub && !focusedSub.completed) {
+              return { ...next, current_substep: focused };
+            }
           }
           return next;
         });
@@ -354,6 +354,7 @@ const Implementation: React.FC<ImplementationProps> = ({
         return;
       }
       setExpandedTaskId(taskId);
+      setPanelTask(null);
       void loadPanelTask(taskId);
     },
     [expandedTaskId, loadPanelTask],
@@ -575,6 +576,23 @@ const Implementation: React.FC<ImplementationProps> = ({
   const substepPercent = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
   const progressPercent = Math.min(100, Math.max((progress as any)?.percent ?? 0, computedPercent, substepPercent));
 
+  const showPanelLoader = Boolean(
+    expandedTaskId &&
+      (loadingPanelTaskId === expandedTaskId ||
+        !panelTask ||
+        panelTask.id !== expandedTaskId),
+  );
+
+  const panelTaskProgressLoading = Boolean(
+    showPanelLoader ||
+      (loading && expandedTaskId != null) ||
+      (isRefreshingTask &&
+        panelTask &&
+        currentTask &&
+        panelTask.id === currentTask.id &&
+        panelTask.id === expandedTaskId),
+  );
+
   const loadImplementationData = async (_options?: { silent?: boolean }) => {
     await refetchTasks();
   };
@@ -587,24 +605,44 @@ const Implementation: React.FC<ImplementationProps> = ({
       }));
     }
 
+    const taskId = data.result?.task_id;
     const substepNumber = data.result?.substep_number;
-    if (substepNumber == null) return;
-
     const note = data.result?.notes?.trim() ?? '';
 
     const applyToTask = (taskPrev: ImplementationTask | null) => {
-      if (!taskPrev) return taskPrev;
+      if (!taskPrev || (taskId && taskPrev.id !== taskId)) return taskPrev;
 
-      const substepId = `${taskPrev.id}_substep_${substepNumber}`;
-      const completedIds: string[] = [];
-      for (const s of taskPrev.substeps ?? []) {
-        const id = `${taskPrev.id}_substep_${s.step_number}`;
-        if (s.completed || s.step_number === substepNumber) {
-          completedIds.push(id);
+      if (substepNumber != null) {
+        const substepId = `${taskPrev.id}_substep_${substepNumber}`;
+        const completedIds: string[] = [];
+        for (const s of taskPrev.substeps ?? []) {
+          const id = `${taskPrev.id}_substep_${s.step_number}`;
+          if (s.completed || s.step_number === substepNumber) {
+            completedIds.push(id);
+          }
         }
+        if (!completedIds.includes(substepId)) {
+          completedIds.push(substepId);
+        }
+
+        const updated = applySubstepCompletionToTask(
+          taskPrev,
+          substepNumber,
+          note,
+          completedIds,
+        );
+
+        setCompletedTasks((completedPrev) => {
+          const merged = new Set([...completedPrev, ...completedIds]);
+          return Array.from(merged);
+        });
+
+        return updated;
       }
-      if (!completedIds.includes(substepId)) {
-        completedIds.push(substepId);
+
+      const completedIds: string[] = [taskPrev.id];
+      for (const s of taskPrev.substeps ?? []) {
+        completedIds.push(`${taskPrev.id}_substep_${s.step_number}`);
       }
 
       setCompletedTasks((completedPrev) => {
@@ -612,11 +650,23 @@ const Implementation: React.FC<ImplementationProps> = ({
         return Array.from(merged);
       });
 
-      return applySubstepCompletionToTask(taskPrev, substepNumber, note, completedIds);
+      const substeps = (taskPrev.substeps ?? []).map((substep) => ({
+        ...substep,
+        completed: true,
+      }));
+      const lastSubstep = substeps[substeps.length - 1];
+
+      return {
+        ...taskPrev,
+        substeps,
+        current_substep: lastSubstep?.step_number ?? taskPrev.current_substep,
+      };
     };
 
-    setCurrentTask(applyToTask);
-    setPanelTask((prev) => (prev ? applyToTask(prev) : prev));
+    if (substepNumber != null || taskId) {
+      setCurrentTask(applyToTask);
+      setPanelTask((prev) => (prev ? applyToTask(prev) : prev));
+    }
   };
 
   const handleTaskCompletion = async (completionData: any) => {
@@ -722,6 +772,7 @@ const Implementation: React.FC<ImplementationProps> = ({
     );
 
     toast.success('Document uploaded successfully');
+    invalidateImplementationTaskDocuments(sessionId!, activeSupportTask.id);
     return {
       filename: document.original_filename || file.name,
       file_id: document.file_id,
@@ -1109,7 +1160,7 @@ const Implementation: React.FC<ImplementationProps> = ({
                     loadingTaskId={loadingPanelTaskId}
                     onSelectTask={handleSelectTask}
                     expandedPanel={
-                      loadingPanelTaskId && !panelTask ? (
+                      showPanelLoader ? (
                         <div className="flex items-center justify-center gap-2 py-12 text-gray-600">
                           <div className="h-8 w-8 animate-spin rounded-full border-4 border-teal-200 border-t-teal-600" />
                           <span className="text-sm font-medium">Loading task details…</span>
@@ -1117,6 +1168,11 @@ const Implementation: React.FC<ImplementationProps> = ({
                       ) : panelTask ? (
                         <TaskCard
                           task={panelTask}
+                          isTaskCompleted={
+                            !panelTaskProgressLoading &&
+                            completedTasks.includes(panelTask.id)
+                          }
+                          isProgressLoading={panelTaskProgressLoading}
                           onComplete={handleSubstepCompletion}
                           onSubstepFocus={(stepNumber) => {
                             const patch = (prev: ImplementationTask | null) =>

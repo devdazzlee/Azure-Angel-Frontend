@@ -26,14 +26,38 @@ interface UploadDocumentResponse {
   document?: ImplementationTaskDocument;
 }
 
+const documentsCache = new Map<
+  string,
+  { docs: ImplementationTaskDocument[]; fetchedAt: number }
+>();
+const DOCUMENTS_CACHE_TTL_MS = 5 * 60 * 1000;
+
+export function invalidateImplementationTaskDocuments(
+  sessionId: string,
+  taskId: string,
+): void {
+  documentsCache.delete(`${sessionId}:${taskId}`);
+}
+
 export async function fetchImplementationTaskDocuments(
   sessionId: string,
   taskId: string,
+  options?: { force?: boolean },
 ): Promise<ImplementationTaskDocument[]> {
+  const cacheKey = `${sessionId}:${taskId}`;
+  if (!options?.force) {
+    const cached = documentsCache.get(cacheKey);
+    if (cached && Date.now() - cached.fetchedAt < DOCUMENTS_CACHE_TTL_MS) {
+      return cached.docs;
+    }
+  }
+
   const { data } = await httpClient.get<DocumentsListResponse>(
     `/implementation/sessions/${sessionId}/tasks/${taskId}/documents`,
   );
-  return data.result?.documents ?? [];
+  const docs = data.result?.documents ?? [];
+  documentsCache.set(cacheKey, { docs, fetchedAt: Date.now() });
+  return docs;
 }
 
 export async function refreshImplementationDocumentViewUrl(

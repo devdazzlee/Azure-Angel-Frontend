@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/popover';
 import {
   fetchImplementationTaskDocuments,
+  invalidateImplementationTaskDocuments,
   refreshImplementationDocumentViewUrl,
   type ImplementationTaskDocument,
 } from '../services/implementationDocumentsService';
@@ -95,6 +96,8 @@ export interface TaskCompletionResult {
 
 interface TaskCardProps {
   task: ImplementationTask;
+  /** True when this main task id is in the session completed list */
+  isTaskCompleted?: boolean;
   onComplete: (result?: TaskCompletionResult) => void;
   onGetServiceProviders: () => void;
   onGetHelp: () => void;
@@ -107,12 +110,15 @@ interface TaskCardProps {
   helpContent?: string;
   helpLoading?: boolean;
   isRefreshing?: boolean;
+  /** True while task progress / completion state is still loading from the API */
+  isProgressLoading?: boolean;
   /** Keeps Angel panel / parent state aligned when user reviews a completed step */
   onSubstepFocus?: (stepNumber: number) => void;
 }
 
 export const TaskCard: React.FC<TaskCardProps> = ({
   task,
+  isTaskCompleted = false,
   onComplete,
   onGetServiceProviders,
   onGetHelp,
@@ -121,6 +127,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   helpContent,
   helpLoading,
   isRefreshing = false,
+  isProgressLoading = false,
   onSubstepFocus,
 }) => {
   const [selectedOption, setSelectedOption] = useState<string>('');
@@ -136,6 +143,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const documentsRequestKeyRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mentorInsights, setMentorInsights] = useState<string>('');
@@ -151,10 +159,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const [pendingSubsteps, setPendingSubsteps] = useState<Set<number>>(new Set());
   /** User-selected step for review; only reset when the implementation task changes. */
   const [focusedSubstepNumber, setFocusedSubstepNumber] = useState<number | null>(null);
+  /** Prevents duplicate full-task submissions before refetch lands */
+  const [taskCompletionLocked, setTaskCompletionLocked] = useState(false);
+
+  const isMainTaskComplete =
+    !isProgressLoading && (isTaskCompleted || taskCompletionLocked);
 
   useEffect(() => {
     loadTaskInsights();
     setFocusedSubstepNumber(null);
+    setTaskCompletionLocked(false);
     setUploadedFile(null);
     setUploadedFileId(null);
     setUploadedViewUrl(null);
@@ -162,6 +176,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     setUploadError(null);
     setSelectedDocumentId(null);
     setDocumentsPickerOpen(false);
+    documentsRequestKeyRef.current = null;
     void loadExistingDocuments();
   }, [task.id, sessionId]);
 
@@ -177,14 +192,21 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     );
   }, [existingDocuments]);
 
-  const loadExistingDocuments = async () => {
+  const loadExistingDocuments = async (options?: { force?: boolean }) => {
     if (!sessionId || !task.id) {
       setExistingDocuments([]);
       return;
     }
+
+    const requestKey = `${sessionId}:${task.id}`;
+    if (!options?.force && documentsRequestKeyRef.current === requestKey) {
+      return;
+    }
+
+    documentsRequestKeyRef.current = requestKey;
     setDocumentsLoading(true);
     try {
-      const docs = await fetchImplementationTaskDocuments(sessionId, task.id);
+      const docs = await fetchImplementationTaskDocuments(sessionId, task.id, options);
       setExistingDocuments(docs);
     } catch (err) {
       console.error('Failed to load task documents:', err);
@@ -240,14 +262,18 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       const focusedIdx = task.substeps.findIndex(
         (s) => s.step_number === focusedSubstepNumber,
       );
-      if (focusedIdx >= 0) return focusedIdx;
+      if (focusedIdx >= 0 && !task.substeps[focusedIdx].completed) {
+        return focusedIdx;
+      }
     }
 
     if (task.current_substep != null) {
       const fromServer = task.substeps.findIndex(
         (s) => s.step_number === task.current_substep,
       );
-      if (fromServer >= 0) return fromServer;
+      if (fromServer >= 0 && !task.substeps[fromServer].completed) {
+        return fromServer;
+      }
     }
 
     const incompleteIndex = task.substeps.findIndex((s) => !s.completed);
@@ -309,6 +335,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         return [nextDoc, ...prev.filter((d) => d.file_id !== result.file_id)];
       });
       setSelectedDocumentId(result.file_id);
+      invalidateImplementationTaskDocuments(sessionId, task.id);
     } catch (err: unknown) {
       setUploadedFile(null);
       setUploadedFileId(null);
@@ -412,6 +439,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
       if ((response.data as any).success) {
         onComplete(response.data as TaskCompletionResult);
+        const nextIncomplete =
+          task.substeps?.find((s) => s.step_number > stepNumber && !s.completed) ??
+          task.substeps?.find((s) => s.step_number !== stepNumber && !s.completed);
+        if (nextIncomplete) {
+          setFocusedSubstepNumber(nextIncomplete.step_number);
+          onSubstepFocus?.(nextIncomplete.step_number);
+        } else {
+          setFocusedSubstepNumber(null);
+        }
       } else {
         const message = (response.data as any).message || 'Failed to complete step';
         toast.error(`Step ${stepNumber}: ${message}`);
@@ -433,7 +469,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   };
 
   const handleComplete = async () => {
-    // Decision field is now optional - no validation needed
+    if (isMainTaskComplete) {
+      toast.info('This task is already completed.');
+      return;
+    }
 
     // CRITICAL: Check if all substeps are completed before allowing task completion
     if (task.substeps && task.substeps.length > 0) {
@@ -480,13 +519,25 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         }
       );
 
-      if ((response.data as any).success) {
-        onComplete(response.data as TaskCompletionResult);
+      const data = response.data as TaskCompletionResult & { already_completed?: boolean };
+      if (data.success) {
+        if (data.already_completed) {
+          toast.info('This task is already completed.');
+        } else {
+          toast.success('Task completed successfully!');
+        }
+        setTaskCompletionLocked(true);
+        onComplete(data);
       } else {
-        setError((response.data as any).message || 'Failed to complete task');
+        setError(data.message || 'Failed to complete task');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to complete task');
+      const message =
+        err.response?.data?.detail ||
+        err.response?.data?.message ||
+        err?.message ||
+        'Failed to complete task';
+      setError(typeof message === 'string' ? message : 'Failed to complete task');
     } finally {
       setLoading(false);
     }
@@ -598,6 +649,29 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               <Target className="h-4 w-4 text-blue-600" />
               Implementation Steps ({task.substeps.length} steps)
             </h3>
+            {isProgressLoading ? (
+              <div className="space-y-3" aria-busy="true" aria-label="Loading step progress">
+                {task.substeps.map((substep) => (
+                  <div
+                    key={substep.step_number}
+                    className="animate-pulse rounded-xl border border-gray-200 bg-gray-50 p-4"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="h-8 w-8 rounded-full bg-gray-200" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 w-2/3 rounded bg-gray-200" />
+                        <div className="h-3 w-full rounded bg-gray-100" />
+                        <div className="h-3 w-5/6 rounded bg-gray-100" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-center justify-center gap-2 py-2 text-sm text-gray-500">
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                  Loading your progress…
+                </div>
+              </div>
+            ) : (
             <div className="space-y-3">
               {task.substeps.map((substep, index) => {
                 const isActive = index === currentSubstepIndex;
@@ -752,16 +826,19 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               );
               })}
             </div>
+            )}
+            {!isProgressLoading && (
             <div className="mt-4 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
               <p className="text-xs text-indigo-800">
                 <strong>Flow:</strong> Complete each step in order. Click any completed step to review it. Current: Step {task.substeps[currentSubstepIndex]?.step_number || 1}.
               </p>
             </div>
+            )}
           </div>
         )}
 
-        {/* Decision Options - Optional, only show when completing the full task */}
-        {task.options.length > 0 && (
+        {/* Decision Options - only while the main task is still open */}
+        {!isMainTaskComplete && !isProgressLoading && task.options.length > 0 && (
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Optional: what did you choose?
@@ -852,7 +929,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </div>
         </div>
 
-        {/* Completion Notes */}
+        {/* Completion Notes — hidden once the task is finished */}
+        {!isMainTaskComplete && !isProgressLoading && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Completion Notes</label>
           <textarea
@@ -863,8 +941,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
+        )}
 
         {/* Document Upload */}
+        {!isProgressLoading && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Upload documentation
@@ -1020,6 +1100,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             </div>
           )}
 
+          {!isMainTaskComplete && (
           <div
             role={uploadState !== 'uploading' && uploadState !== 'success' ? 'button' : undefined}
             tabIndex={uploadState !== 'uploading' && uploadState !== 'success' ? 0 : undefined}
@@ -1117,10 +1198,21 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               className="sr-only"
             />
           </div>
+          )}
           {uploadError && (
             <p className="mt-2 text-xs text-red-600">{uploadError}</p>
           )}
         </div>
+        )}
+
+        {isProgressLoading && (
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-6" aria-busy="true">
+            <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
+              <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+              Loading completion options…
+            </div>
+          </div>
+        )}
 
         {/* Error Display */}
         {error && (
@@ -1133,10 +1225,25 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         )}
 
         {/* Action Buttons */}
+        {isProgressLoading ? null : isMainTaskComplete ? (
+          <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-500 text-white">
+                <CheckCircle className="h-5 w-5" aria-hidden />
+              </div>
+              <div>
+                <p className="font-semibold text-green-900">Task completed</p>
+                <p className="text-sm text-green-800">
+                  All steps are done. Move on to the next task in your roadmap.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
         <div className="flex flex-col sm:flex-row gap-3">
           <button
             onClick={handleComplete}
-            disabled={loading}
+            disabled={loading || isMainTaskComplete}
             className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
           >
             {loading ? (
@@ -1153,6 +1260,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </button>
 
         </div>
+        )}
       </div>
 
       {/* Substep Completion Modal */}
