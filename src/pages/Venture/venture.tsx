@@ -58,6 +58,10 @@ import {
 } from "../../utils/businessPlanImportPrompt";
 import { useBusinessContext } from "../../hooks/useBusinessContext";
 import { normalizeBusinessContext } from "../../types/businessContext";
+import {
+  MODIFY_HISTORY_ANSWER_LABEL,
+  resolveModifyAssistantSnapshot,
+} from "../../utils/resolveModifyAssistantSnapshot";
 import ReactMarkdown from "react-markdown";
 import type { Budget, BudgetItem, APIResponse } from "../../types/apiTypes";
 import BusinessPlanningInstructions from "../../components/BusinessPlanningInstructions";
@@ -83,7 +87,9 @@ interface ConversationPair {
   /** Draft, Support, Scrapping etc. - display in chat but exclude from progress */
   isCommand?: boolean;
   /** Which quick action produced this row — used for the response card title only */
-  commandKind?: "draft" | "support" | "scrapping";
+  commandKind?: "draft" | "support" | "scrapping" | "modify";
+  /** Full raw Angel API reply for Draft/Support/Scrapping/Modify — used for Modify snapshot */
+  assistReply?: string;
 }
 
 /**
@@ -120,6 +126,7 @@ function inferCommandKindFromUserInput(userInput: string): ConversationPair["com
 function commandQuickActionResponseTitle(kind: ConversationPair["commandKind"]): string {
   if (kind === "support") return "Support Response";
   if (kind === "scrapping") return "Scrapping Response";
+  if (kind === "modify") return "Modified Response";
   if (kind === "draft") return "Draft Response";
   return "Angel Response";
 }
@@ -428,8 +435,10 @@ export default function ChatPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const isInitialIntroShown = useRef(false);
-  /** Raw last Angel reply before a command turn — used so Draft/Support rows show full question context. */
+  /** Raw last Angel reply before a command turn — active questionnaire prompt + research. */
   const lastFullAssistantReplyRef = useRef<string>("");
+  /** Full API reply from the latest Draft/Support/Scrapping/Modify assist — Modify snapshot source. */
+  const lastCommandAssistReplyRef = useRef<string>("");
   const {
     context: businessContext,
     refresh: refreshBusinessContext,
@@ -635,6 +644,10 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false);
   /** User's answer displayed while waiting for Angel's reply (keeps question + reply visible during loading) */
   const [pendingUserReply, setPendingUserReply] = useState<string | null>(null);
+  /** Prior answer restored by go-back — shown with Accept/Modify for review */
+  const [goBackReviewAnswer, setGoBackReviewAnswer] = useState<string | null>(null);
+  const [goBackUserDisplay, setGoBackUserDisplay] = useState<string | null>(null);
+  const goBackAcceptPayloadRef = useRef<string>("accept");
   const [backButtonLoading, setBackButtonLoading] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [progress, setProgress] = useState<ProgressState>({
@@ -1194,6 +1207,7 @@ export default function ChatPage() {
     
     // Remove draft/support prefixes
     cleanedContent = cleanedContent.replace(/^Here's a (research-backed )?draft for you:\s*/i, '').trim();
+    cleanedContent = cleanedContent.replace(/^Here's a revised draft(?:\s+for you)?:\s*/i, '').trim();
     cleanedContent = cleanedContent.replace(/^Here's a draft based on.*?:\s*/i, '').trim();
     
     // Remove trailing tips and verification prompts
@@ -1233,6 +1247,7 @@ export default function ChatPage() {
     if (!message?.trim()) return null;
     let cleaned = message
       .replace(/^Here's a (research-backed )?draft for you:\s*/i, "")
+      .replace(/^Here's a revised draft(?:\s+for you)?:\s*/i, "")
       .replace(/^Here's a draft based on what you've shared:\s*/i, "")
       .replace(/^Here's a refined version of your thoughts:\s*/i, "")
       .trim();
@@ -1243,6 +1258,17 @@ export default function ChatPage() {
   // Handle Accept button click
   const handleAccept = async () => {
     setShowVerificationButtons(false);
+
+    const goBackResubmit =
+      goBackReviewAnswer &&
+      goBackAcceptPayloadRef.current !== "accept"
+        ? goBackAcceptPayloadRef.current
+        : null;
+    if (goBackReviewAnswer) {
+      setGoBackReviewAnswer(null);
+      setGoBackUserDisplay(null);
+      goBackAcceptPayloadRef.current = "accept";
+    }
 
     // Commit the live section summary into the last Q&A row before advancing.
     const summaryToArchive =
@@ -1272,9 +1298,11 @@ export default function ChatPage() {
     try {
       // IMPORTANT: Send only "Accept" to the backend, not the full content
       // The backend will understand "Accept" as a command to move to the next question
+      // After go-back review, resubmit the preserved typed answer when applicable.
+      const acceptPayload = goBackResubmit || "Accept";
       const {
         result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number, is_section_summary },
-      } = await fetchQuestion("Accept", sessionId!);
+      } = await fetchQuestion(acceptPayload, sessionId!);
       const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
       const { isSectionSummary, questionNumber } = resolveDisplayFromAngelResult(
         { question_number, is_section_summary },
@@ -1290,6 +1318,8 @@ export default function ChatPage() {
       
       // Use backend detection for showing buttons (always respect backend decision)
       setShowVerificationButtons(show_accept_modify || false);
+
+      lastCommandAssistReplyRef.current = "";
 
       // After Draft/Support/Scrapping, the last row stays isCommand — that hides the next
       // question card. Also, currentQuestion is only the short parsed question, so merge the
@@ -1348,27 +1378,16 @@ export default function ChatPage() {
     }
   };
 
-  // Handle Modify button click
   const handleModify = (currentText: string) => {
-    const last = history.length > 0 ? history[history.length - 1] : null;
-    const fromDraftCard =
-      last?.isCommand && last.acknowledgement?.trim()
-        ? extractDraftBodyFromAssistantMessage(last.acknowledgement) || last.acknowledgement.trim()
-        : "";
-    const fromQuestion = extractGuidanceContent(currentQuestion);
-    const trimmedPassed = (currentText || "").trim();
-    const shortQ = (currentQuestion || "").trim();
-    let snapshot =
-      fromQuestion ||
-      (fromDraftCard && (!trimmedPassed || trimmedPassed === shortQ) ? fromDraftCard : trimmedPassed) ||
-      trimmedPassed ||
-      fromDraftCard;
-    if (fromDraftCard && snapshot === shortQ) {
-      snapshot = fromDraftCard;
-    }
+    const snapshot = resolveModifyAssistantSnapshot({
+      pendingAssistReply: lastCommandAssistReplyRef.current,
+      activeQuestionReply: lastFullAssistantReplyRef.current,
+      goBackReviewAnswer,
+      history,
+    });
     setModifyModal({
       isOpen: true,
-      assistantSnapshot: snapshot,
+      assistantSnapshot: snapshot || currentText,
     });
   };
 
@@ -3472,6 +3491,14 @@ export default function ChatPage() {
       };
     }
   ) => {
+    if (loading) {
+      return;
+    }
+    if (!sessionId) {
+      toast.error("Session is still loading. Please try again in a moment.");
+      return;
+    }
+
     const input = options?.modify
       ? options.modify.user_guidance.trim()
       : (inputOverride ?? currentInput).trim();
@@ -3532,7 +3559,11 @@ export default function ChatPage() {
       if (progress.phase === 'BUSINESS_PLAN') {
         setAwaitingGkyProceed(false);
       }
-      await refreshBusinessContext();
+      try {
+        await refreshBusinessContext();
+      } catch (refreshError) {
+        console.warn("Business context refresh failed after chat turn:", refreshError);
+      }
       
       // Handle transition phases - return early (no history add for modal transitions)
       if (transition_phase === "PLAN_TO_SUMMARY") {
@@ -3617,22 +3648,25 @@ export default function ChatPage() {
       );
 
       if (options?.modify) {
-        const reviseDisplay = (
-          (ack && ack.trim().length > 0 ? ack : parsedQ) ||
-          reply ||
-          ""
-        ).trim();
+        const reviseDisplay = reply.trim();
+
+        lastCommandAssistReplyRef.current = reply;
 
         setHistory((prev) => {
+          const modifyRow = {
+            answer: MODIFY_HISTORY_ANSWER_LABEL,
+            acknowledgement: reviseDisplay || undefined,
+            questionNumber: previousQuestionNumber,
+            phase: progress.phase,
+            isCommand: true,
+            commandKind: "modify" as const,
+            assistReply: reply,
+          };
           if (prev.length === 0) {
             return [
               {
                 question: previousQuestion,
-                answer: input,
-                acknowledgement: reviseDisplay || undefined,
-                questionNumber: previousQuestionNumber,
-                phase: progress.phase,
-                isCommand: true,
+                ...modifyRow,
               },
             ];
           }
@@ -3642,8 +3676,7 @@ export default function ChatPage() {
               ...prev.slice(0, -1),
               {
                 ...last,
-                answer: input,
-                acknowledgement: reviseDisplay || last.acknowledgement,
+                ...modifyRow,
               },
             ];
           }
@@ -3651,11 +3684,7 @@ export default function ChatPage() {
             ...prev,
             {
               question: previousQuestion,
-              answer: input,
-              acknowledgement: reviseDisplay || undefined,
-              questionNumber: previousQuestionNumber,
-              phase: progress.phase,
-              isCommand: true,
+              ...modifyRow,
             },
           ];
         });
@@ -3704,10 +3733,12 @@ export default function ChatPage() {
           phase: progress.phase,
           ...(wasCommand && { isCommand: true }),
           ...(wasCommand && cmdKindFromInput ? { commandKind: cmdKindFromInput } : {}),
+          ...(wasCommand && { assistReply: reply }),
         },
       ]);
 
       if (wasCommand && !options?.modify) {
+        lastCommandAssistReplyRef.current = reply;
         // Command turns (Draft/Support/Scrapping) should not replace the active question UI.
         // Keep the same question visible while showing command output in chat history.
         setCurrentQuestion(previousQuestion);
@@ -3908,8 +3939,22 @@ export default function ChatPage() {
       const replyText = data.result?.reply ?? '';
       const { acknowledgement: prevAck, question: prevQ } = parseAngelReply(replyText);
       const tagMatch = replyText.match(/\[\[Q:([A-Z_]+)\.(\d{2})]]/);
-      const previousQuestionNumber = tagMatch ? parseInt(tagMatch[2], 10) : null;
+      const previousQuestionNumber = tagMatch ? parseInt(tagMatch[2], 10) : data.result?.question_number ?? null;
       const previousPhase = tagMatch ? tagMatch[1] : progress.phase;
+
+      const reviewText =
+        (data.result?.review_answer_text as string | undefined) || "";
+      const displayAnswer =
+        (data.result?.display_user_answer as string | undefined) || "";
+      const prevStored = (data.result?.previous_answer as string | undefined)?.trim().toLowerCase();
+      goBackAcceptPayloadRef.current =
+        prevStored && prevStored !== "accept" && prevStored !== "yes"
+          ? (data.result?.previous_answer as string)
+          : "accept";
+      setGoBackReviewAnswer(reviewText.trim() || null);
+      setGoBackUserDisplay(displayAnswer.trim() || null);
+      setShowVerificationButtons(Boolean(data.result?.show_accept_modify ?? reviewText));
+      setIsCurrentSectionSummary(false);
 
         if (previousQuestionNumber !== null) {
           setPhaseQuestionTracker((prev) => ({
@@ -3955,52 +4000,15 @@ export default function ChatPage() {
       try {
         const refreshedHistory = await fetchSessionHistory(sessionId);
         if (refreshedHistory && Array.isArray(refreshedHistory)) {
-          // Rebuild conversation pairs from refreshed history
-          const buildPairs = (records: RawChatRecord[]) => {
-            const pairs: ConversationPair[] = [];
-            let pendingQuestion: string | null = null;
-            let pendingAck: string | null = null;
-            let pendingNumber: number | null = null;
-            let pendingPhase: ConversationPair['phase'] | null = null;
-
-            records.forEach((record) => {
-              if (record.role === 'assistant') {
-                if (!record.content) return;
-                const { acknowledgement, question } = parseAngelReply(record.content);
-                const tagMatch = record.content.match(/\[\[Q:([A-Z_]+)\.(\d{2})]]/);
-                const rawPhase = tagMatch ? tagMatch[1] : record.phase;
-                const rawUpper2 = rawPhase ? rawPhase.toUpperCase() : 'GKY';
-                const normalizedPhase = rawUpper2 === 'KYC' ? 'GKY' : rawUpper2;
-                const parsedNumber = tagMatch ? parseInt(tagMatch[2], 10) : null;
-
-                pendingQuestion = question;
-                pendingAck = acknowledgement;
-                pendingNumber = parsedNumber;
-                pendingPhase = normalizedPhase as ConversationPair['phase'];
-              } else if (record.role === 'user') {
-                if (!pendingQuestion) return;
-                const answerText = (record.content || '').trim();
-                if (!answerText || answerText.toUpperCase() === 'EMPTY') {
-                  return;
-                }
-                pairs.push({
-                  question: pendingQuestion,
-                  answer: answerText,
-                  acknowledgement: pendingAck || undefined,
-                  questionNumber: pendingNumber ?? undefined,
-                  phase: pendingPhase ?? undefined,
-                });
-                pendingQuestion = null;
-                pendingAck = null;
-                pendingNumber = null;
-                pendingPhase = null;
-              }
-            });
-
-            return pairs;
-          };
-
-            const refreshedPairs = buildPairs(refreshedHistory);
+          const refreshed = buildHistoryPairs(refreshedHistory, parseAngelReply);
+          let refreshedPairs = refreshed.pairs;
+          if (
+            previousQuestionNumber != null &&
+            refreshedPairs.length > 0 &&
+            refreshedPairs[refreshedPairs.length - 1].questionNumber === previousQuestionNumber
+          ) {
+            refreshedPairs = refreshedPairs.slice(0, -1);
+          }
             setHistory((prevHistory) => {
               console.log("✅ History refreshed from backend after going back:", {
                 oldLength: prevHistory.length,
@@ -5170,7 +5178,9 @@ export default function ChatPage() {
                         You
                       </div>
                       <div className="text-gray-700 whitespace-pre-wrap text-sm">
-                        {pair.answer}
+                        {pair.commandKind === "modify"
+                          ? MODIFY_HISTORY_ANSWER_LABEL
+                          : pair.answer}
                       </div>
                     </div>
                   </div>
@@ -5329,7 +5339,7 @@ export default function ChatPage() {
             )}
 
             {/* User's answer + Angel thinking - shown AFTER the question while waiting for response */}
-            {pendingUserReply && (
+            {(pendingUserReply || goBackUserDisplay) && (
               <div className="space-y-4">
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100">
                   <div className="p-3 sm:p-4 bg-gray-50">
@@ -5342,15 +5352,19 @@ export default function ChatPage() {
                           You
                         </div>
                         <div className="text-gray-700 whitespace-pre-wrap text-sm">
-                          {pendingUserReply}
+                          {goBackUserDisplay && !pendingUserReply
+                            ? goBackUserDisplay
+                            : pendingUserReply}
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
+                {pendingUserReply && (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
                   <AngelThinkingLoader />
                 </div>
+                )}
               </div>
             )}
             </div>
@@ -5395,10 +5409,11 @@ export default function ChatPage() {
                   onDraftMore={handleDraftMore}
                   disabled={loading}
                   currentText={
-                    history.length > 0 && history[history.length - 1]?.isCommand &&
+                    goBackReviewAnswer?.trim() ||
+                    (history.length > 0 && history[history.length - 1]?.isCommand &&
                     history[history.length - 1]?.acknowledgement?.trim()
                       ? history[history.length - 1].acknowledgement!.trim()
-                      : currentQuestion || ""
+                      : currentQuestion || "")
                   }
                   showDraftMore={
                     (history.length > 0 && history[history.length - 1]?.isCommand) ||
