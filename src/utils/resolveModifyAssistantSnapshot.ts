@@ -41,3 +41,17 @@ export function resolveModifyAssistantSnapshot(args: {
 
 /** Shown in chat history instead of the full modify guidance blob. */
 export const MODIFY_HISTORY_ANSWER_LABEL = "Modify refinement";
+
+/** Strip command-assist lead-ins so Accept persists the answer body only. */
+export function extractCommandAssistBody(message: string): string {
+  if (!message?.trim()) return "";
+  let cleaned = message
+    .trim()
+    .replace(/^Here's a (research-backed )?draft for you:\s*/i, "")
+    .replace(/^Here's a revised draft(?:\s+for you)?:\s*/i, "")
+    .replace(/^Here's a draft based on what you've shared:\s*/i, "")
+    .replace(/^Here's a refined version of your thoughts:\s*/i, "")
+    .replace(/\*\*/g, "")
+    .trim();
+  return cleaned;
+}

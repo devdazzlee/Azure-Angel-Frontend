@@ -40,6 +40,7 @@ import AngelThinkingLoader from "../../components/AngelThinkingLoader";
 import QuestionFormatter from "../../components/QuestionFormatter";
 import {
   getAngelMessageBadgeLabel,
+  isAutoResearchContent,
   isSectionSummaryContent,
   normalizeAngelMarkdown,
   normalizeSectionSummaryMarkdown,
@@ -60,6 +61,7 @@ import { useBusinessContext } from "../../hooks/useBusinessContext";
 import { normalizeBusinessContext } from "../../types/businessContext";
 import {
   MODIFY_HISTORY_ANSWER_LABEL,
+  extractCommandAssistBody,
   resolveModifyAssistantSnapshot,
 } from "../../utils/resolveModifyAssistantSnapshot";
 import ReactMarkdown from "react-markdown";
@@ -648,6 +650,8 @@ export default function ChatPage() {
   const [goBackReviewAnswer, setGoBackReviewAnswer] = useState<string | null>(null);
   const [goBackUserDisplay, setGoBackUserDisplay] = useState<string | null>(null);
   const goBackAcceptPayloadRef = useRef<string>("accept");
+  /** Modified answer body awaiting Accept — separate from go-back resubmit */
+  const pendingModifyAcceptRef = useRef<string>("");
   const [backButtonLoading, setBackButtonLoading] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [progress, setProgress] = useState<ProgressState>({
@@ -1244,20 +1248,25 @@ export default function ChatPage() {
 
   /** Strip draft/support lead-in lines so Accept can persist the body from a command card. */
   const extractDraftBodyFromAssistantMessage = (message: string): string | null => {
-    if (!message?.trim()) return null;
-    let cleaned = message
-      .replace(/^Here's a (research-backed )?draft for you:\s*/i, "")
-      .replace(/^Here's a revised draft(?:\s+for you)?:\s*/i, "")
-      .replace(/^Here's a draft based on what you've shared:\s*/i, "")
-      .replace(/^Here's a refined version of your thoughts:\s*/i, "")
-      .trim();
-    cleaned = cleaned.replace(/\*\*/g, "").trim();
+    const cleaned = extractCommandAssistBody(message);
     return cleaned.length > 0 ? cleaned : null;
   };
 
   // Handle Accept button click
   const handleAccept = async () => {
+    if (loading) {
+      return;
+    }
+
     setShowVerificationButtons(false);
+
+    const lastHistoryRow = history.length > 0 ? history[history.length - 1] : null;
+    const pendingModifyBody =
+      lastHistoryRow?.commandKind === "modify"
+        ? extractCommandAssistBody(
+            lastHistoryRow.assistReply || lastHistoryRow.acknowledgement || "",
+          )
+        : "";
 
     const goBackResubmit =
       goBackReviewAnswer &&
@@ -1268,6 +1277,23 @@ export default function ChatPage() {
       setGoBackReviewAnswer(null);
       setGoBackUserDisplay(null);
       goBackAcceptPayloadRef.current = "accept";
+    }
+
+    const pendingModifyAccept = pendingModifyAcceptRef.current.trim();
+
+    let acceptPayload: string;
+    if (isCurrentSectionSummary) {
+      acceptPayload = "Accept";
+      pendingModifyAcceptRef.current = "";
+    } else if (goBackResubmit) {
+      acceptPayload = goBackResubmit;
+    } else if (pendingModifyAccept) {
+      acceptPayload = pendingModifyAccept;
+      pendingModifyAcceptRef.current = "";
+    } else if (pendingModifyBody.length > 0) {
+      acceptPayload = pendingModifyBody;
+    } else {
+      acceptPayload = "Accept";
     }
 
     // Commit the live section summary into the last Q&A row before advancing.
@@ -1296,10 +1322,6 @@ export default function ChatPage() {
     setLoading(true);
     
     try {
-      // IMPORTANT: Send only "Accept" to the backend, not the full content
-      // The backend will understand "Accept" as a command to move to the next question
-      // After go-back review, resubmit the preserved typed answer when applicable.
-      const acceptPayload = goBackResubmit || "Accept";
       const {
         result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number, is_section_summary },
       } = await fetchQuestion(acceptPayload, sessionId!);
@@ -2992,6 +3014,7 @@ export default function ChatPage() {
         // Section summary: asked_q stays on the last question of the section (e.g. .04),
         // but the active UI is the summary — not "Question 4".
         let pausedOnSectionSummary = false;
+        let pausedOnAutoResearch = false;
         let sectionSummaryContent: string | null = null;
         if (historyResponse && Array.isArray(historyResponse)) {
           for (let i = historyResponse.length - 1; i >= 0; i--) {
@@ -3001,6 +3024,8 @@ export default function ChatPage() {
               if (isSectionSummaryContent(rec.content)) {
                 pausedOnSectionSummary = true;
                 sectionSummaryContent = rec.content;
+              } else if (isAutoResearchContent(rec.content)) {
+                pausedOnAutoResearch = true;
               }
               break;
             }
@@ -3419,7 +3444,7 @@ export default function ChatPage() {
           setCurrentAcknowledgement(reconstructed.pendingAcknowledgement || '');
           setIsCurrentSectionSummary(pausedOnSectionSummary);
           setCurrentQuestionNumber(pausedOnSectionSummary ? null : pendingNumber);
-          if (pausedOnSectionSummary) {
+          if (pausedOnSectionSummary || pausedOnAutoResearch) {
             setShowVerificationButtons(true);
           }
           setNeedsInitialQuestion(false);
@@ -3649,8 +3674,15 @@ export default function ChatPage() {
 
       if (options?.modify) {
         const reviseDisplay = reply.trim();
+        const modifiedBody =
+          extractCommandAssistBody(reviseDisplay) || reviseDisplay;
 
         lastCommandAssistReplyRef.current = reply;
+
+        setGoBackUserDisplay(null);
+        setGoBackReviewAnswer(modifiedBody);
+        pendingModifyAcceptRef.current = modifiedBody;
+        setPendingUserReply(null);
 
         setHistory((prev) => {
           const modifyRow = {
@@ -3760,7 +3792,11 @@ export default function ChatPage() {
       }
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
 
-      if (show_accept_modify !== undefined) {
+      if (isSectionSummary) {
+        setShowVerificationButtons(true);
+      } else if (isAutoResearchContent(reply)) {
+        setShowVerificationButtons(true);
+      } else if (show_accept_modify !== undefined) {
         setShowVerificationButtons(show_accept_modify);
       } else if (wasCommand) {
         setShowVerificationButtons(true);
@@ -4429,6 +4465,11 @@ export default function ChatPage() {
   const latestHistoryPair = history.length > 0 ? history[history.length - 1] : null;
   const hideStandaloneCurrentQuestionCard = Boolean(
     latestHistoryPair?.isCommand && !loading
+  );
+  const pendingModifyReviewActive = Boolean(
+    showVerificationButtons &&
+      latestHistoryPair?.commandKind === "modify" &&
+      !loading
   );
 
   // Add current question
@@ -5339,7 +5380,7 @@ export default function ChatPage() {
             )}
 
             {/* User's answer + Angel thinking - shown AFTER the question while waiting for response */}
-            {(pendingUserReply || goBackUserDisplay) && (
+            {(pendingUserReply || (goBackUserDisplay && !pendingModifyReviewActive)) && (
               <div className="space-y-4">
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100">
                   <div className="p-3 sm:p-4 bg-gray-50">
