@@ -6,15 +6,22 @@ interface AcceptModifyButtonsProps {
   disabled?: boolean;
   currentText?: string;
   showDraftMore?: boolean;
+  /**
+   * Whether the Accept action is offered. Informational responses (e.g. Support)
+   * are not answers, so they must not be acceptable — they surface Modify/Draft only.
+   * Defaults to true to preserve answerable flows (questions, Draft, go-back review).
+   */
+  showAccept?: boolean;
 }
 
-export default function AcceptModifyButtons({ 
-  onAccept, 
-  onModify, 
-  onDraftMore, 
-  disabled = false, 
+export default function AcceptModifyButtons({
+  onAccept,
+  onModify,
+  onDraftMore,
+  disabled = false,
   currentText = "",
-  showDraftMore = false 
+  showDraftMore = false,
+  showAccept = true
 }: AcceptModifyButtonsProps) {
   return (
     <div className="mt-4 p-4 bg-gradient-to-r from-green-50 via-blue-50 to-orange-50 rounded-lg border border-gray-200 shadow-sm">
@@ -30,19 +37,21 @@ export default function AcceptModifyButtons({
 
       {/* Compact Buttons Grid */}
       <div className="flex flex-col sm:flex-row gap-2 justify-center">
-        {/* Accept Button */}
-        <button
-          onClick={onAccept}
-          disabled={disabled}
-          className="group relative px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:hover:scale-100 disabled:hover:shadow-none flex items-center justify-center gap-2 min-w-[120px]"
-        >
-          <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 rounded-lg transition-opacity duration-300"></div>
-          <svg className="w-4 h-4 transition-transform duration-300 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-          <span className="relative z-10">Accept</span>
-          <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-300 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-        </button>
+        {/* Accept Button — hidden for informational responses (e.g. Support) */}
+        {showAccept && (
+          <button
+            onClick={onAccept}
+            disabled={disabled}
+            className="group relative px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:hover:scale-100 disabled:hover:shadow-none flex items-center justify-center gap-2 min-w-[120px]"
+          >
+            <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 rounded-lg transition-opacity duration-300"></div>
+            <svg className="w-4 h-4 transition-transform duration-300 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            <span className="relative z-10">Accept</span>
+            <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-300 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+          </button>
+        )}
 
         {/* Modify Button */}
         <button

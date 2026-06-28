@@ -331,6 +331,10 @@ function buildHistoryPairs(
   let pendingAck: string | null = null;
   let pendingNumber: number | null = null;
   let pendingPhase: ConversationPair["phase"] | null = null;
+  // Whether the pending (tagged) assistant turn carried an auto-generated answer
+  // (auto-research, e.g. Q11/Q12). Such turns are accepted, not typed — we must
+  // still preserve them as a Q&A pair rather than discard them on "Accept".
+  let pendingIsAutoResearch = false;
   const phaseCounters: Record<string, number> = {};
 
   for (const record of records) {
@@ -349,6 +353,7 @@ function buildHistoryPairs(
         pendingAck = null;
         pendingNumber = null;
         pendingPhase = null;
+        pendingIsAutoResearch = false;
         continue;
       }
 
@@ -370,11 +375,31 @@ function buildHistoryPairs(
       pendingQuestion = question;
       pendingAck = acknowledgement;
       pendingPhase = normalizedPhase;
+      pendingIsAutoResearch = isAutoResearchContent(content);
     } else if (record.role === "user") {
       const answerText = (record.content || "").trim();
       if (!answerText || answerText.toUpperCase() === "EMPTY") continue;
 
       if (isAcceptUserInput(answerText)) {
+        // Accepting an auto-generated answer (auto-research) is the only way those
+        // turns get "answered". Preserve the question + generated body as a pair so
+        // it stays in the chat; otherwise the next tagged turn overwrites it and the
+        // content is lost on reload.
+        if (pendingQuestion && pendingIsAutoResearch) {
+          pairs.push({
+            question: pendingQuestion,
+            answer: answerText,
+            acknowledgement: pendingAck || undefined,
+            questionNumber: pendingNumber ?? undefined,
+            phase: pendingPhase ?? undefined,
+          });
+          pendingQuestion = null;
+          pendingAck = null;
+          pendingNumber = null;
+          pendingPhase = null;
+          pendingIsAutoResearch = false;
+          continue;
+        }
         if (pairs.length > 0 && pairs[pairs.length - 1].sectionSummary) {
           const lastIdx = pairs.length - 1;
           pairs[lastIdx] = { ...pairs[lastIdx], sectionSummaryAccepted: true };
@@ -394,6 +419,7 @@ function buildHistoryPairs(
       pendingAck = null;
       pendingNumber = null;
       pendingPhase = null;
+      pendingIsAutoResearch = false;
     }
   }
 
@@ -1258,9 +1284,40 @@ export default function ChatPage() {
       return;
     }
 
+    const lastHistoryRow = history.length > 0 ? history[history.length - 1] : null;
+
+    // Invariant: a Support response is informational guidance, never a candidate
+    // answer. Accept must not commit it (the button is hidden, but enforce here so
+    // UI state desync can't persist guidance as the user's answer and advance).
+    if (
+      !goBackReviewAnswer &&
+      lastHistoryRow?.isCommand &&
+      lastHistoryRow.commandKind === "support"
+    ) {
+      return;
+    }
+
+    // Auto-generated answers (auto-research: Q11 competitors, Q12 trends, etc.) are
+    // accepted rather than typed, so unlike typed answers they were never pushed to
+    // history by handleNext. Snapshot this turn now (current question + the generated
+    // body in its acknowledgement) so accepting it preserves the content in the chat
+    // for later reference instead of discarding it when we advance.
+    const acceptedAutoResearchPair: ConversationPair | null =
+      !isCurrentSectionSummary &&
+      !goBackReviewAnswer &&
+      !lastHistoryRow?.isCommand &&
+      isAutoResearchContent(lastFullAssistantReplyRef.current || "")
+        ? {
+            question: currentQuestion,
+            answer: "Accept",
+            acknowledgement: currentAcknowledgement || undefined,
+            questionNumber: currentQuestionNumber ?? undefined,
+            phase: progress.phase as ConversationPair["phase"],
+          }
+        : null;
+
     setShowVerificationButtons(false);
 
-    const lastHistoryRow = history.length > 0 ? history[history.length - 1] : null;
     const pendingModifyBody =
       lastHistoryRow?.commandKind === "modify"
         ? extractCommandAssistBody(
@@ -1341,6 +1398,12 @@ export default function ChatPage() {
       // Use backend detection for showing buttons (always respect backend decision)
       setShowVerificationButtons(show_accept_modify || false);
 
+      // Accept advances to a new active question. Refresh the snapshot ref so a
+      // later Draft/Support/Scrapping turn references THIS question — not the
+      // stale section summary that was active before Accept (which otherwise
+      // gets re-rendered as the question of every following command turn).
+      lastFullAssistantReplyRef.current = reply;
+
       lastCommandAssistReplyRef.current = "";
 
       // After Draft/Support/Scrapping, the last row stays isCommand — that hides the next
@@ -1377,7 +1440,13 @@ export default function ChatPage() {
           },
         ];
       });
-      
+
+      // Preserve an accepted auto-generated (auto-research) answer as its own
+      // chat turn so it stays visible after we advance to the next question.
+      if (acceptedAutoResearchPair) {
+        setHistory((prev) => [...prev, acceptedAutoResearchPair]);
+      }
+
       // Show immediate response if available
       if (immediate_response) {
         // toast.info(immediate_response, { 
@@ -1430,6 +1499,8 @@ export default function ChatPage() {
       applyProgressUpdate(progress);
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
       setShowVerificationButtons(show_accept_modify || false);
+      // Keep the command-snapshot ref pointing at the new active question.
+      lastFullAssistantReplyRef.current = reply;
     } catch (error: any) {
       console.error("❌ Failed to handle Yes:", error);
       const errorMessage = 
@@ -1461,6 +1532,8 @@ export default function ChatPage() {
       applyProgressUpdate(progress);
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
       setShowVerificationButtons(show_accept_modify || false);
+      // Keep the command-snapshot ref pointing at the new active question.
+      lastFullAssistantReplyRef.current = reply;
     } catch (error: any) {
       console.error("❌ Failed to handle No:", error);
       const errorMessage = 
@@ -1469,48 +1542,6 @@ export default function ChatPage() {
         error?.response?.data?.error ||
         error?.response?.data?.message ||
         "Failed to proceed. Please try again.";
-      toast.error(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Handle Draft Answer button click
-  const handleDraftMore = async () => {
-    setLoading(true);
-    
-    try {
-      const {
-        result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number },
-      } = await fetchQuestion("Draft Answer", sessionId!);
-      const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
-      const questionNumber = deriveQuestionNumber(question_number, reply, progress);
-      setCurrentQuestion(parsedQ);
-      setCurrentAcknowledgement(ack);
-      setCurrentQuestionNumber(questionNumber);
-      updateQuestionTracker(progress.phase, questionNumber);
-      applyProgressUpdate(progress);
-      setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
-      
-      // Use backend detection for showing buttons (always respect backend decision)
-      setShowVerificationButtons(show_accept_modify || false);
-      
-      // Show immediate response if available
-      if (immediate_response) {
-        // toast.info(immediate_response, { 
-        //   autoClose: 5000,
-        //   position: "top-center",
-        //   className: "bg-blue-50 border border-blue-200 text-blue-800"
-        // });
-      }
-    } catch (error: any) {
-      console.error("❌ Failed to fetch question (Draft More):", error);
-      const errorMessage = 
-        error?.message ||
-        error?.response?.data?.detail ||
-        error?.response?.data?.error ||
-        error?.response?.data?.message ||
-        "Failed to generate draft. Please try again.";
       toast.error(errorMessage);
     } finally {
       setLoading(false);
@@ -3755,19 +3786,31 @@ export default function ChatPage() {
 
       // Add to history only when Angel reply arrives (progress increments here, not on submit)
       // Commands (Draft, Support, etc.) add for display but isCommand excludes from progress
-      setHistory((prev) => [
-        ...prev,
-        {
-          question: questionSnapshotForHistory,
-          answer: input,
-          acknowledgement: commandDisplay || undefined,
-          questionNumber: previousQuestionNumber,
-          phase: progress.phase,
-          ...(wasCommand && { isCommand: true }),
-          ...(wasCommand && cmdKindFromInput ? { commandKind: cmdKindFromInput } : {}),
-          ...(wasCommand && { assistReply: reply }),
-        },
-      ]);
+      setHistory((prev) => {
+        // A Draft generated right after Support supersedes that Support turn — the
+        // research was the input to the draft, not a separate answer. Drop the
+        // trailing Support row so only the resulting draft remains.
+        const base =
+          cmdKindFromInput === "draft" &&
+          prev.length > 0 &&
+          prev[prev.length - 1]?.isCommand &&
+          prev[prev.length - 1]?.commandKind === "support"
+            ? prev.slice(0, -1)
+            : prev;
+        return [
+          ...base,
+          {
+            question: questionSnapshotForHistory,
+            answer: input,
+            acknowledgement: commandDisplay || undefined,
+            questionNumber: previousQuestionNumber,
+            phase: progress.phase,
+            ...(wasCommand && { isCommand: true }),
+            ...(wasCommand && cmdKindFromInput ? { commandKind: cmdKindFromInput } : {}),
+            ...(wasCommand && { assistReply: reply }),
+          },
+        ];
+      });
 
       if (wasCommand && !options?.modify) {
         lastCommandAssistReplyRef.current = reply;
@@ -4471,6 +4514,14 @@ export default function ChatPage() {
       latestHistoryPair?.commandKind === "modify" &&
       !loading
   );
+  // Support is informational guidance, not a candidate answer. When the pending
+  // verification belongs to a Support response, hide Accept and surface only
+  // Modify/Draft. Go-back review answers are answerable, so they keep Accept.
+  const isSupportResponsePending = Boolean(
+    !goBackReviewAnswer &&
+      latestHistoryPair?.isCommand &&
+      latestHistoryPair?.commandKind === "support"
+  );
 
   // Add current question
   if (currentQuestion) {
@@ -5108,10 +5159,14 @@ export default function ChatPage() {
                         Angel
                       </div>
                       {(() => {
+                        // This badge labels THIS row's question. A trailing section
+                        // summary lives in pair.sectionSummary and renders below with
+                        // its own "Section Summary" badge — it must not relabel the
+                        // question row (e.g. the last question of a section was being
+                        // shown as "Section Summary" instead of "Question N").
                         const badgeLabel = getAngelMessageBadgeLabel(pair.phase ?? progress.phase, {
-                          isSectionSummary: Boolean(pair.sectionSummary),
                           questionNumber: pair.questionNumber,
-                          content: pair.sectionSummary || pair.question,
+                          content: pair.question,
                         });
                         return badgeLabel ? (
                           <div className="mb-2">
@@ -5447,7 +5502,13 @@ export default function ChatPage() {
                 <AcceptModifyButtons
                   onAccept={handleAccept}
                   onModify={handleModify}
-                  onDraftMore={handleDraftMore}
+                  // Route "Draft Answer" through the unified command-turn flow so it
+                  // appends a visible draft row (like the Draft button) instead of
+                  // writing to currentQuestion, which is hidden whenever the last row
+                  // is a command (e.g. right after Support) — that made the draft
+                  // silently disappear behind the Support response.
+                  onDraftMore={() => handleNext("Draft Answer")}
+                  showAccept={!isSupportResponsePending}
                   disabled={loading}
                   currentText={
                     goBackReviewAnswer?.trim() ||
@@ -5456,10 +5517,10 @@ export default function ChatPage() {
                       ? history[history.length - 1].acknowledgement!.trim()
                       : currentQuestion || "")
                   }
-                  showDraftMore={
-                    (history.length > 0 && history[history.length - 1]?.isCommand) ||
-                    (currentQuestion?.toLowerCase().includes("draft") ?? false)
-                  }
+                  // Draft Answer is only offered on a Support turn (Modify + Draft).
+                  // After a Draft is generated the choices are Accept/Modify only —
+                  // drafting again from a draft is not offered.
+                  showDraftMore={isSupportResponsePending}
                 />
               </div>
             )}
