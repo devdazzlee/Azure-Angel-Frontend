@@ -105,6 +105,13 @@ interface MobileMenuProps {
 }
 
 const MobileMenu: React.FC<MobileMenuProps> = ({ isOpen, onClose }) => {
+  useEffect(() => {
+    document.body.style.overflow = isOpen ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
@@ -113,7 +120,7 @@ const MobileMenu: React.FC<MobileMenuProps> = ({ isOpen, onClose }) => {
       animate={{ height: 'auto', opacity: 1 }}
       exit={{ height: 0, opacity: 0 }}
       transition={{ duration: 0.3 }}
-      className="md:hidden bg-white/95 shadow-inner backdrop-blur-md"
+      className="md:hidden bg-white"
     >
       <div className="flex flex-col space-y-4 px-6 pb-6 pt-2">
         {navItems.map(i => (
@@ -182,7 +189,11 @@ const Header: React.FC = () => {
   return (
     <header
       className={`fixed inset-x-0 top-0 z-50 transition-colors duration-300 ${
-        scrolled ? 'bg-white/90 shadow-md backdrop-blur-md' : 'bg-transparent'
+        isOpen
+          ? 'bg-white shadow-md'
+          : scrolled
+          ? 'bg-white/90 shadow-md backdrop-blur-md'
+          : 'bg-transparent'
       }`}
     >
       <NavBarContent toggleMenu={toggleMenu} isOpen={isOpen} isSessionActive={isSessionActive} />
