@@ -102,10 +102,9 @@ const NavBarContent: React.FC<NavBarContentProps> = ({ toggleMenu, isOpen, isSes
 interface MobileMenuProps {
   isOpen: boolean;
   onClose: () => void;
-  scrolled: boolean;
 }
 
-const MobileMenu: React.FC<MobileMenuProps> = ({ isOpen, onClose, scrolled }) => {
+const MobileMenu: React.FC<MobileMenuProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
@@ -114,7 +113,7 @@ const MobileMenu: React.FC<MobileMenuProps> = ({ isOpen, onClose, scrolled }) =>
       animate={{ height: 'auto', opacity: 1 }}
       exit={{ height: 0, opacity: 0 }}
       transition={{ duration: 0.3 }}
-      className={`md:hidden ${scrolled ? 'bg-white/90 shadow-inner backdrop-blur-md' : 'bg-transparent'}`}
+      className="md:hidden bg-white/95 shadow-inner backdrop-blur-md"
     >
       <div className="flex flex-col space-y-4 px-6 pb-6 pt-2">
         {navItems.map(i => (
@@ -187,7 +186,7 @@ const Header: React.FC = () => {
       }`}
     >
       <NavBarContent toggleMenu={toggleMenu} isOpen={isOpen} isSessionActive={isSessionActive} />
-      <MobileMenu isOpen={isOpen} onClose={closeMenu} scrolled={scrolled} />
+      <MobileMenu isOpen={isOpen} onClose={closeMenu} />
     </header>
   );
 };
