@@ -4742,7 +4742,7 @@ export default function ChatPage() {
         <div className="flex-shrink-0 px-2 py-2 sm:px-3 sm:py-3 lg:px-3 lg:py-4">
           <div className="max-w-6xl mx-auto">
             {/* Mobile header — single compact row */}
-            <div className="mb-2 flex h-11 min-w-0 items-center gap-1.5 sm:gap-2 lg:hidden">
+            <div className="mb-2 flex h-[4.5rem] min-w-0 items-center gap-1.5 sm:gap-2 lg:hidden">
               <VentureBrandMark />
               <motion.button
                 whileHover={{ scale: 1.02, x: -2 }}
@@ -4831,7 +4831,7 @@ export default function ChatPage() {
             </div>
 
             {/* Desktop header — unchanged layout */}
-            <div className="mb-3 hidden h-12 items-center gap-4 lg:flex">
+            <div className="mb-3 hidden h-[5.5rem] items-center gap-4 lg:flex">
               <div className="flex h-full min-w-0 items-center gap-3">
                 <VentureBrandMark />
                 <motion.button
