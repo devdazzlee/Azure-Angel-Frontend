@@ -28,6 +28,9 @@ const RoadmapPage: React.FC = () => {
   // Real completions sourced from the Implementation phase. Used to overlay
   // a checkmark on the corresponding roadmap rows.
   const [completedRoadmapStepKeys, setCompletedRoadmapStepKeys] = useState<string[]>([]);
+  const documentEndRef = useRef<HTMLDivElement>(null);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const [isAtBottom, setIsAtBottom] = useState(false);
 
   useEffect(() => {
     const loadRoadmap = async () => {
@@ -104,8 +107,57 @@ const RoadmapPage: React.FC = () => {
   const stages = parseRoadmapMarkdown(roadmapContent);
   const totalTasks = stages.reduce((sum, stage) => sum + stage.tasks.length, 0);
 
+  // Floating scroll button: points down and jumps to the end of the roadmap
+  // while there's more content below; once the end sentinel scrolls into
+  // view, it flips to point up and scrolls back to the top instead.
+  useEffect(() => {
+    const target = documentEndRef.current;
+    if (!target || loading) {
+      setShowScrollButton(false);
+      return;
+    }
+    setShowScrollButton(true);
+    // Positive bottom margin so the icon flips slightly BEFORE the sentinel
+    // reaches the literal viewport edge — at true max scroll the sentinel
+    // sits exactly at that edge, and a shrinking (negative) margin would
+    // exclude that edge entirely, so isIntersecting would never turn true.
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsAtBottom(entry.isIntersecting),
+      { threshold: 0, rootMargin: "0px 0px 100px 0px" },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [loading, roadmapContent]);
+
+  const scrollToRoadmapEnd = () => {
+    documentEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  };
+
+  const scrollToRoadmapTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   return (
     <div className="min-h-screen min-w-0 overflow-x-hidden bg-gray-50">
+      {showScrollButton && (
+        <div className="fixed bottom-4 right-4 z-[100] sm:bottom-8 sm:right-8">
+          <button
+            type="button"
+            onClick={isAtBottom ? scrollToRoadmapTop : scrollToRoadmapEnd}
+            aria-label={isAtBottom ? "Scroll to top of roadmap" : "Scroll to bottom of roadmap"}
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-800 text-white shadow-[0_4px_14px_rgba(15,23,42,0.35)] transition-colors hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-800"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              {isAtBottom ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.25} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.25} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+              )}
+            </svg>
+          </button>
+        </div>
+      )}
+
       <header className="sticky top-0 z-40 border-b border-gray-200 bg-white shadow-sm">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
           <div className="flex min-w-0 items-center gap-3 sm:gap-6">
@@ -390,6 +442,7 @@ const RoadmapPage: React.FC = () => {
                 )}
               </button>
             </div>
+            <div ref={documentEndRef} aria-hidden />
           </>
         )}
       </div>
