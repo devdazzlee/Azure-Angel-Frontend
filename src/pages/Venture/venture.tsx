@@ -1333,8 +1333,21 @@ export default function ChatPage() {
 
     setShowVerificationButtons(false);
 
-    const pendingModifyBody =
-      lastHistoryRow?.commandKind === "modify"
+    // Accepting a Draft/Scrapping/Modify command must submit the GENERATED
+    // body as the answer — not the literal word "Accept". Modify was already
+    // handled this way; Draft and Scrapping were not, so the backend persisted
+    // "Accept" as the raw chat_history answer for that question. Since
+    // "Accept" is filtered out as a command token during identity extraction
+    // (get_tagged_user_answer), the scanner fell through to whatever the user
+    // typed for a LATER question and mis-attributed it back to this one —
+    // e.g. a Draft-accepted industry answer showing a completely unrelated
+    // later reply as "the industry". Support is deliberately excluded: it's
+    // informational guidance, never a candidate answer (see the invariant
+    // above), and the Accept button is hidden for it anyway.
+    const pendingCommandBody =
+      lastHistoryRow?.commandKind === "modify" ||
+      lastHistoryRow?.commandKind === "draft" ||
+      lastHistoryRow?.commandKind === "scrapping"
         ? extractCommandAssistBody(
             lastHistoryRow.assistReply || lastHistoryRow.acknowledgement || "",
           )
@@ -1362,8 +1375,8 @@ export default function ChatPage() {
     } else if (pendingModifyAccept) {
       acceptPayload = pendingModifyAccept;
       pendingModifyAcceptRef.current = "";
-    } else if (pendingModifyBody.length > 0) {
-      acceptPayload = pendingModifyBody;
+    } else if (pendingCommandBody.length > 0) {
+      acceptPayload = pendingCommandBody;
     } else {
       acceptPayload = "Accept";
     }
