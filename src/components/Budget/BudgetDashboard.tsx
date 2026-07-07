@@ -551,15 +551,22 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   );
 
   // Calculations
-  // Toggle-aware amount for Startup Costs / Operating Expenses: in "actual"
-  // mode, falls back to the budgeted estimate for any line item that doesn't
-  // have an actual filled in yet, so the Actual view is always a complete,
-  // meaningful total — it just gets more accurate as real actuals replace
-  // the budget placeholders, rather than silently undercounting unfilled rows.
+  // Toggle-aware amount for Startup Costs / Operating Expenses. "Actual" mode
+  // sums ONLY real actual_amount entries (unfilled = $0) — deliberately NOT
+  // falling back to the budget estimate per item. That fallback was tried
+  // first and made the toggle look broken: with zero actuals entered (the
+  // normal starting state), every row would silently fall back to its budget
+  // figure, so Budget and Actual totals came out byte-identical and flipping
+  // the switch visibly changed nothing. It also contradicted the "Expenses To
+  // Date" card below, which always summed real actuals only (0 when none are
+  // logged) — the same page showed two different numbers both labeled
+  // "actual" for the same data. Actual now honestly starts at $0 and grows as
+  // real spend is logged, matching "Actuals become more important as you
+  // progress" and staying consistent with Expenses To Date.
   const getEffectiveAmount = useCallback(
     (item: BudgetItem) =>
       budgetViewMode === 'actual'
-        ? Number(item.actual_amount ?? item.estimated_amount) || 0
+        ? Number(item.actual_amount) || 0
         : Number(item.estimated_amount) || 0,
     [budgetViewMode],
   );
@@ -579,7 +586,32 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
     [projectedMonthlyRevenue, totalMonthlyCosts]
   );
 
+  // In Actual mode, before any actual_amount has been logged, totalMonthlyCosts
+  // is 0 not because costs are genuinely zero but because nothing's been
+  // tracked yet — that made monthlyNetIncome equal the full projected revenue
+  // and break-even round down to a handful of months, rendered as "Excellent!
+  // Quick path to profitability." The math wasn't wrong, but the message was:
+  // it read as "you've already nearly broken even" when the true state is
+  // "no real spending data exists yet." Distinguishing the two here (in the
+  // data layer) instead of guessing from the numbers downstream is what lets
+  // the UI show an honest empty state instead of a misleadingly upbeat one.
+  const hasAnyActualCostData = useMemo(
+    () =>
+      [...startupCostItems, ...operatingExpenseItems].some(
+        (item) => item.actual_amount !== null && item.actual_amount !== undefined,
+      ),
+    [startupCostItems, operatingExpenseItems],
+  );
+
   const breakEven = useMemo(() => {
+    if (budgetViewMode === 'actual' && !hasAnyActualCostData) {
+      return {
+        status: 'no-actual-data' as const,
+        months: null as number | null,
+        years: null as number | null,
+      };
+    }
+
     if (monthlyNetIncome <= 0) {
       return {
         status: 'never' as const,
@@ -595,7 +627,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       months,
       years,
     };
-  }, [monthlyNetIncome, startupCostsTotal]);
+  }, [monthlyNetIncome, startupCostsTotal, budgetViewMode, hasAnyActualCostData]);
 
   const twoYearProjection = useMemo(() => {
     const months = 24;
@@ -1141,17 +1173,33 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
 
             {/* Budget vs. Actual — drives this card, Break-Even, and the
                 2-year projection below. Revenue is never affected: it's a
-                projection, not a spend with an actual counterpart. */}
-            <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-3 py-1.5 border border-white/20">
-              <Label htmlFor="budget-view-mode" className="text-xs font-semibold uppercase tracking-wide text-white/90 cursor-pointer">
+                projection, not a spend with an actual counterpart.
+                Track/thumb colors are overridden here (not in the shared
+                Switch primitive) because the default bg-primary/bg-input
+                pair washes out against this card's dark teal background —
+                the active side is now bold white text + amber track so
+                on/off is unambiguous at a glance. */}
+            <div className="flex items-center gap-2.5 bg-black/15 backdrop-blur-sm rounded-full px-3 py-1.5 border border-white/25 shadow-inner">
+              <Label
+                htmlFor="budget-view-mode"
+                className={`text-xs font-bold uppercase tracking-wide cursor-pointer transition-colors ${
+                  budgetViewMode === 'budget' ? 'text-white' : 'text-teal-200/50'
+                }`}
+              >
                 Budget
               </Label>
               <Switch
                 id="budget-view-mode"
                 checked={budgetViewMode === 'actual'}
                 onCheckedChange={(checked) => setBudgetViewMode(checked ? 'actual' : 'budget')}
+                className="data-[state=checked]:bg-amber-400 data-[state=unchecked]:bg-teal-900/70 border-white/30"
               />
-              <Label htmlFor="budget-view-mode" className="text-xs font-semibold uppercase tracking-wide text-white/90 cursor-pointer">
+              <Label
+                htmlFor="budget-view-mode"
+                className={`text-xs font-bold uppercase tracking-wide cursor-pointer transition-colors ${
+                  budgetViewMode === 'actual' ? 'text-amber-300' : 'text-teal-200/50'
+                }`}
+              >
                 Actual
               </Label>
             </div>
@@ -1179,7 +1227,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
               </TooltipTrigger>
               <TooltipContent side="bottom">
                 {budgetViewMode === 'actual'
-                  ? 'Sum of actual startup costs — falls back to your budgeted amount for any line item without an actual yet'
+                  ? 'Sum of actual amounts entered so far in Startup Costs — $0 for any line item without an actual logged yet'
                   : 'Sum of all budgeted startup cost line items'}
               </TooltipContent>
             </UITooltip>
@@ -1284,7 +1332,9 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
 
               {/* Right: Timeline badge */}
               <div className={`relative p-6 rounded-2xl border-2 flex flex-col justify-center ${
-                breakEven.status === 'never'
+                breakEven.status === 'no-actual-data'
+                  ? 'bg-gray-50 border-gray-200'
+                  : breakEven.status === 'never'
                   ? 'bg-red-50 border-red-200'
                   : breakEvenMonths <= 12
                   ? 'bg-emerald-50 border-emerald-200'
@@ -1293,7 +1343,9 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                   : 'bg-orange-50 border-orange-200'
               }`}>
                 <div className="flex items-center gap-2 mb-3">
-                  {breakEven.status === 'never' ? (
+                  {breakEven.status === 'no-actual-data' ? (
+                    <HelpCircle className="w-7 h-7 text-gray-400" />
+                  ) : breakEven.status === 'never' ? (
                     <XCircle className="w-7 h-7 text-red-500" />
                   ) : breakEvenMonths <= 12 ? (
                     <CheckCircle2 className="w-7 h-7 text-emerald-500" />
@@ -1303,7 +1355,15 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                   <h4 className="text-base font-bold text-gray-900">Break-Even Timeline</h4>
                 </div>
 
-                {breakEven.status === 'never' ? (
+                {breakEven.status === 'no-actual-data' ? (
+                  <>
+                    <p className="text-2xl font-extrabold text-gray-500 mb-1">Not enough data yet</p>
+                    <p className="text-xs text-gray-600 leading-relaxed">
+                      No actual costs have been logged yet, so there's nothing real to measure against. Switch to
+                      Budget to see your projected break-even, or log actuals in Manage Items to track it here.
+                    </p>
+                  </>
+                ) : breakEven.status === 'never' ? (
                   <>
                     <p className="text-4xl font-extrabold text-red-600 mb-1">Never</p>
                     <p className="text-xs text-gray-600 leading-relaxed">Revenue doesn't cover monthly costs. Adjust pricing or reduce expenses.</p>
@@ -1477,7 +1537,11 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
               <TooltipTrigger asChild>
                   <TabsTrigger
                     value="overview"
-                    className="flex h-9 w-full min-w-0 flex-none items-center justify-center gap-1.5 rounded-lg border-0 px-2 text-xs font-medium text-gray-600 transition-colors hover:text-gray-900 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-600 data-[state=active]:to-cyan-600 data-[state=active]:!text-white data-[state=active]:shadow-none data-[state=active]:[&_svg]:text-white sm:px-3 sm:text-sm"
+                    className={`flex h-9 w-full min-w-0 flex-none items-center justify-center gap-1.5 rounded-lg border-0 px-2 text-xs font-medium transition-colors sm:px-3 sm:text-sm ${
+                      activeTab === 'overview'
+                        ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-sm [&_svg]:text-white'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
                   >
                     <PieChartIcon className="h-4 w-4 shrink-0" />
                     <span className="truncate">Overview</span>
@@ -1489,7 +1553,11 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
               <TooltipTrigger asChild>
                   <TabsTrigger
                     value="manage"
-                    className="flex h-9 w-full min-w-0 flex-none items-center justify-center gap-1.5 rounded-lg border-0 px-2 text-xs font-medium text-gray-600 transition-colors hover:text-gray-900 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-600 data-[state=active]:to-cyan-600 data-[state=active]:!text-white data-[state=active]:shadow-none data-[state=active]:[&_svg]:text-white sm:px-3 sm:text-sm"
+                    className={`flex h-9 w-full min-w-0 flex-none items-center justify-center gap-1.5 rounded-lg border-0 px-2 text-xs font-medium transition-colors sm:px-3 sm:text-sm ${
+                      activeTab === 'manage'
+                        ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-sm [&_svg]:text-white'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
                   >
                     <Edit2 className="h-4 w-4 shrink-0" />
                     <span className="truncate">Manage Items</span>
@@ -1501,7 +1569,11 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
               <TooltipTrigger asChild>
                   <TabsTrigger
                     value="analysis"
-                    className="flex h-9 w-full min-w-0 flex-none items-center justify-center gap-1.5 rounded-lg border-0 px-2 text-xs font-medium text-gray-600 transition-colors hover:text-gray-900 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-600 data-[state=active]:to-cyan-600 data-[state=active]:!text-white data-[state=active]:shadow-none data-[state=active]:[&_svg]:text-white sm:px-3 sm:text-sm"
+                    className={`flex h-9 w-full min-w-0 flex-none items-center justify-center gap-1.5 rounded-lg border-0 px-2 text-xs font-medium transition-colors sm:px-3 sm:text-sm ${
+                      activeTab === 'analysis'
+                        ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-sm [&_svg]:text-white'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
                   >
                     <BarChart3 className="h-4 w-4 shrink-0" />
                     <span className="truncate">Analysis</span>

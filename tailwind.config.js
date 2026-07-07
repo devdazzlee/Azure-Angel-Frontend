@@ -1,5 +1,15 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  // Without this, Tailwind's default 'media' strategy activates every
+  // shadcn/ui primitive's `dark:` classes based on the OS/browser
+  // `prefers-color-scheme`, even though this app has no dark theme (only
+  // one :root color block, no .dark overrides) and no theme toggle. On any
+  // system set to dark mode, that silently swapped in unstyled dark-mode
+  // colors (e.g. near-black `--foreground` text) across buttons, tabs,
+  // switches, inputs, etc. — exactly the "active tab text unreadable" bug.
+  // 'class' scopes dark: to an explicit .dark class this app never adds,
+  // so those variants stay inert and the intended light theme always renders.
+  darkMode: 'class',
   content: [
     "./src/**/*.{js,jsx,ts,tsx}",
   ],

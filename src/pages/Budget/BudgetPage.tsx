@@ -85,9 +85,18 @@ const BudgetPage: React.FC = () => {
   const budgetExportsRef = useRef<BudgetExportActions | null>(null);
   const { context: businessContext } = useBusinessContext(id);
   const businessType = businessContext.business_type;
+  // Guards fetchBudget (and its AI pre-population call) against firing twice
+  // for the same session — e.g. React StrictMode's dev-mode double-invoke of
+  // effects, or a fast remount before the first call's save lands. Without
+  // this, two concurrent calls can each see zero existing items and both
+  // generate + save a full AI batch, duplicating every startup cost, revenue
+  // stream, and operating expense line. Mirrors the same fix already used
+  // for revenue-stream loading (see revenueLoadedRef in BudgetDashboard).
+  const budgetLoadedForSessionRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (id) {
+    if (id && budgetLoadedForSessionRef.current !== id) {
+      budgetLoadedForSessionRef.current = id;
       fetchBudget();
     }
   }, [id]);
