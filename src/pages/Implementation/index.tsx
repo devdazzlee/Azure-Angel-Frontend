@@ -880,7 +880,6 @@ const Implementation: React.FC<ImplementationProps> = ({
           {/* Mobile — logo + back, then title and progress badges */}
           <div className="lg:hidden">
             <div className="flex items-center gap-2">
-              <VentureBrandMark />
               <button
                 type="button"
                 onClick={() => navigate(`/ventures/${sessionId}/roadmap`)}
@@ -889,6 +888,7 @@ const Implementation: React.FC<ImplementationProps> = ({
                 <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
                 Back
               </button>
+              <VentureBrandMark />
             </div>
             <div className="mt-2.5 border-t border-gray-100 pt-2.5">
               <h1 className="text-lg font-bold leading-tight tracking-tight text-gray-900">
@@ -934,7 +934,6 @@ const Implementation: React.FC<ImplementationProps> = ({
           {/* Desktop — brand + nav + title | phase + progress */}
           <div className="hidden lg:flex lg:items-center lg:justify-between lg:gap-8">
             <div className="flex min-w-0 flex-1 items-center gap-6">
-              <VentureBrandMark />
               <button
                 type="button"
                 onClick={() => navigate(`/ventures/${sessionId}/roadmap`)}
@@ -943,6 +942,7 @@ const Implementation: React.FC<ImplementationProps> = ({
                 <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
                 Back to Roadmap
               </button>
+              <VentureBrandMark />
               <div className="h-10 w-px shrink-0 bg-gray-200" aria-hidden />
               <div className="min-w-0">
                 <h1 className="text-2xl font-bold tracking-tight text-gray-900">

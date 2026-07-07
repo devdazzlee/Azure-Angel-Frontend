@@ -73,6 +73,14 @@ export interface AngelResponse {
         is_section_summary?: boolean;
         /** GKY complete — show Proceed button instead of free-text confirmation. */
         awaiting_gky_proceed?: boolean;
+        /**
+         * Authoritative flag: this reply is an auto-research answer (Q11 competitors,
+         * Q12 trends, Q17/23 operational/marketing needs, Q26/27 permits/insurance,
+         * Q34 costs, Q35 scaling, Q42 contingency) that the user accepts rather than
+         * types. Computed once on the backend (single source of truth) so the
+         * frontend doesn't need to re-guess it from the message text.
+         */
+        is_auto_research?: boolean;
     };
 }
 

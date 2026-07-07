@@ -15,7 +15,7 @@ export default function VentureBrandMark({ className = '' }: VentureBrandMarkPro
       <img
         src={LOGO}
         alt="Founderport"
-        className="h-[4.5rem] w-auto lg:h-[5.5rem]"
+        className="h-16 w-auto lg:h-20"
       />
     </Link>
   );

@@ -109,7 +109,6 @@ const RoadmapPage: React.FC = () => {
       <header className="sticky top-0 z-40 border-b border-gray-200 bg-white shadow-sm">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
           <div className="flex min-w-0 items-center gap-3 sm:gap-6">
-            <VentureBrandMark />
             <button
               type="button"
               disabled={!sessionId}
@@ -126,6 +125,7 @@ const RoadmapPage: React.FC = () => {
               <span className="hidden sm:inline">Back to Budget</span>
               <span className="sm:hidden">Back</span>
             </button>
+            <VentureBrandMark />
 
             <div className="hidden h-10 w-px shrink-0 bg-gray-200 sm:block" aria-hidden />
 

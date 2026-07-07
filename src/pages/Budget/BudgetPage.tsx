@@ -386,7 +386,6 @@ const BudgetPage: React.FC = () => {
           <div className="md:hidden">
             <div className="flex items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2">
-                <VentureBrandMark />
                 <Button
                   variant="ghost"
                   size="sm"
@@ -404,6 +403,7 @@ const BudgetPage: React.FC = () => {
                   <ArrowLeft className="h-4 w-4 shrink-0" />
                   Back
                 </Button>
+                <VentureBrandMark />
               </div>
               <Button
                 variant="outline"
@@ -431,7 +431,6 @@ const BudgetPage: React.FC = () => {
           {/* Desktop */}
           <div className="hidden md:flex md:flex-row md:items-center md:justify-between md:gap-6">
             <div className="flex min-w-0 items-center gap-6">
-              <VentureBrandMark />
               <Button
                 variant="ghost"
                 disabled={transitioning}
@@ -448,6 +447,7 @@ const BudgetPage: React.FC = () => {
                 <ArrowLeft className="h-4 w-4 shrink-0" />
                 Back to Summary Overview
               </Button>
+              <VentureBrandMark />
               <div className="h-10 w-px shrink-0 bg-gray-200" aria-hidden />
               <div className="min-w-0">
                 <h1 className="text-2xl font-bold tracking-tight text-gray-900">

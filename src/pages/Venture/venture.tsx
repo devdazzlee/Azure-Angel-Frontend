@@ -467,6 +467,14 @@ export default function ChatPage() {
   const lastFullAssistantReplyRef = useRef<string>("");
   /** Full API reply from the latest Draft/Support/Scrapping/Modify assist — Modify snapshot source. */
   const lastCommandAssistReplyRef = useRef<string>("");
+  /**
+   * Backend-authoritative flag for whether lastFullAssistantReplyRef is an
+   * auto-research answer (Q11/12/17/23/26/27/34/35/42). Set from the API
+   * response's `is_auto_research` field whenever a new reply arrives — do not
+   * re-derive this from message text; that duplicated regex-based guess is
+   * what let accepted auto-research answers silently vanish before.
+   */
+  const lastReplyIsAutoResearchRef = useRef<boolean>(false);
   const {
     context: businessContext,
     refresh: refreshBusinessContext,
@@ -1302,11 +1310,18 @@ export default function ChatPage() {
     // history by handleNext. Snapshot this turn now (current question + the generated
     // body in its acknowledgement) so accepting it preserves the content in the chat
     // for later reference instead of discarding it when we advance.
+    //
+    // Whether this is an auto-research turn comes from lastReplyIsAutoResearchRef —
+    // set from the backend's `is_auto_research` field when the reply arrived. This
+    // used to be guessed here via a regex on the message text (isAutoResearchContent),
+    // a second, independently-maintained copy of logic the backend already computes
+    // authoritatively; the two could drift out of sync and silently fail to match,
+    // which is what dropped the content after Accept instead of preserving it.
     const acceptedAutoResearchPair: ConversationPair | null =
       !isCurrentSectionSummary &&
       !goBackReviewAnswer &&
       !lastHistoryRow?.isCommand &&
-      isAutoResearchContent(lastFullAssistantReplyRef.current || "")
+      lastReplyIsAutoResearchRef.current
         ? {
             question: currentQuestion,
             answer: "Accept",
@@ -1380,7 +1395,7 @@ export default function ChatPage() {
     
     try {
       const {
-        result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number, is_section_summary },
+        result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number, is_section_summary, is_auto_research },
       } = await fetchQuestion(acceptPayload, sessionId!);
       const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
       const { isSectionSummary, questionNumber } = resolveDisplayFromAngelResult(
@@ -1403,6 +1418,7 @@ export default function ChatPage() {
       // stale section summary that was active before Accept (which otherwise
       // gets re-rendered as the question of every following command turn).
       lastFullAssistantReplyRef.current = reply;
+      lastReplyIsAutoResearchRef.current = Boolean(is_auto_research);
 
       lastCommandAssistReplyRef.current = "";
 
@@ -1488,7 +1504,7 @@ export default function ChatPage() {
     
     try {
       const {
-        result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number },
+        result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number, is_auto_research },
       } = await fetchQuestion("Yes", sessionId!);
       const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
       const questionNumber = deriveQuestionNumber(question_number, reply, progress);
@@ -1501,6 +1517,7 @@ export default function ChatPage() {
       setShowVerificationButtons(show_accept_modify || false);
       // Keep the command-snapshot ref pointing at the new active question.
       lastFullAssistantReplyRef.current = reply;
+      lastReplyIsAutoResearchRef.current = Boolean(is_auto_research);
     } catch (error: any) {
       console.error("❌ Failed to handle Yes:", error);
       const errorMessage = 
@@ -1521,7 +1538,7 @@ export default function ChatPage() {
     
     try {
       const {
-        result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number },
+        result: { reply, progress, web_search_status, immediate_response, show_accept_modify, question_number, is_auto_research },
       } = await fetchQuestion("No", sessionId!);
       const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
       const questionNumber = deriveQuestionNumber(question_number, reply, progress);
@@ -1534,6 +1551,7 @@ export default function ChatPage() {
       setShowVerificationButtons(show_accept_modify || false);
       // Keep the command-snapshot ref pointing at the new active question.
       lastFullAssistantReplyRef.current = reply;
+      lastReplyIsAutoResearchRef.current = Boolean(is_auto_research);
     } catch (error: any) {
       console.error("❌ Failed to handle No:", error);
       const errorMessage = 
@@ -2872,7 +2890,7 @@ export default function ChatPage() {
       setLoading(true);
       try {
         const {
-          result: { reply, progress, web_search_status, immediate_response, question_number, transition_phase, awaiting_gky_proceed },
+          result: { reply, progress, web_search_status, immediate_response, question_number, transition_phase, awaiting_gky_proceed, is_auto_research },
         } = await fetchQuestion("", sessionId!);
         if (cancelled) return;
 
@@ -2895,6 +2913,7 @@ export default function ChatPage() {
         const { acknowledgement: ack, question: parsedQ } = parseAngelReply(reply);
         const questionNumber = deriveQuestionNumber(question_number, reply, progress);
         lastFullAssistantReplyRef.current = reply;
+        lastReplyIsAutoResearchRef.current = Boolean(is_auto_research);
         setCurrentQuestion(parsedQ);
         setCurrentAcknowledgement(ack);
         setCurrentQuestionNumber(questionNumber);
@@ -3062,7 +3081,11 @@ export default function ChatPage() {
             }
           }
         }
-        
+        // Restore the authoritative auto-research flag for the resumed question so
+        // handleAccept (which now trusts this ref instead of re-matching content)
+        // still preserves the answer correctly after a page reload.
+        lastReplyIsAutoResearchRef.current = pausedOnAutoResearch;
+
         // Filter history to only include Q&A pairs up to the backend's asked_q
         // If backend says we're on Q2, we should only show Q1 as answered
         let filteredPairs = reconstructed.pairs;
@@ -3587,9 +3610,10 @@ export default function ChatPage() {
           question_number,
           is_section_summary,
           awaiting_gky_proceed,
+          is_auto_research,
         },
       } = response;
-      
+
       // Get business_plan_artifact from response if available
       const business_plan_artifact = (response as any)?.result?.business_plan_artifact;
       
@@ -3684,9 +3708,10 @@ export default function ChatPage() {
           applyProgressUpdate(progress);
           setPendingUserReply(null);
           lastFullAssistantReplyRef.current = reply;
+          lastReplyIsAutoResearchRef.current = Boolean(is_auto_research);
           setLoading(false);
           return;
-        }      
+        }
       // Handle roadmap generation
       if (transition_phase === "ROADMAP_GENERATED") {
         setRoadmapData({
@@ -3832,12 +3857,13 @@ export default function ChatPage() {
         setCurrentQuestionNumber(nextQuestionNumber);
         updateQuestionTracker(progress.phase, nextQuestionNumber);
         lastFullAssistantReplyRef.current = reply;
+        lastReplyIsAutoResearchRef.current = Boolean(is_auto_research);
       }
       setWebSearchStatus(web_search_status || { is_searching: false, query: undefined, completed: false });
 
       if (isSectionSummary) {
         setShowVerificationButtons(true);
-      } else if (isAutoResearchContent(reply)) {
+      } else if (is_auto_research) {
         setShowVerificationButtons(true);
       } else if (show_accept_modify !== undefined) {
         setShowVerificationButtons(show_accept_modify);
@@ -4742,8 +4768,7 @@ export default function ChatPage() {
         <div className="flex-shrink-0 px-2 py-2 sm:px-3 sm:py-3 lg:px-3 lg:py-4">
           <div className="max-w-6xl mx-auto">
             {/* Mobile header — single compact row */}
-            <div className="mb-2 flex h-[4.5rem] min-w-0 items-center gap-1.5 sm:gap-2 lg:hidden">
-              <VentureBrandMark />
+            <div className="mb-2 flex h-16 min-w-0 items-center gap-1.5 sm:gap-2 lg:hidden">
               <motion.button
                 whileHover={{ scale: 1.02, x: -2 }}
                 whileTap={{ scale: 0.98 }}
@@ -4766,6 +4791,7 @@ export default function ChatPage() {
                 </svg>
                 <span className="max-[340px]:hidden sm:inline">Ventures</span>
               </motion.button>
+              <VentureBrandMark />
 
               <div className="flex min-w-0 flex-1 items-center justify-center overflow-hidden">
                 <div className="flex min-w-0 max-w-[10rem] items-center gap-1 rounded-md border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-1.5 py-1 shadow-sm sm:max-w-none sm:gap-1.5 sm:px-2.5 sm:py-1.5">
@@ -4831,9 +4857,8 @@ export default function ChatPage() {
             </div>
 
             {/* Desktop header — unchanged layout */}
-            <div className="mb-3 hidden h-[5.5rem] items-center gap-4 lg:flex">
+            <div className="mb-3 hidden h-20 items-center gap-4 lg:flex">
               <div className="flex h-full min-w-0 items-center gap-3">
-                <VentureBrandMark />
                 <motion.button
                   whileHover={{ scale: 1.02, x: -2 }}
                   whileTap={{ scale: 0.98 }}
@@ -4855,6 +4880,7 @@ export default function ChatPage() {
                   </svg>
                   <span className="font-medium">All Ventures</span>
                 </motion.button>
+                <VentureBrandMark />
               </div>
 
               <div className="flex flex-1 items-center justify-center">

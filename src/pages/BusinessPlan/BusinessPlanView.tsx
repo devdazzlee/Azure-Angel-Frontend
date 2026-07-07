@@ -614,7 +614,6 @@ const BusinessPlanView: React.FC = () => {
           <div className="md:hidden">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
-                <VentureBrandMark />
                 <button
                   type="button"
                   onClick={handleBackNavigation}
@@ -626,6 +625,7 @@ const BusinessPlanView: React.FC = () => {
                   </svg>
                   Back
                 </button>
+                <VentureBrandMark />
               </div>
               <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">{documentActions}</div>
             </div>
@@ -637,7 +637,6 @@ const BusinessPlanView: React.FC = () => {
 
           <div className="hidden md:flex md:items-center md:justify-between md:gap-8">
             <div className="flex min-w-0 items-center gap-6">
-              <VentureBrandMark />
               <button
                 type="button"
                 onClick={handleBackNavigation}
@@ -649,6 +648,7 @@ const BusinessPlanView: React.FC = () => {
                 </svg>
                 {headerBackLabel}
               </button>
+              <VentureBrandMark />
               <div className="h-8 w-px shrink-0 bg-gray-200" aria-hidden />
               <div className="min-w-0">
                 <h1 className="text-xl font-bold tracking-tight text-gray-900">Business Plan</h1>
