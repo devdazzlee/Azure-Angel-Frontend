@@ -4291,11 +4291,10 @@ export default function ChatPage() {
 
   /**
    * Re-open the Business Plan Summary screen from the chat. Used by the
-   * "View Business Plan Summary" call-to-action that appears once every BP
-   * question has been answered — without it the user has no way to leave the
-   * chat surface after clicking Back/Edit Plan, since there are no more
-   * questions to answer and the sidebar's "Business Plan" button is only
-   * visible during ROADMAP / IMPLEMENTATION phases.
+   * "View Business Plan Summary" call-to-action that appears when there is no
+   * active question left to answer in BUSINESS_PLAN phase — without it the
+   * user has no way to leave the chat surface, since the sidebar's "Business
+   * Plan" button is only visible during ROADMAP / IMPLEMENTATION phases.
    */
   const handleReopenPlanSummary = async () => {
     setLoading(true);
@@ -5491,13 +5490,22 @@ export default function ChatPage() {
             )}
             </div>
 
-            {/* "View Business Plan Summary" CTA — visible when every BP
-                question is answered. Without this, a user who clicked
-                Back/Edit Plan from the Summary screen is stranded in the
-                chat with no way to return: there's no next question to
-                answer, and the sidebar's "Business Plan" button only
-                appears in ROADMAP / IMPLEMENTATION phases. */}
-            {progress.phase === "BUSINESS_PLAN" && bpPairs.length >= bpTotal && !pendingUserReply && (
+            {/* "View Business Plan Summary" CTA — recovery affordance for a user
+                with no active question left to answer in BUSINESS_PLAN phase
+                (there's no next question, and the sidebar's "Business Plan"
+                button only appears in ROADMAP / IMPLEMENTATION phases).
+                Gated on the absence of a live current question, NOT on
+                "bpPairs.length >= bpTotal": answering the final question
+                (BUSINESS_PLAN.45) never adds a history pair for its own
+                answer (the summary transition modal replaces that chat bubble
+                instead), so a history-derived count reads as "done" the whole
+                time the user is still looking at an unanswered Q45 — showing
+                this button before the final question was actually answered.
+                Checking currentQuestion directly is authoritative: whenever
+                there IS a live question on screen (including Q45 itself, or
+                the question restored by "Edit Plan"), the CTA must stay
+                hidden and answering it is what should drive the transition. */}
+            {progress.phase === "BUSINESS_PLAN" && !currentQuestion?.trim() && !pendingUserReply && (
               <div className="mt-4 flex justify-center print:hidden">
                 <button
                   type="button"
