@@ -9,15 +9,18 @@ type RevenueProjectionInput = {
   estimatedVolume?: number;
 };
 
-/** Resolve monthly projection from stored amount or price × volume. */
+/**
+ * Monthly projection is ALWAYS price × volume — never a stored lump sum.
+ * Price and Volume are the editable fields the user sees in the Revenue table,
+ * so the projection must be derived from exactly what's on screen. A "prefer
+ * the stored amount" fallback used to win here, which is how a row could show
+ * Price $0.00 / Volume 1 while still displaying a stale $3,000 projection
+ * carried over from a backend seed that never set price/volume — a
+ * self-contradictory "phantom" total that didn't match its own row.
+ */
 export function resolveRevenueProjection(stream: RevenueProjectionInput): number {
-  const stored = Number(stream.revenueProjection ?? stream.estimated_amount);
-  if (Number.isFinite(stored) && stored > 0) {
-    return stored;
-  }
-
   const price = Number(stream.estimated_price ?? stream.estimatedPrice ?? 0);
-  const volume = Number(stream.estimated_volume ?? stream.estimatedVolume ?? 1);
+  const volume = Number(stream.estimated_volume ?? stream.estimatedVolume ?? 0);
   return price * volume;
 }
 
@@ -50,7 +53,7 @@ export function mapApiRecordToRevenueStream(item: {
   is_custom?: boolean;
 }): RevenueStream {
   const estimatedPrice = Number(item.estimated_price ?? 0);
-  const estimatedVolume = Number(item.estimated_volume ?? 1);
+  const estimatedVolume = Number(item.estimated_volume ?? 0);
 
   return {
     id: item.id,

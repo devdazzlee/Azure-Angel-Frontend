@@ -34,6 +34,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Tooltip as UITooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, Area, AreaChart } from 'recharts';
 import type { BudgetItem, Budget, APIResponse } from '@/types/apiTypes'; 
@@ -145,6 +147,16 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   const contentPaddingClass = embeddedInParent ? 'px-0' : 'px-4 sm:px-6 lg:px-8';
 
   // State Management
+  // Budget vs. Actual toggle for the Startup Costs / Monthly Operating Expenses
+  // summary figures (Startup Budget Summary, Break-Even, 2-year projection).
+  // Revenue is deliberately never affected — it's a projection, not a spend
+  // that has an "actual" counterpart in this model. Seeded from `showActuals`
+  // so callers can set the sensible starting point for their phase (Budget
+  // Setup starts on Budget; Implementation — where actuals start accumulating
+  // — starts on Actual) while still letting the user flip it either way.
+  const [budgetViewMode, setBudgetViewMode] = useState<'budget' | 'actual'>(
+    showActuals ? 'actual' : 'budget',
+  );
   const [dynamicRevenueStreams, setDynamicRevenueStreams] = useState<RevenueStream[]>([]);
   const [loadingRevenueStreams, setLoadingRevenueStreams] = useState<boolean>(true);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(() => new Set());
@@ -539,19 +551,27 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
   );
 
   // Calculations
-  const getEstimatedAmount = useCallback(
-    (item: BudgetItem) => Number(item.estimated_amount) || 0,
-    [],
+  // Toggle-aware amount for Startup Costs / Operating Expenses: in "actual"
+  // mode, falls back to the budgeted estimate for any line item that doesn't
+  // have an actual filled in yet, so the Actual view is always a complete,
+  // meaningful total — it just gets more accurate as real actuals replace
+  // the budget placeholders, rather than silently undercounting unfilled rows.
+  const getEffectiveAmount = useCallback(
+    (item: BudgetItem) =>
+      budgetViewMode === 'actual'
+        ? Number(item.actual_amount ?? item.estimated_amount) || 0
+        : Number(item.estimated_amount) || 0,
+    [budgetViewMode],
   );
 
-  const startupCostsTotal = useMemo(() => 
-    startupCostItems.reduce((sum, item) => sum + (item.estimated_amount || 0), 0), 
-    [startupCostItems]
+  const startupCostsTotal = useMemo(() =>
+    startupCostItems.reduce((sum, item) => sum + getEffectiveAmount(item), 0),
+    [startupCostItems, getEffectiveAmount]
   );
 
-  const totalMonthlyCosts = useMemo(() => 
-    operatingExpenseItems.reduce((sum, item) => sum + (item.estimated_amount || 0), 0),
-    [operatingExpenseItems]
+  const totalMonthlyCosts = useMemo(() =>
+    operatingExpenseItems.reduce((sum, item) => sum + getEffectiveAmount(item), 0),
+    [operatingExpenseItems, getEffectiveAmount]
   );
 
   const monthlyNetIncome = useMemo(() => 
@@ -589,15 +609,31 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
     return { months, revenue24, costs24, net24, totalStartup, netAfterStartup24 };
   }, [projectedMonthlyRevenue, totalMonthlyCosts, startupCostsTotal]);
 
+  // Raw sum of actual_amount entries only (never falls back to budget) — feeds
+  // the "Expenses To Date" detail card, which is explicitly about real spend
+  // regardless of the Budget/Actual toggle above.
   const startupActualTotal = useMemo(() => {
     return startupCostItems.reduce((sum, item) => sum + (Number(item.actual_amount) || 0), 0);
   }, [startupCostItems]);
 
+  // Toggle-aware: mirrors startupCostsTotal's view mode. Used by the top
+  // Startup Budget Summary card ("Available Funds" / "Funding Gap"), whose
+  // tooltip is "Investment − Startup Costs" for whichever view is active —
+  // this replaces the old "use actual once any actual is entered" heuristic,
+  // which silently jumped between formulas independent of what the user
+  // actually selected.
   const remainingStartupFunds = useMemo(() => {
     const investment = Number(budget.initial_investment) || 0;
-    const spent = startupActualTotal > 0 ? startupActualTotal : startupCostsTotal;
-    return investment - spent;
-  }, [budget.initial_investment, startupActualTotal, startupCostsTotal]);
+    return investment - startupCostsTotal;
+  }, [budget.initial_investment, startupCostsTotal]);
+
+  // Always actual-based (never toggle-aware) — feeds the "Remaining Funds"
+  // detail card next to "Expenses To Date", whose tooltip explicitly promises
+  // "Initial Investment − Expenses To Date".
+  const remainingFundsVsActualSpend = useMemo(() => {
+    const investment = Number(budget.initial_investment) || 0;
+    return investment - startupActualTotal;
+  }, [budget.initial_investment, startupActualTotal]);
 
   // Add validation hook
   const useBudgetValidation = () => {
@@ -664,14 +700,14 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
     return startupCostItems
       .map((item) => ({
         name: item.name,
-        value: getEstimatedAmount(item),
+        value: getEffectiveAmount(item),
       }))
       .filter((d) => Number.isFinite(d.value) && d.value > 0);
-  }, [startupCostItems, getEstimatedAmount]);
+  }, [startupCostItems, getEffectiveAmount]);
 
   const monthlyChartData = useMemo(
-    () => buildOperatingExpenseChartData(operatingExpenseItems, getEstimatedAmount),
-    [operatingExpenseItems, getEstimatedAmount],
+    () => buildOperatingExpenseChartData(operatingExpenseItems, getEffectiveAmount),
+    [operatingExpenseItems, getEffectiveAmount],
   );
 
   const allBudgetItems = useMemo(() => {
@@ -1095,11 +1131,30 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         <div className="absolute bottom-0 left-0 w-40 h-40 bg-white/[0.04] rounded-full -ml-16 -mb-16" />
 
         <div className="relative z-10 p-5 md:p-8">
-          <div className="flex items-center gap-3 mb-5 md:mb-6 min-w-0">
-            <div className="p-2.5 md:p-3 bg-white/15 backdrop-blur-sm rounded-xl border border-white/20 shrink-0">
-              <Calculator className="w-6 h-6 md:w-7 md:h-7 text-white" />
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-5 md:mb-6 min-w-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="p-2.5 md:p-3 bg-white/15 backdrop-blur-sm rounded-xl border border-white/20 shrink-0">
+                <Calculator className="w-6 h-6 md:w-7 md:h-7 text-white" />
+              </div>
+              <h3 className="text-lg md:text-2xl font-bold tracking-tight leading-tight">Startup Budget Summary</h3>
             </div>
-            <h3 className="text-lg md:text-2xl font-bold tracking-tight leading-tight">Startup Budget Summary</h3>
+
+            {/* Budget vs. Actual — drives this card, Break-Even, and the
+                2-year projection below. Revenue is never affected: it's a
+                projection, not a spend with an actual counterpart. */}
+            <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-3 py-1.5 border border-white/20">
+              <Label htmlFor="budget-view-mode" className="text-xs font-semibold uppercase tracking-wide text-white/90 cursor-pointer">
+                Budget
+              </Label>
+              <Switch
+                id="budget-view-mode"
+                checked={budgetViewMode === 'actual'}
+                onCheckedChange={(checked) => setBudgetViewMode(checked ? 'actual' : 'budget')}
+              />
+              <Label htmlFor="budget-view-mode" className="text-xs font-semibold uppercase tracking-wide text-white/90 cursor-pointer">
+                Actual
+              </Label>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5">
@@ -1116,11 +1171,17 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
             <UITooltip>
               <TooltipTrigger asChild>
                 <div className="bg-white/10 backdrop-blur-sm rounded-xl p-5 border border-white/15 hover:bg-white/[0.14] transition-colors cursor-help">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-teal-200 mb-2">Total Startup Costs</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-teal-200 mb-2">
+                    {budgetViewMode === 'actual' ? 'Total Startup Costs (Actual)' : 'Total Startup Costs (Budget)'}
+                  </p>
                   <p className="text-2xl md:text-3xl font-extrabold break-words">{formatCurrency(startupCostsTotal, currency)}</p>
                 </div>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Sum of all budgeted startup cost line items</TooltipContent>
+              <TooltipContent side="bottom">
+                {budgetViewMode === 'actual'
+                  ? 'Sum of actual startup costs — falls back to your budgeted amount for any line item without an actual yet'
+                  : 'Sum of all budgeted startup cost line items'}
+              </TooltipContent>
             </UITooltip>
 
             <UITooltip>
@@ -1139,7 +1200,11 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                   <p className="text-2xl md:text-3xl font-extrabold break-words">{formatCurrency(Math.abs(remainingStartupFunds), currency)}</p>
                 </div>
               </TooltipTrigger>
-              <TooltipContent side="bottom">{remainingStartupFunds >= 0 ? 'Investment − Startup Costs = funds remaining' : 'Your startup costs exceed your investment — you need more capital'}</TooltipContent>
+              <TooltipContent side="bottom">
+                {remainingStartupFunds >= 0
+                  ? `Investment − Startup Costs (${budgetViewMode === 'actual' ? 'Actual' : 'Budget'}) = funds remaining`
+                  : 'Your startup costs exceed your investment — you need more capital'}
+              </TooltipContent>
             </UITooltip>
           </div>
 
@@ -1159,7 +1224,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         </div>
       </div>
     </motion.div>
-  ), [budget.initial_investment, startupCostsTotal, remainingStartupFunds, currency]);
+  ), [budget.initial_investment, startupCostsTotal, remainingStartupFunds, currency, budgetViewMode]);
 
   // Break-Even Analysis Card — teal themed (memoised)
   const breakEvenEl = useMemo(() => {
@@ -1195,7 +1260,11 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
               <div className="space-y-3">
                 {[
                   { label: 'Monthly Revenue', value: projectedMonthlyRevenue, color: 'text-emerald-600' },
-                  { label: 'Monthly Costs', value: totalMonthlyCosts, color: 'text-red-500' },
+                  {
+                    label: budgetViewMode === 'actual' ? 'Monthly Costs (Actual)' : 'Monthly Costs (Budget)',
+                    value: totalMonthlyCosts,
+                    color: 'text-red-500',
+                  },
                 ].map((row) => (
                   <div key={row.label} className="flex items-center justify-between p-4 bg-gray-50/80 rounded-xl border border-gray-100">
                     <span className="text-sm font-medium text-gray-600">{row.label}</span>
@@ -1267,7 +1336,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
         </div>
       </motion.div>
     );
-  }, [projectedMonthlyRevenue, totalMonthlyCosts, monthlyNetIncome, breakEven, currency]);
+  }, [projectedMonthlyRevenue, totalMonthlyCosts, monthlyNetIncome, breakEven, currency, budgetViewMode]);
 
   // Modern Charts — teal themed (memoised)
   const modernChartsEl = useMemo(() => (
@@ -1524,7 +1593,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                         </div>
                         <p className="text-2xl font-extrabold text-teal-700">{formatCurrency(startupActualTotal, currency)}</p>
                       </div>
-                      <div className={`p-4 rounded-xl border ${remainingStartupFunds >= 0 ? 'bg-emerald-50/60 border-emerald-200/60' : 'bg-red-50/60 border-red-200/60'}`}>
+                      <div className={`p-4 rounded-xl border ${remainingFundsVsActualSpend >= 0 ? 'bg-emerald-50/60 border-emerald-200/60' : 'bg-red-50/60 border-red-200/60'}`}>
                         <div className="flex items-center gap-1.5 mb-1">
                           <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Remaining Funds</p>
                           <UITooltip>
@@ -1532,7 +1601,7 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
                             <TooltipContent side="right" className="max-w-[240px]">Initial Investment − Expenses To Date. Red if overspent</TooltipContent>
                           </UITooltip>
                         </div>
-                        <p className={`text-2xl font-extrabold ${remainingStartupFunds >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatCurrency(remainingStartupFunds, currency)}</p>
+                        <p className={`text-2xl font-extrabold ${remainingFundsVsActualSpend >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatCurrency(remainingFundsVsActualSpend, currency)}</p>
                       </div>
                     </div>
                   </div>
