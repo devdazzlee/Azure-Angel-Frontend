@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import { clearEmailPendingVerification } from '../../utils/tokenUtils';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -16,12 +17,18 @@ const ConfirmEmail = () => {
     async function finishConfirmation() {
       const { error } = await supabase.auth.getSession();
 
+      // This app signs users in via the custom /auth/signin endpoint, not the
+      // Supabase session detected from this confirmation link, so always send
+      // the user to the login page to sign in with their credentials.
       if (error) {
         console.error('Email confirmation failed:', error.message);
+        toast.error('Email confirmation failed. Please try the link again or request a new one.');
+        navigate('/login');
         return;
       }
       clearEmailPendingVerification();
-      navigate('/gky');
+      toast.success('Email confirmed! Please sign in to continue.');
+      navigate('/login');
     }
     finishConfirmation();
   }, [search, navigate]);
