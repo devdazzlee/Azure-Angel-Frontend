@@ -38,7 +38,7 @@ const SignupPage: React.FC = () => {
   const recaptchaContainerRef = useRef<HTMLDivElement | null>(null);
   const recaptchaWidgetIdRef = useRef<number | null>(null);
 
-  const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined;
+  const recaptchaSiteKey = '6LfbvEktAAAAABb_DTKVNq74BvxmjWt2lDglX0iJ';
   const recaptchaVersion = (import.meta.env.VITE_RECAPTCHA_VERSION as string | undefined)?.toLowerCase().trim();
   const isRecaptchaEnabled = Boolean(recaptchaSiteKey);
   const recaptchaMode: 'v2' | 'v3' = recaptchaVersion === 'v3' ? 'v3' : 'v2';
