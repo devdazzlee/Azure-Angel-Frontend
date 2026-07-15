@@ -1,13 +1,12 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Download, MessageSquareText } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 interface BudgetDashboardHeaderProps {
-  onChatWithAngel?: () => void;
   /** Opens export format modal (PDF, Excel, DOCX) */
   onOpenExport?: () => void;
   /** Hide duplicate title when parent page already shows "Budget Setup" */
@@ -16,7 +15,6 @@ interface BudgetDashboardHeaderProps {
 }
 
 const BudgetDashboardHeader: React.FC<BudgetDashboardHeaderProps> = ({
-  onChatWithAngel,
   onOpenExport,
   compact = false,
   disabled = false,
@@ -68,23 +66,6 @@ const BudgetDashboardHeader: React.FC<BudgetDashboardHeaderProps> = ({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Download your budget as PDF, Excel, or Word</TooltipContent>
-              </Tooltip>
-            )}
-
-            {onChatWithAngel && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    onClick={onChatWithAngel}
-                    size="sm"
-                    disabled={disabled}
-                    className="w-full md:w-auto bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white shadow-md"
-                  >
-                    <MessageSquareText className="w-3.5 h-3.5 mr-1.5 shrink-0" />
-                    <span className="truncate">Chat with Angel</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Discuss your budget with Angel AI</TooltipContent>
               </Tooltip>
             )}
           </div>

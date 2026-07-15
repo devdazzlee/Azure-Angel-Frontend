@@ -8,6 +8,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils'; // Assuming cn utility is available
 import { fetchQuestion } from '@/services/authService';
 import { toast } from 'react-toastify';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface ChatMessage {
   id: string;
@@ -152,8 +154,8 @@ const BudgetChatModal: React.FC<BudgetChatModalProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-grow flex flex-col overflow-hidden border-t pt-4">
-          <ScrollArea className="flex-grow pr-4">
+        <div className="flex-grow flex flex-col min-h-0 overflow-hidden border-t pt-4">
+          <ScrollArea className="flex-grow min-h-0 pr-4">
             <div className="space-y-4">
               {messages.map((message) => (
                 <div
@@ -176,7 +178,34 @@ const BudgetChatModal: React.FC<BudgetChatModalProps> = ({
                         : 'bg-gray-100 text-gray-800'
                     )}
                   >
-                    <p className="text-sm">{message.text}</p>
+                    <div
+                      className={cn(
+                        'prose prose-sm max-w-none break-words',
+                        message.sender === 'user' ? 'prose-invert' : ''
+                      )}
+                    >
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          p: ({ children }) => <p className="text-sm mb-2 last:mb-0 leading-relaxed">{children}</p>,
+                          ul: ({ children }) => <ul className="text-sm mb-2 last:mb-0 pl-4 list-disc space-y-1">{children}</ul>,
+                          ol: ({ children }) => <ol className="text-sm mb-2 last:mb-0 pl-4 list-decimal space-y-1">{children}</ol>,
+                          li: ({ children }) => <li className="text-sm">{children}</li>,
+                          strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                          em: ({ children }) => <em className="italic">{children}</em>,
+                          a: ({ children, href }) => (
+                            <a href={href} target="_blank" rel="noopener noreferrer" className="underline">
+                              {children}
+                            </a>
+                          ),
+                          code: ({ children }) => (
+                            <code className="px-1 py-0.5 rounded bg-black/10 text-xs">{children}</code>
+                          ),
+                        }}
+                      >
+                        {message.text}
+                      </ReactMarkdown>
+                    </div>
                     <p className="text-xs text-right mt-1 opacity-75">{message.timestamp}</p>
                   </div>
                   {message.sender === 'user' && (

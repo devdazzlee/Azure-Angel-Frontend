@@ -4479,6 +4479,29 @@ export default function ChatPage() {
       />
     );
 
+  // Bridge the gap between the backend flipping to a transition phase and
+  // `transitionData` becoming available (it's populated by a follow-up fetch,
+  // see the PLAN_TO_SUMMARY_TRANSITION/PLAN_TO_BUDGET_TRANSITION handlers above).
+  // Without this, the old Q&A view kept rendering during that fetch with its
+  // phase-gated widgets (sidebar, progress circle, etc.) already hidden because
+  // `progress.phase` no longer matched BUSINESS_PLAN/GKY/IMPLEMENTATION — producing
+  // a broken, half-collapsed layout for a moment on every phase transition.
+  if (
+    !transitionData &&
+    [
+      "PLAN_TO_SUMMARY_TRANSITION",
+      "PLAN_TO_ROADMAP_TRANSITION",
+      "PLAN_TO_BUDGET_TRANSITION",
+    ].includes(progress.phase as string)
+  ) {
+    return (
+      <VentureLoader
+        title="Wrapping up…"
+        subtitle="Preparing your next step"
+      />
+    );
+  }
+
   // Show GKY to Business Plan transition
   if (transitionData && transitionData.transitionPhase === "PLAN_TO_SUMMARY") {
     return (
@@ -4958,8 +4981,17 @@ export default function ChatPage() {
               )}
             </div>
 
-            {/* Single source of truth for BP progress: sidebar “Overall” bar. Hide floating circle on BP. */}
-            {progress.phase !== 'GKY' && progress.phase !== 'BUSINESS_PLAN' && (
+            {/* Single source of truth for BP progress: sidebar “Overall” bar. Hide floating circle on BP,
+               and during phase-transition states — those get their own dedicated transition screen, so a
+               raw percent/phase badge here would just flash confusingly for a moment. */}
+            {![
+              'GKY',
+              'BUSINESS_PLAN',
+              'PLAN_TO_ROADMAP_TRANSITION',
+              'PLAN_TO_SUMMARY_TRANSITION',
+              'PLAN_TO_BUDGET_TRANSITION',
+              'ROADMAP_TO_IMPLEMENTATION_TRANSITION',
+            ].includes(progress.phase) && (
               <ProgressCircle
                 progress={percent}
                 phase={progress.phase}

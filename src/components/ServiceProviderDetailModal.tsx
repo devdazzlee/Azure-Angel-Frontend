@@ -37,8 +37,10 @@ const extractWebsiteUrl = (value?: string | null): string | null => {
 const extractPhone = (provider: ServiceProviderRow): string | null => {
   const direct = provider.phone?.trim();
   if (direct) return direct;
+  // Leading "(" must be captured too, otherwise "(212) 555-0199" loses its
+  // opening parenthesis (regex has to start on \( or \+ or a digit).
   const fromContact = provider.contact_method?.match(
-    /(?:\+?\d[\d\s().-]{7,}\d)/,
+    /(?:\+?\(?\d[\d\s().-]{7,}\d\)?)/,
   );
   return fromContact?.[0]?.trim() ?? null;
 };
@@ -112,11 +114,9 @@ const ServiceProviderDetailModal: React.FC<ServiceProviderDetailModalProps> = ({
 
   const businessLocation = resolveBusinessLocation(provider);
   const businessScale = resolveBusinessScale(provider);
-  const contactMethodText =
-    provider.contact_method?.trim() &&
-    !extractWebsiteUrl(provider.contact_method)
-      ? provider.contact_method.trim()
-      : null;
+  // Fallback search link used when no site URL is on file — always offer a way
+  // to independently verify the business is real rather than a vague text blurb.
+  const webSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(provider.name)}`;
 
   const tabClass = (tab: DetailTab) =>
     `flex-1 px-2 py-2 transition-colors sm:px-3 ${
@@ -286,11 +286,11 @@ const ServiceProviderDetailModal: React.FC<ServiceProviderDetailModalProps> = ({
 
           {activeTab === 'contact' && (
             <div className="space-y-3">
-              {websiteUrl && (
-                <div className="flex items-start gap-2 rounded-lg border border-gray-200 px-3 py-2">
-                  <Globe className="mt-0.5 h-4 w-4 shrink-0 text-teal-600" aria-hidden />
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-gray-900">Website</p>
+              <div className="flex items-start gap-2 rounded-lg border border-gray-200 px-3 py-2">
+                <Globe className="mt-0.5 h-4 w-4 shrink-0 text-teal-600" aria-hidden />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-gray-900">Website</p>
+                  {websiteUrl ? (
                     <a
                       href={websiteUrl}
                       target="_blank"
@@ -299,9 +299,18 @@ const ServiceProviderDetailModal: React.FC<ServiceProviderDetailModalProps> = ({
                     >
                       {websiteUrl.replace(/^https?:\/\//, '')}
                     </a>
-                  </div>
+                  ) : (
+                    <a
+                      href={webSearchUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="break-all text-xs text-teal-700 hover:underline"
+                    >
+                      No site on file — verify this business on the web
+                    </a>
+                  )}
                 </div>
-              )}
+              </div>
 
               {phone && (
                 <div className="flex items-start gap-2 rounded-lg border border-gray-200 px-3 py-2">
@@ -327,16 +336,9 @@ const ServiceProviderDetailModal: React.FC<ServiceProviderDetailModalProps> = ({
                 </div>
               )}
 
-              {contactMethodText && (
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
-                  <p className="mb-1 font-semibold text-gray-900">How to reach them</p>
-                  <p className="leading-relaxed">{contactMethodText}</p>
-                </div>
-              )}
-
-              {!websiteUrl && !phone && !email && !contactMethodText && (
+              {!phone && !email && (
                 <p className="text-xs text-gray-500">
-                  No direct contact details on file. Use the button below to search for this provider online.
+                  No direct phone or email on file. Use the website link above, or the button below, to reach this provider.
                 </p>
               )}
             </div>

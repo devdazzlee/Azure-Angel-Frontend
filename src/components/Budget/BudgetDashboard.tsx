@@ -1506,16 +1506,12 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
       <BudgetDashboardHeader
         compact={embeddedInSetup || embeddedInParent}
         disabled={interactionLocked}
-        onChatWithAngel={() => setIsChatModalOpen(true)}
         onOpenExport={onRegisterExportActions ? undefined : () => setShowExportModal(true)}
       />
 
       {/* Selected Items Banner */}
       <div className={`max-w-7xl mx-auto ${contentPaddingClass} min-w-0`}>
-        <SelectedItemsBanner
-          selectedItemIds={selectedItemIds}
-          onChatOpen={() => setIsChatModalOpen(true)}
-        />
+        <SelectedItemsBanner selectedItemIds={selectedItemIds} />
       </div>
 
       {/* Main Content */}
@@ -1822,6 +1818,31 @@ const BudgetDashboard: React.FC<BudgetDashboardProps> = ({
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Floating Chat with Angel trigger — stays reachable without scrolling back to the top */}
+      {!isChatModalOpen && (
+        <button
+          type="button"
+          onClick={() => setIsChatModalOpen(true)}
+          disabled={interactionLocked}
+          aria-label={selectedItemIds.size > 0 ? `Chat with Angel about ${selectedItemIds.size} selected items` : 'Chat with Angel'}
+          className={`fixed right-2 sm:right-4 z-40 flex items-center gap-2 rounded-full bg-gradient-to-r from-teal-500 to-cyan-600 pl-4 pr-4 py-3 text-sm font-semibold text-white shadow-lg shadow-teal-600/30 transition-all hover:from-teal-600 hover:to-cyan-700 hover:shadow-xl active:scale-95 disabled:opacity-50 disabled:pointer-events-none ${
+            embeddedInSetup
+              ? 'bottom-5 md:bottom-20'
+              : embeddedInParent
+              ? 'bottom-20 sm:bottom-24' // stack above the "Angel" support FAB rendered by the parent Implementation page
+              : 'bottom-5 md:bottom-6'
+          }`}
+        >
+          <MessageSquareText className="h-4 w-4 shrink-0" />
+          <span>Chat with Angel</span>
+          {selectedItemIds.size > 0 && (
+            <span className="ml-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-xs font-bold text-teal-700">
+              {selectedItemIds.size}
+            </span>
+          )}
+        </button>
+      )}
 
       {/* Modals */}
       {isChatModalOpen && (

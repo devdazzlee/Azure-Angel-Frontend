@@ -17,7 +17,12 @@ const phaseShortMap: Record<string, string> = {
   GKY: "GKY",
   BUSINESS_PLAN: "BP",
   ROADMAP: "RD",
+  ROADMAP_GENERATED: "RD",
   IMPLEMENTATION: "IMPL",
+  PLAN_TO_ROADMAP_TRANSITION: "RD",
+  PLAN_TO_SUMMARY_TRANSITION: "BP",
+  PLAN_TO_BUDGET_TRANSITION: "BP",
+  ROADMAP_TO_IMPLEMENTATION_TRANSITION: "IMPL",
 };
 
 const ProgressCircle: React.FC<ProgressCircleProps> = ({
@@ -72,8 +77,8 @@ const ProgressCircle: React.FC<ProgressCircleProps> = ({
           <span className="text-base font-semibold text-emerald-600">
             {Math.round(progress)}%
           </span>
-          <span className="text-xs font-medium text-gray-600">
-            {phaseShortMap[phase] || phase}
+          <span className="text-xs font-medium text-gray-600 truncate max-w-full">
+            {phaseShortMap[phase] || phase.replace(/_/g, ' ')}
           </span>
         </div>
       </div>
