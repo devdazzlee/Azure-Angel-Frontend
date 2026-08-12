@@ -4,6 +4,7 @@ import {
   getRefreshToken,
   setSession,
   clearSession,
+  subscribeSessionChange,
   isEmailNotConfirmedError,
   getEmailPendingVerification,
   EMAIL_VERIFICATION_MESSAGE,
@@ -34,16 +35,16 @@ function isAxiosError(error: any): boolean {
 }
 
 const extractErrorMessage = (response: any): string => {
-  // Handle 422 validation errors with details array (Pydantic format)
   const details = response?.data?.details;
   if (Array.isArray(details) && details.length > 0) {
     const messages = details.map((d: { msg?: string }) => d.msg).filter(Boolean);
     return messages.length > 0 ? messages.join('. ') : '';
   }
-  return response?.data?.detail
-    || response?.data?.error
-    || response?.data?.message
-    || '';
+  const detail = response?.data?.detail;
+  if (detail && typeof detail === 'object') {
+    return detail.message || detail.error || detail.detail || JSON.stringify(detail);
+  }
+  return detail || response?.data?.error || response?.data?.message || '';
 };
 
 const handleError = (error: any): never => {
@@ -80,13 +81,11 @@ const handleError = (error: any): never => {
       }
       case 404:
       case 405: {
-        // Route exists in code but isn't reachable at the deployed backend —
-        // almost always means the API hasn't been redeployed after a route
-        // change. Surface this distinctly so it doesn't masquerade as a
-        // generic "Server error" and hide a deployment-drift bug.
         const method = (error.config?.method || 'request').toUpperCase();
         const path = error.config?.url || '';
-        toast.error(`This action isn't available at the backend yet (HTTP ${status} on ${method} ${path}).`);
+        toast.error(
+          `This action isn't available at the backend yet (HTTP ${status} on ${method} ${path}).`
+        );
         break;
       }
       case 429:
@@ -113,144 +112,139 @@ const httpClient = axios.create({
   baseURL: BASE,
 });
 
-// Request Interceptor
+const syncDefaultAuthHeader = () => {
+  const token = getAccessToken();
+  if (token) {
+    httpClient.defaults.headers.common.Authorization = `Bearer ${token}`;
+  } else {
+    delete httpClient.defaults.headers.common.Authorization;
+  }
+};
+
+syncDefaultAuthHeader();
+subscribeSessionChange(syncDefaultAuthHeader);
+
 httpClient.interceptors.request.use(
-  config => {
+  (config) => {
     const token = getAccessToken();
     if (token && config.headers) {
+      // Always overwrite with latest token (ignore stale caller snapshots).
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
-  error => Promise.reject(error)
+  (error) => Promise.reject(error)
 );
 
-// Refresh logic
-let isRefreshing = false;
-let failedQueue: {
-  resolve: (value?: unknown) => void;
-  reject: (reason?: unknown) => void;
-}[] = [];
+/** Single-flight refresh — all concurrent 401s share one Promise. */
+let refreshPromise: Promise<string> | null = null;
+let isRedirectingToLogin = false;
 
-const processQueue = (error: any, token: string | null = null) => {
-  failedQueue.forEach(prom => {
-    if (error) prom.reject(error);
-    else prom.resolve(token);
+const forceReauth = (message?: string) => {
+  if (isRedirectingToLogin) return;
+  isRedirectingToLogin = true;
+  toast.error(message || ErrorMessages[ErrorCodes.UNAUTHORIZED], {
+    toastId: 'session-expired',
   });
-  failedQueue = [];
+  clearSession();
+  window.location.href = '/login';
+};
+
+const refreshAccessToken = async (): Promise<string> => {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  refreshPromise = (async () => {
+    const refreshTokenUsed = getRefreshToken();
+    if (!refreshTokenUsed) {
+      throw new Error('No refresh token');
+    }
+
+    const res = await axios.post<IRefreshTokenResponse>(
+      `${BASE}/auth/refresh-token`,
+      { refresh_token: refreshTokenUsed },
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+
+    const session = res.data?.result?.session;
+    if (!session?.access_token || !session?.refresh_token) {
+      throw new Error('Invalid session from refresh');
+    }
+
+    setSession(session.access_token, session.refresh_token);
+    syncDefaultAuthHeader();
+    return session.access_token;
+  })().finally(() => {
+    refreshPromise = null;
+  });
+
+  return refreshPromise;
+};
+
+const isAuthEndpoint = (url?: string): boolean => {
+  if (!url) return false;
+  return (
+    url.includes('/auth/signin') ||
+    url.includes('/auth/signup') ||
+    url.includes('/auth/login') ||
+    url.includes('/auth/refresh-token')
+  );
 };
 
 httpClient.interceptors.response.use(
-  response => response,
-  async error => {
+  (response) => response,
+  async (error) => {
     const originalRequest = error.config;
 
-    // Skip retry logic if request was cancelled or doesn't have config
     if (!originalRequest) {
       return Promise.reject(error);
     }
 
     const is401 = error?.response?.status === 401;
     const isRetry = originalRequest._retry === true;
-    
-    // Skip token refresh for signin/login endpoints - these are authentication attempts, not token refresh
-    const isAuthEndpoint = originalRequest.url?.includes('/auth/signin') || 
-                          originalRequest.url?.includes('/auth/signup') ||
-                          originalRequest.url?.includes('/auth/login');
 
-    // Handle 401 errors (token expired) with automatic refresh
-    // BUT skip for authentication endpoints (signin/signup) - those should show actual error messages
-    if (is401 && !isRetry && !isAuthEndpoint) {
-      console.log('🔐 Token expired (401), attempting refresh...');
+    if (is401 && !isRetry && !isAuthEndpoint(originalRequest.url)) {
       originalRequest._retry = true;
 
-      const refreshToken = getRefreshToken();
-      if (!refreshToken) {
-        console.log('❌ No refresh token found, redirecting to login');
-        toast.error(ErrorMessages[ErrorCodes.UNAUTHORIZED]);
-        clearSession();
-        window.location.href = '/login';
+      const refreshTokenBefore = getRefreshToken();
+      if (!refreshTokenBefore) {
+        forceReauth(ErrorMessages[ErrorCodes.UNAUTHORIZED]);
         return Promise.reject(error);
       }
 
-      // If refresh is already in progress, queue this request
-      if (isRefreshing) {
-        console.log('⏳ Token refresh already in progress, queuing request');
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        }).then(token => {
-          if (token && originalRequest.headers) {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
-          }
-          return httpClient(originalRequest);
-        }).catch(err => {
-          return Promise.reject(err);
-        });
-      }
-
-      isRefreshing = true;
-      console.log('🔄 Starting token refresh...');
-
       try {
-        const res = await axios.post<IRefreshTokenResponse>(`${BASE}/auth/refresh-token`, {
-          refresh_token: refreshToken,
-        }, {
-          // Don't use httpClient here to avoid infinite loop
-          headers: { 'Content-Type': 'application/json' }
-        });
-
-        const session = res.data?.result?.session;
-        if (!session) {
-          throw new Error('Invalid session from refresh');
-        }
-
-        const { access_token, refresh_token: newRefreshToken } = session;
-        setSession(access_token, newRefreshToken);
-
-        // Update default headers
-        httpClient.defaults.headers.common.Authorization = `Bearer ${access_token}`;
-        
-        // Process queued requests
-        processQueue(null, access_token);
-
-        // Update original request with new token
+        const accessToken = await refreshAccessToken();
         if (originalRequest.headers) {
-          originalRequest.headers.Authorization = `Bearer ${access_token}`;
+          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         }
-
-        console.log('✅ Token refresh successful, retrying original request');
         return httpClient(originalRequest);
       } catch (refreshErr: any) {
-        console.log('❌ Token refresh failed:', refreshErr);
-        processQueue(refreshErr, null);
-        
-        // Check error message format (could be detail, error, or message)
-        const errorMessage = 
-          refreshErr?.response?.data?.detail ||
-          refreshErr?.response?.data?.error ||
-          refreshErr?.response?.data?.message ||
-          refreshErr?.message ||
-          '';
-        
-        if (errorMessage.includes('Already Used') || 
-            errorMessage.includes('Session expired') ||
-            errorMessage.includes('Invalid token') ||
-            errorMessage.includes('expired')) {
-          console.log('🔒 Refresh token invalid, redirecting to login');
-          toast.error('Your session has expired. Please log in again.');
-        } else {
-          toast.error(ErrorMessages[ErrorCodes.UNAUTHORIZED]);
+        const currentRefresh = getRefreshToken();
+        // Another request already rotated successfully — retry with new token.
+        if (currentRefresh && currentRefresh !== refreshTokenBefore) {
+          const accessToken = getAccessToken();
+          if (accessToken) {
+            if (originalRequest.headers) {
+              originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+            }
+            return httpClient(originalRequest);
+          }
         }
-        
-        clearSession();
-        window.location.href = '/login';
+
+        const errorMessage = extractErrorMessage(refreshErr?.response) || refreshErr?.message || '';
+
+        forceReauth(
+          String(errorMessage).includes('Already Used') ||
+            String(errorMessage).includes('Session expired') ||
+            String(errorMessage).includes('expired')
+            ? 'Your session has expired. Please log in again.'
+            : ErrorMessages[ErrorCodes.UNAUTHORIZED]
+        );
         return Promise.reject(refreshErr);
-      } finally {
-        isRefreshing = false;
       }
     }
 
-    // For non-401 errors, use standard error handling
     return handleError(error);
   }
 );

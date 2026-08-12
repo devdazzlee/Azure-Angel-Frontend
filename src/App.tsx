@@ -44,6 +44,8 @@ const App = () => {
         closeOnClick
         pauseOnHover
         theme="light"
+        style={{ zIndex: 100000 }}
+        toastClassName="!z-[100000]"
       />
       <RouterProvider router={router} />
     </>

@@ -13,12 +13,14 @@ import {
   syncSessionProgress,
 } from "../../services/authService";
 import httpClient from "../../api/httpClient";
+import { getAccessToken } from "../../utils/tokenUtils";
 import { toast } from "react-toastify";
 import ProgressCircle from "../../components/ProgressCircle";
 import BusinessPlanModal from "../../components/BusinessPlanModal";
 import VentureLoader from "../../components/VentureLoader";
 import QuestionNavigator from "../../components/QuestionNavigator";
 import SmartInput from "../../components/SmartInput";
+import AngelMessageActions from "../../components/AngelMessageActions";
 import AcceptModifyButtons from "../../components/AcceptModifyButtons";
 import YesNoButtons from "../../components/YesNoButtons";
 import WebSearchIndicator from "../../components/WebSearchIndicator";
@@ -491,7 +493,7 @@ export default function ChatPage() {
   const loadProfileData = useCallback(async () => {
     setLoadingProfile(true);
     try {
-      const token = localStorage.getItem('sb_access_token');
+      const token = getAccessToken();
       if (!token) {
         toast.error('Please sign in to view your profile');
         return;
@@ -3291,7 +3293,7 @@ export default function ChatPage() {
           console.log("🎯 Detected PLAN_TO_SUMMARY_TRANSITION phase - fetching complete session data");
           try {
             const sessionResponse = await httpClient.get(
-              `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}`
+              `/angel/sessions/${sessionId}`
             );
             const sessionData = sessionResponse.data as { success?: boolean; result?: any };
             const freshSession = sessionData?.success ? sessionData.result : null;
@@ -3328,7 +3330,7 @@ export default function ChatPage() {
           try {
             // ROOT CAUSE FIX: Fetch FRESH session data to get transition data
             const sessionResponse = await httpClient.get(
-              `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}`
+              `/angel/sessions/${sessionId}`
             );
             
             const sessionData = sessionResponse.data as { success?: boolean; result?: any };
@@ -3403,7 +3405,7 @@ export default function ChatPage() {
             // ROOT CAUSE FIX: Fetch FRESH session data to get the artifact
             // The artifact is generated in background, so we need to fetch it separately
             const sessionResponse = await httpClient.get(
-              `${import.meta.env.VITE_API_BASE_URL}/angel/sessions/${sessionId}`
+              `/angel/sessions/${sessionId}`
             );
             
             const sessionData = sessionResponse.data as { success?: boolean; result?: any };
@@ -4712,7 +4714,7 @@ export default function ChatPage() {
             </button>
           )} */}
 
-          {/* Skip to Q45 — testing only (desktop sidebar) */}
+          {/* Skip to Q45 — testing only (desktop sidebar)
           {progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) && (
             <button
               type="button"
@@ -4731,6 +4733,7 @@ export default function ChatPage() {
               <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-rose-500/10 to-pink-500/10 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
             </button>
           )}
+          */}
 
           {/* Save Button */}
           {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
@@ -5277,6 +5280,10 @@ export default function ChatPage() {
                                         {normalizeAngelMarkdown(snapAck)}
                                       </ReactMarkdown>
                                     </div>
+                                    <AngelMessageActions
+                                      content={snapAck}
+                                      messageId={`history-${index}-cmd-ack`}
+                                    />
                                   </div>
                                   <div className="space-y-2">
                                     <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-600">
@@ -5317,6 +5324,10 @@ export default function ChatPage() {
                                   {normalizeAngelMarkdown(pair.acknowledgement)}
                                 </ReactMarkdown>
                               </div>
+                              <AngelMessageActions
+                                content={pair.acknowledgement}
+                                messageId={`history-${index}-ack`}
+                              />
                             </div>
                           )}
                           <div className={pair.acknowledgement ? "space-y-2" : ""}>
@@ -5328,6 +5339,12 @@ export default function ChatPage() {
                                 <QuestionFormatter text={pair.question} phase={progress.phase} />
                               </div>
                             </div>
+                            {!pair.acknowledgement && pair.question?.trim() && (
+                              <AngelMessageActions
+                                content={pair.question}
+                                messageId={`history-${index}-q`}
+                              />
+                            )}
                           </div>
                         </div>
                       )}
@@ -5343,10 +5360,26 @@ export default function ChatPage() {
                       <div className="font-semibold text-gray-800 mb-1 text-sm">
                         You
                       </div>
-                      <div className="text-gray-700 whitespace-pre-wrap text-sm">
-                        {pair.commandKind === "modify"
-                          ? MODIFY_HISTORY_ANSWER_LABEL
-                          : pair.answer}
+                      <div className="text-gray-700 text-sm leading-relaxed prose prose-sm max-w-none prose-p:my-1 prose-strong:font-semibold prose-strong:text-gray-900">
+                        {pair.commandKind === "modify" ? (
+                          MODIFY_HISTORY_ANSWER_LABEL
+                        ) : (
+                          <ReactMarkdown
+                            components={{
+                              p: ({ children }) => (
+                                <p className="whitespace-pre-wrap mb-2 last:mb-0">{children}</p>
+                              ),
+                              strong: ({ children }) => (
+                                <strong className="font-semibold text-gray-900">{children}</strong>
+                              ),
+                              em: ({ children }) => (
+                                <em className="italic">{children}</em>
+                              ),
+                            }}
+                          >
+                            {pair.answer}
+                          </ReactMarkdown>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -5402,6 +5435,10 @@ export default function ChatPage() {
                               {pair.acknowledgement}
                             </ReactMarkdown>
                           </div>
+                          <AngelMessageActions
+                            content={pair.acknowledgement}
+                            messageId={`history-${index}-cmd-response`}
+                          />
                         </div>
                       </div>
                     </div>
@@ -5484,6 +5521,10 @@ export default function ChatPage() {
                                     {normalizeAngelMarkdown(currentAcknowledgement)}
                                   </ReactMarkdown>
                                 </div>
+                                <AngelMessageActions
+                                  content={currentAcknowledgement}
+                                  messageId={`current-ack-${progress.phase}-${currentQuestionNumber ?? "x"}`}
+                                />
                               </div>
                             )}
                             <div className={currentAcknowledgement ? "space-y-2" : ""}>
@@ -5493,6 +5534,12 @@ export default function ChatPage() {
                               <div className={currentAcknowledgement ? "rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3" : ""}>
                                 <QuestionFormatter text={currentQuestion || "Loading…"} phase={progress.phase} />
                               </div>
+                              {!currentAcknowledgement && currentQuestion?.trim() && (
+                                <AngelMessageActions
+                                  content={currentQuestion}
+                                  messageId={`current-q-${progress.phase}-${currentQuestionNumber ?? "x"}`}
+                                />
+                              )}
                             </div>
                           </div>
                       )}
@@ -5517,10 +5564,24 @@ export default function ChatPage() {
                         <div className="font-semibold text-gray-800 mb-1 text-sm">
                           You
                         </div>
-                        <div className="text-gray-700 whitespace-pre-wrap text-sm">
-                          {goBackUserDisplay && !pendingUserReply
-                            ? goBackUserDisplay
-                            : pendingUserReply}
+                        <div className="text-gray-700 text-sm leading-relaxed prose prose-sm max-w-none prose-p:my-1 prose-strong:font-semibold prose-strong:text-gray-900">
+                          <ReactMarkdown
+                            components={{
+                              p: ({ children }) => (
+                                <p className="whitespace-pre-wrap mb-2 last:mb-0">{children}</p>
+                              ),
+                              strong: ({ children }) => (
+                                <strong className="font-semibold text-gray-900">{children}</strong>
+                              ),
+                              em: ({ children }) => (
+                                <em className="italic">{children}</em>
+                              ),
+                            }}
+                          >
+                            {goBackUserDisplay && !pendingUserReply
+                              ? goBackUserDisplay
+                              : pendingUserReply}
+                          </ReactMarkdown>
                         </div>
                       </div>
                     </div>

@@ -71,18 +71,8 @@ const SpecializedAgents: React.FC<SpecializedAgentsProps> = ({
     try {
       setAgentsLoading(true);
       setError(null);
-      
-      const token = localStorage.getItem('sb_access_token');
-      if (!token) {
-        setError('Authentication token not found');
-        return;
-      }
 
-      const response = await httpClient.get('/specialized-agents/agents', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await httpClient.get('/specialized-agents/agents');
 
       const data = response.data as AgentsResponse;
       if (data.success && data.result && data.result.agents) {
@@ -111,21 +101,10 @@ const SpecializedAgents: React.FC<SpecializedAgentsProps> = ({
     setError(null);
     
     try {
-      const token = localStorage.getItem('sb_access_token');
-      if (!token) {
-        setError('Authentication required');
-        return;
-      }
-
       const response = await httpClient.post('/specialized-agents/agent-guidance', {
         question: question.trim(),
         agent_type: selectedAgent,
         business_context: businessContext
-      }, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
       });
 
       const data = response.data as AgentGuidanceResponse;

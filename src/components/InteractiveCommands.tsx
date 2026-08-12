@@ -107,21 +107,10 @@ const InteractiveCommands: React.FC<InteractiveCommandsProps> = ({
     setError(null);
     
     try {
-      const token = localStorage.getItem('sb_access_token');
-      if (!token) {
-        setError('Authentication required');
-        return;
-      }
-
       const response = await httpClient.post('/specialized-agents/interactive-command', {
         command: selectedCommand,
         context: context.trim(),
         business_context: businessContext
-      }, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
       });
 
       if ((response.data as any).success) {

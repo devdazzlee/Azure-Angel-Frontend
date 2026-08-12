@@ -254,13 +254,10 @@ const FloatingComprehensiveSupport: React.FC<FloatingComprehensiveSupportProps> 
     }, 300);
 
     try {
-      const token = localStorage.getItem('sb_access_token');
       const response = await httpClient.post('/specialized-agents/rag-research', {
         query: query.trim(),
         business_context: businessContext,
         research_depth: depth
-      }, {
-        headers: { 'Authorization': `Bearer ${token}` }
       });
       
       clearInterval(progressInterval);

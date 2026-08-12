@@ -74,13 +74,10 @@ const AgentDetailModal: React.FC<AgentDetailModalProps> = ({
     setResponse('');
 
     try {
-      const token = localStorage.getItem('sb_access_token');
       const res = await httpClient.post('/specialized-agents/agent-guidance', {
         question: question.trim(),
         agent_type: agent.agent_type,
         business_context: businessContext
-      }, {
-        headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if ((res.data as any).success) {

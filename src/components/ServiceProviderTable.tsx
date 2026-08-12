@@ -77,21 +77,10 @@ const ServiceProviderTable: React.FC<ServiceProviderTableProps> = ({
     setError(null);
     
     try {
-      const token = localStorage.getItem('sb_access_token');
-      if (!token) {
-        setError('Authentication required');
-        return;
-      }
-
       const response = await httpClient.post('/specialized-agents/provider-table', {
         task_id: taskContext, // Use task_id instead of task_context
         business_context: businessContext,
         location: businessContext.location
-      }, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
       });
 
       if ((response.data as any).success) {

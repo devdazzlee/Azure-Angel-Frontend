@@ -1,9 +1,9 @@
-
 import axios from 'axios';
 import httpClient from '../api/httpClient';
+import { getAccessToken } from '../utils/tokenUtils';
 import type { AngelResponse, APIResponse, ChatResponse, IGeneratedBP, IRecentChats, BusinessContextPayload } from '../types/apiTypes';
 
-const BASE = import.meta.env.VITE_API_BASE_URL as string; // e.g. "/api/v1/auth"
+const BASE = import.meta.env.VITE_API_BASE_URL as string;
 
 interface Session {
     access_token: string;
@@ -60,6 +60,10 @@ export type FetchQuestionOptions =
           modify?: ModifyChatPayload;
       };
 
+function requireAuth(): void {
+    if (!getAccessToken()) throw new Error('Not authenticated');
+}
+
 export async function signUp({
     fullName,
     email,
@@ -90,13 +94,11 @@ export async function signUp({
 
         await axios.post<void>(`${BASE}/auth/signup`, payload);
     } catch (err: any) {
-        // FastAPI standard: errors in response.data.detail
-        // Also check message field for backward compatibility
         const errorData = err?.response?.data;
-        const message = errorData?.detail || 
-            errorData?.message || 
-            errorData?.error || 
-            err?.message || 
+        const message = errorData?.detail ||
+            errorData?.message ||
+            errorData?.error ||
+            err?.message ||
             'Signup failed. Please try again.';
         throw new Error(message);
     }
@@ -131,13 +133,11 @@ export async function resetPassword({
     try {
         await axios.post<void>(`${BASE}/auth/reset-password`, { email });
     } catch (err: any) {
-        // FastAPI standard: errors in response.data.detail
-        // Also check message field for backward compatibility
         const errorData = err?.response?.data;
-        const message = errorData?.detail || 
-            errorData?.message || 
-            errorData?.error || 
-            err?.message || 
+        const message = errorData?.detail ||
+            errorData?.message ||
+            errorData?.error ||
+            err?.message ||
             'Failed to send reset email. Please try again.';
         throw new Error(message);
     }
@@ -160,23 +160,20 @@ export async function updatePassword({
         });
     } catch (err: any) {
         const errorData = err?.response?.data;
-        const message = errorData?.detail || 
-            errorData?.error || 
-            err?.message || 
+        const message = errorData?.detail ||
+            errorData?.error ||
+            err?.message ||
             'Failed to update password. Please try again.';
         throw new Error(message);
     }
 }
 
 export async function createSessions(title: string): Promise<IRecentChats> {
-    const token = localStorage.getItem('sb_access_token');
-    if (!token) throw new Error('Not authenticated');
-
+    requireAuth();
     try {
         const { data } = await httpClient.post<APIResponse<IRecentChats>>(
-            `${BASE}/angel/sessions`,
-            { title },
-            { headers: { Authorization: `Bearer ${token}` } }
+            '/angel/sessions',
+            { title }
         );
         return data.result;
     } catch (err) {
@@ -186,13 +183,10 @@ export async function createSessions(title: string): Promise<IRecentChats> {
 }
 
 export async function fetchSessions(): Promise<IRecentChats> {
-    const token = localStorage.getItem('sb_access_token');
-    if (!token) throw new Error('Not authenticated');
-
+    requireAuth();
     try {
         const { data } = await httpClient.get<APIResponse<IRecentChats>>(
-            `${BASE}/angel/sessions`,
-            { headers: { Authorization: `Bearer ${token}` } }
+            '/angel/sessions'
         );
         return data.result;
     } catch (err) {
@@ -202,17 +196,13 @@ export async function fetchSessions(): Promise<IRecentChats> {
 }
 
 export async function fetchSessionHistory(sessionId: string): Promise<SessionHistoryRecord[]> {
-    const token = localStorage.getItem('sb_access_token');
-    if (!token) throw new Error('Not authenticated');
-
+    requireAuth();
     try {
         const { data } = await httpClient.get<{
             success: boolean;
             message: string;
             data: SessionHistoryRecord[];
-        }>(`${BASE}/angel/sessions/${sessionId}/history`, {
-            headers: { Authorization: `Bearer ${token}` },
-        });
+        }>(`/angel/sessions/${sessionId}/history`);
 
         if (data?.success && Array.isArray(data.data)) {
             return data.data;
@@ -230,16 +220,13 @@ export async function syncSessionProgress(
     sessionId: string,
     payload: SyncProgressPayload
 ): Promise<SyncProgressResult> {
-    // Don't manually set Authorization header - let httpClient interceptor handle it
-    // This ensures automatic token refresh on 401 errors
+    requireAuth();
     try {
         const { data } = await httpClient.post<{
             success: boolean;
             message: string;
             result: SyncProgressResult;
-        }>(`${BASE}/angel/sessions/${sessionId}/sync-progress`, payload);
-        // Note: httpClient interceptor automatically adds Authorization header from localStorage
-        // and handles token refresh if token expires
+        }>(`/angel/sessions/${sessionId}/sync-progress`, payload);
 
         if (data?.success && data.result) {
             return data.result;
@@ -261,8 +248,7 @@ export async function fetchQuestion(
     sessionId: string,
     options?: FetchQuestionOptions
 ): Promise<AngelResponse> {
-    const token = localStorage.getItem('sb_access_token');
-    if (!token) throw new Error('Not authenticated');
+    requireAuth();
 
     let context: string | undefined;
     let modify: ModifyChatPayload | undefined;
@@ -281,9 +267,8 @@ export async function fetchQuestion(
         if (modify) body.modify = modify;
 
         const { data } = await httpClient.post<AngelResponse>(
-            `${BASE}/angel/sessions/${sessionId}/chat`,
-            body,
-            { headers: { Authorization: `Bearer ${token}` } }
+            `/angel/sessions/${sessionId}/chat`,
+            body
         );
         return data;
     } catch (err) {
@@ -295,13 +280,10 @@ export async function fetchQuestion(
 export async function fetchBusinessPlan(
     sessionId: string
 ): Promise<IGeneratedBP> {
-    const token = localStorage.getItem('sb_access_token');
-    if (!token) throw new Error('Not authenticated');
-
+    requireAuth();
     try {
         const { data } = await httpClient.post<IGeneratedBP>(
-            `${BASE}/angel/sessions/${sessionId}/generate-plan`,
-            { headers: { Authorization: `Bearer ${token}` } }
+            `/angel/sessions/${sessionId}/generate-plan`
         );
         return data;
     } catch (err) {
@@ -321,9 +303,7 @@ export async function fetchBusinessContext(
         updated: boolean;
     };
 }> {
-    const token = localStorage.getItem('sb_access_token');
-    if (!token) throw new Error('Not authenticated');
-
+    requireAuth();
     try {
         const { data } = await httpClient.get<{
             success: boolean;
@@ -333,9 +313,7 @@ export async function fetchBusinessContext(
                 source: string;
                 updated: boolean;
             };
-        }>(`${BASE}/angel/sessions/${sessionId}/business-context`, {
-            headers: { Authorization: `Bearer ${token}` },
-        });
+        }>(`/angel/sessions/${sessionId}/business-context`);
 
         return data;
     } catch (err) {
@@ -347,13 +325,10 @@ export async function fetchBusinessContext(
 export async function fetchRoadmapPlan(
     sessionId: string
 ): Promise<IGeneratedBP> {
-    const token = localStorage.getItem('sb_access_token');
-    if (!token) throw new Error('Not authenticated');
-
+    requireAuth();
     try {
         const { data } = await httpClient.get<IGeneratedBP>(
-            `${BASE}/angel/sessions/${sessionId}/roadmap-plan`,
-            { headers: { Authorization: `Bearer ${token}` } }
+            `/angel/sessions/${sessionId}/roadmap-plan`
         );
         return data;
     } catch (err) {
@@ -363,8 +338,8 @@ export async function fetchRoadmapPlan(
 }
 
 export interface KycResponseConfig {
-    affirmationIntensity: number; // 0-10
-    constructiveFeedbackIntensity: number; // 0-10
+    affirmationIntensity: number;
+    constructiveFeedbackIntensity: number;
     strictBusinessTypeAttention?: boolean;
     avoidBlindAgreement?: boolean;
 }
@@ -380,14 +355,11 @@ export async function fetchNextQuestion(
     userMessage: string,
     contextData: KycContextData
 ): Promise<ChatResponse> {
-    const token = localStorage.getItem('sb_access_token');
-    if (!token) throw new Error('Not authenticated');
-
+    requireAuth();
     try {
         const { data } = await httpClient.post<ChatResponse>(
-            `${BASE}/angel/chat`,
-            { userMessage, contextData },
-            { headers: { Authorization: `Bearer ${token}` } }
+            '/angel/chat',
+            { userMessage, contextData }
         );
         return data;
     } catch (err) {
@@ -403,67 +375,58 @@ interface AcceptanceStatus {
 }
 
 export async function acceptTerms(name: string, date: string): Promise<{ both_accepted: boolean }> {
-    const token = localStorage.getItem('sb_access_token');
-    if (!token) throw new Error('Not authenticated');
-
+    requireAuth();
     try {
         const { data } = await httpClient.post<{ success: boolean; result: { both_accepted: boolean } }>(
-            `${BASE}/auth/accept-terms`,
-            { name, date },
-            { headers: { Authorization: `Bearer ${token}` } }
+            '/auth/accept-terms',
+            { name, date }
         );
         console.log('Terms acceptance response:', data);
         return data.result;
     } catch (err: any) {
         console.error('Terms acceptance error:', err);
         const errorData = err?.response?.data;
-        const message = errorData?.detail || 
-            errorData?.message || 
-            errorData?.error || 
-            err?.message || 
+        const message = errorData?.detail ||
+            errorData?.message ||
+            errorData?.error ||
+            err?.message ||
             'Failed to accept Terms and Conditions. Please try again.';
         throw new Error(message);
     }
 }
 
 export async function acceptPrivacy(name: string, date: string): Promise<{ both_accepted: boolean }> {
-    const token = localStorage.getItem('sb_access_token');
-    if (!token) throw new Error('Not authenticated');
-
+    requireAuth();
     try {
         const { data } = await httpClient.post<{ success: boolean; result: { both_accepted: boolean } }>(
-            `${BASE}/auth/accept-privacy`,
-            { name, date },
-            { headers: { Authorization: `Bearer ${token}` } }
+            '/auth/accept-privacy',
+            { name, date }
         );
         return data.result;
     } catch (err: any) {
         const errorData = err?.response?.data;
-        const message = errorData?.detail || 
-            errorData?.message || 
-            errorData?.error || 
-            err?.message || 
+        const message = errorData?.detail ||
+            errorData?.message ||
+            errorData?.error ||
+            err?.message ||
             'Failed to accept Privacy Policy. Please try again.';
         throw new Error(message);
     }
 }
 
 export async function checkAcceptanceStatus(): Promise<AcceptanceStatus> {
-    const token = localStorage.getItem('sb_access_token');
-    if (!token) throw new Error('Not authenticated');
-
+    requireAuth();
     try {
         const { data } = await httpClient.get<{ success: boolean; result: AcceptanceStatus }>(
-            `${BASE}/auth/acceptance-status`,
-            { headers: { Authorization: `Bearer ${token}` } }
+            '/auth/acceptance-status'
         );
         return data.result;
     } catch (err: any) {
         const errorData = err?.response?.data;
-        const message = errorData?.detail || 
-            errorData?.message || 
-            errorData?.error || 
-            err?.message || 
+        const message = errorData?.detail ||
+            errorData?.message ||
+            errorData?.error ||
+            err?.message ||
             'Failed to check acceptance status. Please try again.';
         throw new Error(message);
     }

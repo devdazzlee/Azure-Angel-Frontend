@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FaBars, FaTimes } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { clearSession } from '../../utils/tokenUtils';
+import { clearSession, getAccessToken } from '../../utils/tokenUtils';
 import LOGO from '../../assets/images/home/Founderport_Logo_Horizontal_Mariner_Main.svg';
 
 interface NavItem { label: string; to: string; }
@@ -11,7 +11,7 @@ const navItems: NavItem[] = [
   { label: 'Services', to: '/services' },
 ];
 
-const isSessionActive = Boolean(localStorage.getItem('sb_access_token'));
+const isSessionActive = Boolean(getAccessToken());
 
 const handleAction = () => {
   if (isSessionActive) {

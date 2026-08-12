@@ -39,8 +39,9 @@ import TestQuestionFormatter from "../pages/TestQuestionFormatter";
 import AcceptanceGuard from "../components/AcceptanceGuard";
 import RootLayout from "../layout/RootLayout";
 
-const isAuthenticated = (): boolean =>
-  !!localStorage.getItem("sb_access_token");
+import { getAccessToken } from "../utils/tokenUtils";
+
+const isAuthenticated = (): boolean => !!getAccessToken();
 
 // Helper: if logged in → redirect to /ventures, otherwise render the given component
 const redirectIfAuth = (component: React.ReactElement) =>

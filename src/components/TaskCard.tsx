@@ -336,12 +336,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       setError('Session ID not found');
       return;
     }
-    const token = localStorage.getItem('sb_access_token');
-    if (!token) {
-      setError('Authentication required');
-      return;
-    }
-
     // Snapshot the values we need before clearing local modal state.
     const stepNumber = substepToComplete.step_number;
     const stepTitle = substepToComplete.title;
@@ -377,8 +371,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     try {
       const response = await httpClient.post(
         `/implementation/sessions/${currentSessionId}/tasks/${task.id}/complete`,
-        completionData,
-        { headers: { Authorization: `Bearer ${token}` } }
+        completionData
       );
 
       if ((response.data as any).success) {
@@ -432,12 +425,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     setError(null);
 
     try {
-      const token = localStorage.getItem('sb_access_token');
-      if (!token) {
-        setError('Authentication required');
-        return;
-      }
-
       const currentSessionId = sessionId || (window.location.pathname.match(/\/venture\/([^\/]+)/) || [])[1] || '';
       if (!currentSessionId) {
         setError('Session ID not found');
@@ -454,13 +441,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
       const response = await httpClient.post(
         `/implementation/sessions/${currentSessionId}/tasks/${task.id}/complete`, 
-        completionData, 
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
+        completionData
       );
 
       const data = response.data as TaskCompletionResult & { already_completed?: boolean };

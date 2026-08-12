@@ -71,12 +71,6 @@ const RAGResearch: React.FC<RAGResearchProps> = ({
     setProgress(0);
     
     try {
-      const token = localStorage.getItem('sb_access_token');
-      if (!token) {
-        setError('Authentication required');
-        return;
-      }
-
       // Simulate progress updates
       const progressInterval = setInterval(() => {
         setProgress(prev => Math.min(prev + 10, 90));
@@ -86,11 +80,6 @@ const RAGResearch: React.FC<RAGResearchProps> = ({
         query: query.trim(),
         business_context: businessContext,
         research_depth: researchDepth
-      }, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
       });
 
       clearInterval(progressInterval);

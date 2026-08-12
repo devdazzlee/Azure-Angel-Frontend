@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { fetchSessions } from '../../services/authService';
 import httpClient from '../../api/httpClient';
+import { getAccessToken } from '../../utils/tokenUtils';
 
 const ProfilePage = () => {
   const navigate = useNavigate();
@@ -22,7 +23,7 @@ const ProfilePage = () => {
   const loadProfileData = useCallback(async () => {
     setLoadingProfile(true);
     try {
-      const token = localStorage.getItem('sb_access_token');
+      const token = getAccessToken();
       if (!token) {
         toast.error('Please sign in to view your profile');
         navigate('/login');

@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
+import { getAccessToken } from '../../utils/tokenUtils';
 
 type Step = {
   number: string;
@@ -128,7 +129,7 @@ const fadeItem = {
 
 const FounderportHome: React.FC = () => {
   const navigate = useNavigate();
-  const isLoggedIn = Boolean(localStorage.getItem('sb_access_token'));
+  const isLoggedIn = Boolean(getAccessToken());
 
   useEffect(() => {
     const hash = window.location.hash;

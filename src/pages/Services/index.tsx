@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
+import { getAccessToken } from '../../utils/tokenUtils';
 
 /** Premium headline pricing — list vs intro offer (one place to update marketing copy). */
 const PREMIUM_PRICING = {
@@ -112,7 +113,7 @@ const itemReveal = {
 
 export default function Services() {
   const navigate = useNavigate();
-  const isLoggedIn = Boolean(localStorage.getItem('sb_access_token'));
+  const isLoggedIn = Boolean(getAccessToken());
 
   const handlePremiumSubscribe = () => {
     if (isLoggedIn) {
