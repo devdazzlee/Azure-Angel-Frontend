@@ -39,6 +39,7 @@ import RoadmapEditModal from "../../components/RoadmapEditModal";
 import BusinessQuestionFormatter from "../../components/BusinessQuestionFormatter";
 import BackButton from "../../components/BackButton";
 import AngelThinkingLoader from "../../components/AngelThinkingLoader";
+import { SHOW_SKIP_QUESTION_BUTTON } from "../../config/devTools";
 import QuestionFormatter from "../../components/QuestionFormatter";
 import {
   getAngelMessageBadgeLabel,
@@ -4714,8 +4715,8 @@ export default function ChatPage() {
             </button>
           )} */}
 
-          {/* Skip to Q45 — testing only (desktop sidebar)
-          {progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) && (
+          {/* Skip to Q45 — testing only (desktop sidebar); toggle via SHOW_SKIP_QUESTION_BUTTON in config/devTools.ts */}
+          {SHOW_SKIP_QUESTION_BUTTON && progress.phase === ("BUSINESS_PLAN" as ProgressState['phase']) && (
             <button
               type="button"
               onClick={() => handleNext("jump to question 45")}
@@ -4733,7 +4734,6 @@ export default function ChatPage() {
               <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-rose-500/10 to-pink-500/10 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
             </button>
           )}
-          */}
 
           {/* Save Button */}
           {(progress.phase === ("IMPLEMENTATION" as ProgressState['phase']) ||
