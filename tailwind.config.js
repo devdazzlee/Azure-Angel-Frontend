@@ -15,6 +15,9 @@ module.exports = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        'landing-display': ['Fraunces', 'Georgia', 'Times New Roman', 'serif'],
+      },
       colors: {
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
@@ -31,6 +34,12 @@ module.exports = {
         popover: {
           DEFAULT: 'hsl(var(--popover))',
           foreground: 'hsl(var(--popover-foreground))',
+        },
+        landing: {
+          navy: 'var(--landing-navy)',
+          'navy-deep': 'var(--landing-navy-deep)',
+          cream: 'var(--landing-cream)',
+          sky: 'var(--landing-sky)',
         },
       },
       animation: {

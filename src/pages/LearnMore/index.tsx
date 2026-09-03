@@ -1,427 +1,386 @@
-import React, { useEffect } from 'react';
-import { motion, useAnimation } from 'framer-motion';
-import type { Variants } from 'framer-motion';
-import { useInView } from 'react-intersection-observer';
+import React from 'react';
+import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
+import { getAccessToken } from '../../utils/tokenUtils';
+import LandingCta from '../../components/landing/LandingCta';
+import iconIsland from '../../assets/images/home/icon-island.png';
+import iconCompass from '../../assets/images/home/icon-compass.png';
+import iconLighthouse from '../../assets/images/home/icon-lighthouse.png';
+import iconOars from '../../assets/images/home/icon-oars.png';
 
-// Animation styles
-const styles = `
-  @keyframes fadeInUp {
-    from {
-      opacity: 0;
-      transform: translateY(30px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  
-  @keyframes float {
-    0%, 100% {
-      transform: translateY(0px);
-    }
-    50% {
-      transform: translateY(-20px);
-    }
-  }
-`;
-
-// Animation variants
-const reveal: Variants = {
-  hidden: { opacity: 0, y: 50 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.6, ease: 'easeOut' },
-  },
-};
-
-const stagger: Variants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.2 },
-  },
-};
-
-interface Feature {
+type Feature = {
   title: string;
   description: string;
   icon: string;
-  color: string;
-}
+};
 
-interface Benefit {
+type Benefit = {
   title: string;
   description: string;
   stat: string;
-}
+};
 
 const features: Feature[] = [
   {
-    title: 'AI-Powered Business Planning',
-    description: 'Get personalized guidance through every step of creating your business plan with our intelligent AI assistant.',
-    icon: '📋',
-    color: 'from-teal-500 to-blue-500',
+    title: 'Guided business planning',
+    description:
+      'Get personalized guidance through every step of creating your business plan with Angel, your AI planning partner.',
+    icon: iconCompass,
   },
   {
-    title: 'Automated Roadmap Generation',
-    description: 'Receive a customized launch roadmap with actionable milestones tailored to your specific business needs.',
-    icon: '🗺️',
-    color: 'from-blue-500 to-purple-500',
+    title: 'Personalized launch roadmap',
+    description:
+      'Receive a customized launch roadmap with clear milestones tailored to your business type and stage.',
+    icon: iconLighthouse,
   },
   {
-    title: 'Step-by-Step Implementation',
-    description: 'Follow guided tasks broken down into manageable actions, making the complex startup process simple.',
-    icon: '✅',
-    color: 'from-purple-500 to-pink-500',
+    title: 'Step-by-step implementation',
+    description:
+      'Follow guided tasks broken into manageable actions — making the startup process clearer and less overwhelming.',
+    icon: iconOars,
   },
   {
-    title: 'Expert Knowledge Base',
-    description: 'Access deep domain expertise across regulatory, financial, marketing, and operational aspects of business.',
-    icon: '🎓',
-    color: 'from-pink-500 to-red-500',
+    title: 'Expert knowledge when you need it',
+    description:
+      'Access guidance across regulatory, financial, marketing, and operational aspects of starting a business.',
+    icon: iconIsland,
   },
   {
-    title: 'Real-Time Research',
-    description: 'Benefit from AI-powered web research that provides up-to-date information and insights for your industry.',
-    icon: '🔍',
-    color: 'from-teal-500 to-green-500',
+    title: 'Research that stays on topic',
+    description:
+      'Benefit from research and insights grounded in your answers — so recommendations fit your idea, not a generic template.',
+    icon: iconCompass,
   },
   {
-    title: 'Progress Tracking',
-    description: 'Monitor your journey from idea to launch with visual progress indicators and milestone tracking.',
-    icon: '📊',
-    color: 'from-orange-500 to-yellow-500',
+    title: 'Progress you can see',
+    description:
+      'Monitor your journey from idea to launch with clear sequencing so you always know what comes next.',
+    icon: iconLighthouse,
   },
 ];
 
 const benefits: Benefit[] = [
   {
-    title: 'Save Time',
-    description: 'Reduce business planning time from months to weeks with automated guidance and templates.',
-    stat: '70% Faster',
+    title: 'Save time',
+    description:
+      'Reduce business planning time from months to weeks with structured guidance and clear next steps.',
+    stat: 'Clearer path',
   },
   {
-    title: 'Reduce Costs',
-    description: 'Eliminate expensive consulting fees while getting expert-level business planning assistance.',
-    stat: '$10k+ Saved',
+    title: 'Reduce costly guesswork',
+    description:
+      'Get expert-level planning help without piecing everything together from scattered advice online.',
+    stat: 'Less overwhelm',
   },
   {
-    title: 'Increase Success',
-    description: 'Follow proven methodologies and best practices to maximize your chances of business success.',
-    stat: '3x Higher',
+    title: 'Move with confidence',
+    description:
+      'Follow a proven sequence so you understand what to do, why it matters, and what to consider.',
+    stat: 'More clarity',
   },
 ];
 
 const howItWorks = [
   {
     step: '01',
-    title: 'Share Your Vision',
-    description: 'Answer guided questions about your business idea, goals, and target market through an interactive conversation.',
-    icon: '💭',
+    title: 'Share your vision',
+    description:
+      'Answer guided questions about your business idea, goals, and customers through an interactive conversation.',
   },
   {
     step: '02',
-    title: 'Build Your Plan',
-    description: 'Angel helps you create a comprehensive business plan with research-backed recommendations and insights.',
-    icon: '📝',
+    title: 'Build your plan',
+    description:
+      'Angel helps you create a comprehensive business plan with recommendations grounded in what you shared.',
   },
   {
     step: '03',
-    title: 'Get Your Roadmap',
-    description: 'Receive a personalized launch roadmap with clear milestones and timelines tailored to your business.',
-    icon: '🗓️',
+    title: 'Get your roadmap',
+    description:
+      'Receive a personalized launch roadmap with clear milestones tailored to your business.',
   },
   {
     step: '04',
-    title: 'Take Action',
-    description: 'Follow step-by-step implementation guidance to turn your plan into reality with confidence.',
-    icon: '🚀',
+    title: 'Take action',
+    description:
+      'Follow step-by-step implementation guidance to turn your plan into reality with more confidence.',
   },
 ];
 
-const AnimatedSection: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const controls = useAnimation();
-  const [ref, inView] = useInView({ threshold: 0.2, triggerOnce: true });
+const faqs = [
+  {
+    q: 'What is Founderport?',
+    a: 'Founderport is a guided platform that helps everyday people explore a business idea, build a plan, and simplify the path to launch — with Angel as your planning partner.',
+  },
+  {
+    q: 'How much does it cost?',
+    a: 'Founderport offers a free tier to get started, with Premium features available when you need the full roadmap and implementation tools.',
+  },
+  {
+    q: 'What kinds of businesses can use it?',
+    a: 'Founderport is built for the kinds of businesses people actually start — trades & home services, side hustles, online & digital offers, and product or growth businesses.',
+  },
+  {
+    q: 'How long does planning take?',
+    a: 'With guided questions and clear sequencing, most founders can complete a structured plan far faster than piecing templates and advice together alone.',
+  },
+];
 
-  useEffect(() => {
-    if (inView) {
-      controls.start('visible');
-    }
-  }, [controls, inView]);
+const sectionReveal = {
+  hidden: { opacity: 0, y: 28 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] },
+  },
+};
 
-  return (
-    <motion.div
-      ref={ref}
-      initial="hidden"
-      animate={controls}
-      variants={reveal}
-    >
-      {children}
-    </motion.div>
-  );
+const stagger = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.1 } },
+};
+
+const item = {
+  hidden: { opacity: 0, y: 18 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] },
+  },
 };
 
 const LearnMore: React.FC = () => {
   const navigate = useNavigate();
+  const isLoggedIn = Boolean(getAccessToken());
+  const primaryCta = isLoggedIn ? '/ventures' : '/signup';
 
   return (
-    <>
-      <style>{styles}</style>
-      <div className="min-h-screen bg-gradient-to-br from-teal-50 via-blue-50 to-purple-50">
-        {/* Hero Section */}
-        <section className="relative py-20 px-4 overflow-hidden">
-          {/* Animated background elements */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-20 left-10 w-72 h-72 bg-teal-200/30 rounded-full blur-3xl animate-pulse"></div>
-            <div className="absolute bottom-20 right-10 w-96 h-96 bg-purple-200/30 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-          </div>
-
-          <div className="relative max-w-6xl mx-auto text-center">
-            {/* Decorative SVG shapes like home page */}
-            <svg className="absolute -top-10 left-1/4 w-48 h-48 opacity-10" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 200 200">
-              <circle cx="100" cy="100" r="80" stroke="url(#grad1)" strokeWidth="20" />
-              <defs>
-                <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#14b8a6" />
-                  <stop offset="100%" stopColor="#3b82f6" />
-                </linearGradient>
-              </defs>
-            </svg>
-            <svg className="absolute -bottom-10 right-1/4 w-48 h-48 opacity-10" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 200 200">
-              <rect x="20" y="20" width="160" height="160" stroke="url(#grad2)" strokeWidth="20" />
-              <defs>
-                <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#3b82f6" />
-                  <stop offset="100%" stopColor="#8b5cf6" />
-                </linearGradient>
-              </defs>
-            </svg>
-
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8 }}
-              className="relative z-10"
+    <div className="landing-page min-h-screen bg-[var(--landing-cream)] pt-20 text-[var(--landing-navy)]">
+      {/* Hero */}
+      <motion.section
+        className="bg-white"
+        initial="hidden"
+        animate="show"
+        variants={stagger}
+      >
+        <div className="mx-auto max-w-3xl px-6 py-16 text-center md:py-20">
+          <motion.p
+            variants={item}
+            className="mb-3 text-sm font-semibold tracking-[0.08em] text-[var(--landing-navy)]/60"
+          >
+            LEARN MORE
+          </motion.p>
+          <motion.h1
+            variants={item}
+            className="font-landing-display text-4xl font-semibold leading-tight text-[var(--landing-navy)] sm:text-5xl"
+          >
+            From idea to action — with more clarity along the way
+          </motion.h1>
+          <motion.p
+            variants={item}
+            className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-[var(--landing-navy)]/70 sm:text-lg"
+          >
+            Founderport helps you explore your business idea, build a real plan, and simplify the
+            path to launch — so you always know what to do next.
+          </motion.p>
+          <motion.div
+            variants={item}
+            className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row"
+          >
+            <button
+              type="button"
+              onClick={() => navigate(primaryCta)}
+              className="inline-flex rounded-md bg-[var(--landing-navy)] px-7 py-3 text-sm font-semibold text-white transition hover:bg-[var(--landing-navy-deep)]"
             >
-              <h1 className="text-5xl md:text-7xl font-extrabold text-gray-900 mb-6 tracking-tight md:mt-20 mt-10">
-                Transform Your Business Idea Into Reality
-              </h1>
-              
-              <p className="text-xl md:text-2xl text-gray-700 mb-12 max-w-3xl mx-auto leading-relaxed">
-                Angel is your AI-powered partner that guides you from concept to launch, providing expert insights and actionable roadmaps every step of the way.
-              </p>
-
-              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                <button
-                  onClick={() => navigate('/signup')}
-                  className="px-8 py-4 bg-teal-600 text-white font-semibold rounded-full hover:bg-teal-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
-                >
-                  Get Started Free
-                </button>
-
-                <Link
-                  to="/"
-                  className="px-8 py-4 border-2 border-teal-600 text-teal-600 font-semibold rounded-full hover:bg-teal-50 transition-all duration-300"
-                >
-                  Back to Home
-                </Link>
-              </div>
-            </motion.div>
-          </div>
-        </section>
-
-        {/* Features Grid */}
-        <section className="py-20 px-4">
-          <div className="max-w-7xl mx-auto">
-            <AnimatedSection>
-              <div className="text-center mb-16">
-                <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-                  Powerful Features to Launch Your Business
-                </h2>
-                <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                  Everything you need to turn your entrepreneurial vision into a thriving business
-                </p>
-              </div>
-            </AnimatedSection>
-
-            <motion.div
-              variants={stagger}
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, amount: 0.2 }}
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+              Get Started Free
+            </button>
+            <Link
+              to="/"
+              className="inline-flex rounded-md border border-[var(--landing-navy)]/20 px-7 py-3 text-sm font-semibold text-[var(--landing-navy)] transition hover:bg-[var(--landing-cream)]"
             >
-              {features.map((feature, index) => (
-                <motion.div
-                  key={index}
-                  variants={reveal}
-                  className="group bg-white/80 backdrop-blur-sm rounded-3xl p-8 shadow-lg hover:shadow-2xl transition-all duration-500 border border-gray-100 hover:border-teal-200 transform hover:-translate-y-2"
-                >
-                  <div className={`w-16 h-16 bg-gradient-to-br ${feature.color} rounded-2xl flex items-center justify-center mb-6 shadow-md group-hover:scale-110 transition-transform duration-300`}>
-                    <span className="text-3xl">{feature.icon}</span>
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-4 group-hover:text-teal-600 transition-colors">
-                    {feature.title}
-                  </h3>
-                  <p className="text-gray-600 leading-relaxed">
-                    {feature.description}
-                  </p>
-                </motion.div>
-              ))}
-            </motion.div>
+              Back to Home
+            </Link>
+          </motion.div>
+        </div>
+      </motion.section>
+
+      {/* Features */}
+      <motion.section
+        className="bg-[var(--landing-cream)]"
+        variants={sectionReveal}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.15 }}
+      >
+        <div className="mx-auto max-w-7xl px-6 py-16 lg:px-10">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="font-landing-display text-3xl font-semibold text-[var(--landing-navy)] sm:text-4xl">
+              What you get with Founderport
+            </h2>
+            <p className="mt-3 text-base text-[var(--landing-navy)]/70">
+              Everything you need to turn a business idea into a clearer plan — without the noise.
+            </p>
           </div>
-        </section>
 
-        {/* How It Works */}
-        <section className="py-20 px-4 bg-white/50">
-          <div className="max-w-7xl mx-auto">
-            <AnimatedSection>
-              <div className="text-center mb-16">
-                <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-                  How Angel Works
-                </h2>
-                <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                  A simple, guided process from idea to implementation
-                </p>
-              </div>
-            </AnimatedSection>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-              {howItWorks.map((item, index) => (
-                <AnimatedSection key={index}>
-                  <div className="relative">
-                    {/* Connecting line */}
-                    {index < howItWorks.length - 1 && (
-                      <div className="hidden lg:block absolute top-16 left-full w-full h-1 bg-gradient-to-r from-teal-200 to-blue-200 transform -translate-x-1/2"></div>
-                    )}
-                    
-                    <div className="relative bg-white rounded-3xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 border-2 border-gray-100 hover:border-teal-300">
-                      <div className="absolute -top-6 left-8 w-12 h-12 bg-gradient-to-br from-teal-500 to-blue-500 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                        {item.step}
-                      </div>
-                      
-                      <div className="mt-8 mb-6 text-5xl">{item.icon}</div>
-                      
-                      <h3 className="text-xl font-bold text-gray-900 mb-3">
-                        {item.title}
-                      </h3>
-                      <p className="text-gray-600 leading-relaxed">
-                        {item.description}
-                      </p>
-                    </div>
-                  </div>
-                </AnimatedSection>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Benefits Section */}
-        <section className="py-20 px-4">
-          <div className="max-w-7xl mx-auto">
-            <AnimatedSection>
-              <div className="text-center mb-16">
-                <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-                  Why Choose Angel?
-                </h2>
-                <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                  Join thousands of entrepreneurs who have successfully launched their businesses
-                </p>
-              </div>
-            </AnimatedSection>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
-              {benefits.map((benefit, index) => (
-                <AnimatedSection key={index}>
-                  <div className="bg-gradient-to-br from-white to-teal-50 rounded-3xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 border border-teal-100 text-center">
-                    <div className="text-5xl font-bold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent mb-4">
-                      {benefit.stat}
-                    </div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                      {benefit.title}
-                    </h3>
-                    <p className="text-gray-600 leading-relaxed">
-                      {benefit.description}
-                    </p>
-                  </div>
-                </AnimatedSection>
-              ))}
-            </div>
-
-            <AnimatedSection>
-              <div className="bg-gradient-to-r from-teal-500 via-blue-500 to-purple-500 rounded-3xl p-12 text-center shadow-2xl">
-                <h3 className="text-3xl md:text-4xl font-bold text-white mb-6">
-                  Ready to Start Your Entrepreneurial Journey?
-                </h3>
-                <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto">
-                  Join Angel today and transform your business idea into a successful venture with AI-powered guidance.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <button
-                    onClick={() => navigate('/signup')}
-                    className="bg-white hover:bg-gray-50 text-teal-600 px-10 py-5 rounded-2xl font-bold text-lg transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
-                  >
-                    Get Started Now
-                  </button>
-                  <button
-                    onClick={() => navigate('/login')}
-                    className="bg-transparent border-2 border-white hover:bg-white/10 text-white px-10 py-5 rounded-2xl font-bold text-lg transition-all duration-300"
-                  >
-                    Sign In
-                  </button>
+          <motion.div
+            className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
+            variants={stagger}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.1 }}
+          >
+            {features.map((feature) => (
+              <motion.article
+                key={feature.title}
+                variants={item}
+                className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-[var(--landing-navy)]/8"
+              >
+                <div className="mb-4 h-14 w-14">
+                  <img src={feature.icon} alt="" className="h-full w-full object-contain" />
                 </div>
-              </div>
-            </AnimatedSection>
-          </div>
-        </section>
+                <h3 className="font-landing-display text-xl font-semibold text-[var(--landing-navy)]">
+                  {feature.title}
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-[var(--landing-navy)]/70">
+                  {feature.description}
+                </p>
+              </motion.article>
+            ))}
+          </motion.div>
+        </div>
+      </motion.section>
 
-        {/* FAQ Section */}
-        <section className="py-20 px-4 bg-white/50">
-          <div className="max-w-4xl mx-auto">
-            <AnimatedSection>
-              <div className="text-center mb-16">
-                <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-                  Frequently Asked Questions
-                </h2>
-              </div>
-            </AnimatedSection>
-
-            <div className="space-y-6">
-              {[
-                {
-                  q: 'What is Angel?',
-                  a: 'Angel is an AI-powered platform that guides entrepreneurs through the entire process of starting a business, from initial planning to implementation.',
-                },
-                {
-                  q: 'How much does it cost?',
-                  a: 'Angel offers a free tier to get started, with premium features available for businesses that need advanced capabilities.',
-                },
-                {
-                  q: 'What kind of businesses can use Angel?',
-                  a: 'Angel supports all types of businesses across various industries, from tech startups to traditional brick-and-mortar businesses.',
-                },
-                {
-                  q: 'How long does it take to create a business plan?',
-                  a: 'With Angel\'s guided approach, most entrepreneurs can complete a comprehensive business plan in 2-3 hours, compared to weeks or months on their own.',
-                },
-              ].map((faq, index) => (
-                <AnimatedSection key={index}>
-                  <div className="bg-white rounded-2xl p-6 shadow-md hover:shadow-lg transition-shadow">
-                    <h3 className="text-xl font-bold text-gray-900 mb-3">{faq.q}</h3>
-                    <p className="text-gray-600 leading-relaxed">{faq.a}</p>
-                  </div>
-                </AnimatedSection>
-              ))}
-            </div>
+      {/* How it works */}
+      <motion.section
+        className="bg-white"
+        variants={sectionReveal}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.15 }}
+      >
+        <div className="mx-auto max-w-7xl px-6 py-16 lg:px-10">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="font-landing-display text-3xl font-semibold text-[var(--landing-navy)] sm:text-4xl">
+              How Founderport works
+            </h2>
+            <p className="mt-3 text-base text-[var(--landing-navy)]/70">
+              A simple, guided process from idea to implementation.
+            </p>
           </div>
-        </section>
-      </div>
-    </>
+
+          <motion.div
+            className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4"
+            variants={stagger}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.1 }}
+          >
+            {howItWorks.map((step) => (
+              <motion.article
+                key={step.step}
+                variants={item}
+                className="rounded-2xl bg-[var(--landing-cream)] p-6 ring-1 ring-[var(--landing-navy)]/8"
+              >
+                <span className="font-landing-display text-2xl font-semibold text-[var(--landing-navy)]/35">
+                  {step.step}
+                </span>
+                <h3 className="mt-3 font-landing-display text-lg font-semibold text-[var(--landing-navy)]">
+                  {step.title}
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-[var(--landing-navy)]/70">
+                  {step.description}
+                </p>
+              </motion.article>
+            ))}
+          </motion.div>
+        </div>
+      </motion.section>
+
+      {/* Benefits */}
+      <motion.section
+        className="bg-[var(--landing-cream)]"
+        variants={sectionReveal}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.15 }}
+      >
+        <div className="mx-auto max-w-7xl px-6 py-16 lg:px-10">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="font-landing-display text-3xl font-semibold text-[var(--landing-navy)] sm:text-4xl">
+              Why founders choose Founderport
+            </h2>
+            <p className="mt-3 text-base text-[var(--landing-navy)]/70">
+              Built for clarity — not for clutter.
+            </p>
+          </div>
+
+          <motion.div
+            className="mt-12 grid gap-6 md:grid-cols-3"
+            variants={stagger}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.1 }}
+          >
+            {benefits.map((benefit) => (
+              <motion.article
+                key={benefit.title}
+                variants={item}
+                className="rounded-2xl bg-white p-7 text-center shadow-sm ring-1 ring-[var(--landing-navy)]/8"
+              >
+                <p className="font-landing-display text-xl font-semibold text-[var(--landing-navy)]">
+                  {benefit.stat}
+                </p>
+                <h3 className="mt-3 text-lg font-semibold text-[var(--landing-navy)]">
+                  {benefit.title}
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-[var(--landing-navy)]/70">
+                  {benefit.description}
+                </p>
+              </motion.article>
+            ))}
+          </motion.div>
+        </div>
+      </motion.section>
+
+      {/* FAQ */}
+      <motion.section
+        className="bg-white"
+        variants={sectionReveal}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.15 }}
+      >
+        <div className="mx-auto max-w-3xl px-6 py-16 lg:px-10">
+          <h2 className="text-center font-landing-display text-3xl font-semibold text-[var(--landing-navy)] sm:text-4xl">
+            Frequently asked questions
+          </h2>
+          <div className="mt-10 space-y-4">
+            {faqs.map((faq) => (
+              <article
+                key={faq.q}
+                className="rounded-2xl bg-[var(--landing-cream)] p-6 ring-1 ring-[var(--landing-navy)]/8"
+              >
+                <h3 className="font-landing-display text-lg font-semibold text-[var(--landing-navy)]">
+                  {faq.q}
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-[var(--landing-navy)]/70">{faq.a}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </motion.section>
+
+      <LandingCta
+        headline="Ready to start with more clarity?"
+        subcopy="Start with your idea. Build from there — with guided help every step of the way."
+        primaryLabel="Get Started Now"
+        primaryTo={primaryCta}
+        secondaryLabel="Sign In"
+        secondaryTo="/login"
+        tagline="Start with your idea. Build from there."
+      />
+    </div>
   );
 };
 
 export default LearnMore;
-

@@ -5,10 +5,16 @@ import { Link } from 'react-router-dom';
 import { clearSession, getAccessToken } from '../../utils/tokenUtils';
 import LOGO from '../../assets/images/home/Founderport_Logo_Horizontal_Mariner_Main.svg';
 
-interface NavItem { label: string; to: string; }
+interface NavItem {
+  label: string;
+  to: string;
+}
+
 const navItems: NavItem[] = [
-  { label: 'Who We Are', to: '/about' },
-  { label: 'Services', to: '/services' },
+  { label: 'How It Works', to: '/#how-it-works' },
+  { label: "Who It's For", to: '/#who-its-for' },
+  { label: 'Pricing', to: '/services' },
+  { label: 'Learn More', to: '/learn-more' },
 ];
 
 const isSessionActive = Boolean(getAccessToken());
@@ -21,6 +27,9 @@ const handleAction = () => {
     window.location.href = '/login';
   }
 };
+
+const navLinkClass =
+  'font-medium text-[var(--landing-navy,#1e3a5f)] transition-colors hover:text-[var(--landing-navy-deep,#152a45)]';
 
 interface NavBarContentProps {
   toggleMenu: () => void;
@@ -39,58 +48,62 @@ const NavBarContent: React.FC<NavBarContentProps> = ({ toggleMenu, isOpen, isSes
         />
       </Link>
 
-      <nav className="hidden items-center space-x-8 md:flex">
-        {navItems.map(item => (
-          <motion.div key={item.to} whileHover={{ scale: 1.1 }} transition={{ duration: 0.2 }}>
-            <Link to={item.to} className="font-medium text-black transition-colors hover:text-teal-600">
+      <nav className="hidden items-center space-x-7 lg:flex">
+        {navItems.map((item) => (
+          <motion.div key={item.to} whileHover={{ scale: 1.04 }} transition={{ duration: 0.2 }}>
+            <Link to={item.to} className={navLinkClass}>
               {item.label}
             </Link>
           </motion.div>
         ))}
         {isSessionActive && (
           <>
-            <motion.div whileHover={{ scale: 1.05 }} transition={{ duration: 0.2 }}>
+            <motion.div whileHover={{ scale: 1.04 }} transition={{ duration: 0.2 }}>
               <Link
                 to="/ventures"
-                className="flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 px-5 py-2 font-semibold text-white shadow-md transition-all hover:from-blue-600 hover:to-indigo-600 hover:shadow-lg"
+                className="rounded-md bg-[var(--landing-navy,#1e3a5f)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--landing-navy-deep,#152a45)]"
               >
                 Your Business
               </Link>
             </motion.div>
-            <motion.div whileHover={{ scale: 1.05 }} transition={{ duration: 0.2 }}>
+            <motion.div whileHover={{ scale: 1.04 }} transition={{ duration: 0.2 }}>
               <Link
                 to="/profile"
-                className="flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 px-5 py-2 font-semibold text-white shadow-md transition-all hover:from-blue-600 hover:to-indigo-600 hover:shadow-lg"
+                className="rounded-md border border-[var(--landing-navy,#1e3a5f)]/20 px-4 py-2 text-sm font-semibold text-[var(--landing-navy,#1e3a5f)] transition hover:bg-[var(--landing-cream,#f4f1ea)]"
               >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
                 My Profile
               </Link>
             </motion.div>
             <motion.button
-              whileHover={{ scale: 1.05 }}
+              whileHover={{ scale: 1.04 }}
               onClick={handleAction}
-              className="ml-2 rounded-full bg-teal-600 px-5 py-2 font-semibold text-white shadow-lg transition-all"
+              className="ml-1 rounded-md bg-[var(--landing-navy,#1e3a5f)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--landing-navy-deep,#152a45)]"
             >
               Logout
             </motion.button>
           </>
         )}
         {!isSessionActive && (
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            onClick={handleAction}
-            className="rounded-full bg-teal-600 px-5 py-2 font-semibold text-white shadow-lg transition-all"
-          >
-            Get Started
-          </motion.button>
+          <>
+            <motion.div whileHover={{ scale: 1.04 }} transition={{ duration: 0.2 }}>
+              <Link to="/login" className={navLinkClass}>
+                Log in
+              </Link>
+            </motion.div>
+            <motion.button
+              whileHover={{ scale: 1.04 }}
+              onClick={handleAction}
+              className="rounded-md bg-[var(--landing-navy,#1e3a5f)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--landing-navy-deep,#152a45)]"
+            >
+              Get Started
+            </motion.button>
+          </>
         )}
       </nav>
 
       <button
         onClick={toggleMenu}
-        className="text-black transition-colors focus:outline-none md:hidden"
+        className="text-[var(--landing-navy,#1e3a5f)] transition-colors focus:outline-none lg:hidden"
         aria-label="Toggle menu"
       >
         {isOpen ? <FaTimes className="h-6 w-6" /> : <FaBars className="h-6 w-6" />}
@@ -120,16 +133,11 @@ const MobileMenu: React.FC<MobileMenuProps> = ({ isOpen, onClose }) => {
       animate={{ height: 'auto', opacity: 1 }}
       exit={{ height: 0, opacity: 0 }}
       transition={{ duration: 0.3 }}
-      className="md:hidden bg-white"
+      className="bg-white lg:hidden"
     >
       <div className="flex flex-col space-y-4 px-6 pb-6 pt-2">
-        {navItems.map(i => (
-          <Link
-            key={i.to}
-            to={i.to}
-            onClick={onClose}
-            className="font-medium text-black transition-colors hover:text-teal-600"
-          >
+        {navItems.map((i) => (
+          <Link key={i.to} to={i.to} onClick={onClose} className={navLinkClass}>
             {i.label}
           </Link>
         ))}
@@ -138,35 +146,37 @@ const MobileMenu: React.FC<MobileMenuProps> = ({ isOpen, onClose }) => {
             <Link
               to="/ventures"
               onClick={onClose}
-              className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 px-4 py-2 font-semibold text-white shadow-md transition-all hover:from-blue-600 hover:to-indigo-600"
+              className="flex items-center justify-center rounded-md bg-[var(--landing-navy,#1e3a5f)] px-4 py-2.5 font-semibold text-white shadow-sm"
             >
               Your Business
             </Link>
             <Link
               to="/profile"
               onClick={onClose}
-              className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 px-4 py-2 font-semibold text-white shadow-md transition-all hover:from-blue-600 hover:to-indigo-600"
+              className="flex items-center justify-center rounded-md border border-[var(--landing-navy,#1e3a5f)]/20 px-4 py-2.5 font-semibold text-[var(--landing-navy,#1e3a5f)]"
             >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
               My Profile
             </Link>
             <button
               onClick={handleAction}
-              className="w-full rounded-full bg-teal-600 px-4 py-2 font-medium text-white shadow-sm transition-all"
+              className="w-full rounded-md bg-[var(--landing-navy,#1e3a5f)] px-4 py-2.5 font-medium text-white shadow-sm"
             >
               Logout
             </button>
           </>
         )}
         {!isSessionActive && (
-          <button
-            onClick={handleAction}
-            className="mt-2 w-full rounded-full bg-teal-600 px-4 py-2 font-medium text-white shadow-sm transition-all"
-          >
-            Get Started
-          </button>
+          <>
+            <Link to="/login" onClick={onClose} className={navLinkClass}>
+              Log in
+            </Link>
+            <button
+              onClick={handleAction}
+              className="mt-1 w-full rounded-md bg-[var(--landing-navy,#1e3a5f)] px-4 py-2.5 font-medium text-white shadow-sm"
+            >
+              Get Started
+            </button>
+          </>
         )}
       </div>
     </motion.div>
@@ -178,12 +188,12 @@ const Header: React.FC = () => {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 100);
+    const onScroll = () => setScrolled(window.scrollY > 40);
     window.addEventListener('scroll', onScroll);
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  const toggleMenu = () => setIsOpen(prev => !prev);
+  const toggleMenu = () => setIsOpen((prev) => !prev);
   const closeMenu = () => setIsOpen(false);
 
   return (
@@ -192,8 +202,8 @@ const Header: React.FC = () => {
         isOpen
           ? 'bg-white shadow-md'
           : scrolled
-          ? 'bg-white/90 shadow-md backdrop-blur-md'
-          : 'bg-transparent'
+            ? 'bg-white/95 shadow-sm backdrop-blur-md'
+            : 'bg-white/80 backdrop-blur-sm'
       }`}
     >
       <NavBarContent toggleMenu={toggleMenu} isOpen={isOpen} isSessionActive={isSessionActive} />
