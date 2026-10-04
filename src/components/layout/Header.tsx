@@ -86,6 +86,14 @@ const NavBarContent: React.FC<NavBarContentProps> = ({ toggleMenu, isOpen, isSes
         {!isSessionActive && (
           <>
             <motion.div whileHover={{ scale: 1.04 }} transition={{ duration: 0.2 }}>
+              <Link
+                to="/try"
+                className="rounded-md border border-[var(--landing-navy,#1e3a5f)]/25 px-4 py-2 text-sm font-semibold text-[var(--landing-navy,#1e3a5f)] transition hover:bg-[var(--landing-cream,#f4f1ea)]"
+              >
+                Try Angel
+              </Link>
+            </motion.div>
+            <motion.div whileHover={{ scale: 1.04 }} transition={{ duration: 0.2 }}>
               <Link to="/login" className={navLinkClass}>
                 Log in
               </Link>
@@ -167,6 +175,13 @@ const MobileMenu: React.FC<MobileMenuProps> = ({ isOpen, onClose }) => {
         )}
         {!isSessionActive && (
           <>
+            <Link
+              to="/try"
+              onClick={onClose}
+              className="flex items-center justify-center rounded-md border border-[var(--landing-navy,#1e3a5f)]/25 px-4 py-2.5 font-semibold text-[var(--landing-navy,#1e3a5f)]"
+            >
+              Try Angel
+            </Link>
             <Link to="/login" onClick={onClose} className={navLinkClass}>
               Log in
             </Link>

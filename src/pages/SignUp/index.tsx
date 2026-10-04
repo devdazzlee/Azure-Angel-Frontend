@@ -4,6 +4,7 @@ import { signUp } from '../../services/authService';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { setEmailPendingVerification } from '../../utils/tokenUtils';
+import { hasGuestSnapshot } from '../../utils/guestSession';
 
 interface SignupFormData {
   fullName: string;
@@ -158,11 +159,15 @@ const SignupPage: React.FC = () => {
       setEmailPendingVerification(formData.email);
 
       // Show success message and redirect to verify email page
-      toast.success('Account created successfully! Please check your email to verify your account.');
+      toast.success(
+        hasGuestSnapshot()
+          ? 'Account created! Verify your email, then log in — we’ll restore your guest chat.'
+          : 'Account created successfully! Please check your email to verify your account.',
+      );
       
       // Redirect to verify email page
       navigate('/verify-email', {
-        state: { email: formData.email },
+        state: { email: formData.email, fromGuest: hasGuestSnapshot() },
       });
     } catch (err: unknown) {
       console.error('Signup error:', err);

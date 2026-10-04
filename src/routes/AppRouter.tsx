@@ -24,6 +24,7 @@ import {
   Support,
   Services,
   Profile,
+  GuestChat,
   NotFound,
   ErrorBoundaryPage,
 } from "../pages";
@@ -216,6 +217,11 @@ const router = createBrowserRouter([
             path: "/services",
             element: <Services />,
             errorElement: <Services />,
+          },
+          {
+            path: "try",
+            element: <GuestChat />,
+            errorElement: <GuestChat />,
           },
           {
             path: "/profile",

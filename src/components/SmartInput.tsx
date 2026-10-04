@@ -12,6 +12,12 @@ interface SmartInputProps {
   loading?: boolean;
   currentQuestion?: string;
   currentPhase?: string;
+  /** Use denser choice chips (guest chat / tight layouts). */
+  compactChoices?: boolean;
+  /** Notify parent when UI switches between text / choices / rating. */
+  onModeChange?: (mode: 'text' | 'choices' | 'rating') => void;
+  /** Stretch rating/choices to fill parent height (guest answer workspace). */
+  fillHeight?: boolean;
 }
 
 // Stable lookup of known choice questions.  Keyed by a substring that must
@@ -68,7 +74,10 @@ const SmartInput: React.FC<SmartInputProps> = ({
   disabled = false,
   loading = false,
   currentQuestion = "",
-  currentPhase = "GKY"
+  currentPhase = "GKY",
+  compactChoices = false,
+  onModeChange,
+  fillHeight = false,
 }) => {
   const [showRatingForm, setShowRatingForm] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -90,18 +99,21 @@ const SmartInput: React.FC<SmartInputProps> = ({
     if (isCompletionMessage) {
       setShowRatingForm(false);
       setShowDropdown(false);
+      onModeChange?.('text');
       return;
     }
 
     if (currentPhase === 'BUSINESS_PLAN') {
       setShowRatingForm(false);
       setShowDropdown(false);
+      onModeChange?.('text');
       return;
     }
 
     if (questionLine.includes('how comfortable are you with these business skills')) {
       setShowRatingForm(true);
       setShowDropdown(false);
+      onModeChange?.('rating');
       return;
     }
 
@@ -111,6 +123,7 @@ const SmartInput: React.FC<SmartInputProps> = ({
         setShowDropdown(true);
         setDropdownOptions(options);
         setShowRatingForm(false);
+        onModeChange?.('choices');
         return;
       }
     }
@@ -125,13 +138,15 @@ const SmartInput: React.FC<SmartInputProps> = ({
         setShowDropdown(true);
         setDropdownOptions(options);
         setShowRatingForm(false);
+        onModeChange?.('choices');
         return;
       }
     }
 
     setShowRatingForm(false);
     setShowDropdown(false);
-  }, [currentQuestion, currentPhase]);
+    onModeChange?.('text');
+  }, [currentQuestion, currentPhase, onModeChange]);
 
   const extractBulletOptions = (question: string): string[] => {
     const options: string[] = [];
@@ -188,10 +203,20 @@ const SmartInput: React.FC<SmartInputProps> = ({
 
   if (showRatingForm) {
     return (
-      <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-white/50 p-3">
+      <div
+        className={
+          fillHeight
+            ? 'flex h-full min-h-0 flex-1 flex-col'
+            : compactChoices
+              ? 'w-full'
+              : 'rounded-xl border border-white/50 bg-white/90 p-3 shadow-lg backdrop-blur-sm'
+        }
+      >
         <SkillRatingForm
           onSubmit={handleRatingSubmit}
           onCancel={handleRatingCancel}
+          compact={compactChoices}
+          fillHeight={fillHeight}
         />
       </div>
     );
@@ -199,7 +224,7 @@ const SmartInput: React.FC<SmartInputProps> = ({
 
   if (showDropdown && dropdownOptions.length > 0) {
     return (
-      <div className="w-full">
+      <div className={fillHeight ? 'flex h-full min-h-0 flex-1 flex-col' : 'w-full'}>
         <QuestionDropdown
           key={dropdownKey}
           options={dropdownOptions}
@@ -207,6 +232,8 @@ const SmartInput: React.FC<SmartInputProps> = ({
           onCancel={handleDropdownCancel}
           placeholder="Select an option..."
           disabled={disabled}
+          compact={compactChoices}
+          fillHeight={fillHeight}
         />
       </div>
     );

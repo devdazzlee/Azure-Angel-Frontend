@@ -10,6 +10,8 @@ import {
 } from '../../utils/tokenUtils';
 import { toast } from 'react-toastify';
 import { signIn } from '../../api/authService';
+import { claimGuestSessionIfPresent } from '../../services/guestChatService';
+import { hasGuestSnapshot } from '../../utils/guestSession';
 
 interface LoginFormData {
   email: string;
@@ -49,9 +51,23 @@ const LoginPage: React.FC = () => {
       const session = await signIn(formData);
       clearEmailPendingVerification();
       setSession(session.access_token, session.refresh_token);
+
+      let resumePath = '/ventures';
+      if (hasGuestSnapshot()) {
+        try {
+          const claimed = await claimGuestSessionIfPresent();
+          if (claimed?.resume_path) {
+            resumePath = claimed.resume_path;
+            toast.success('Welcome back — continuing your chat where you left off.');
+          }
+        } catch {
+          /* fall through to ventures list */
+        }
+      }
+
       setTimeout(() => {
-        window.location.href = '/ventures';
-      }, 1000);
+        window.location.href = resumePath;
+      }, 800);
     } catch (err: any) {
       const msg = err?.response?.data?.detail
         || err?.response?.data?.error

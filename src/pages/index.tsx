@@ -25,3 +25,4 @@ export { default as GetToKnowYou } from './KYC';
 export { default as NewVenture } from './Venture/newVenture';
 export { default as RecentVenture } from './Venture/recentVentures';
 export { default as Chat } from './Venture/venture';
+export { default as GuestChat } from './GuestChat';
