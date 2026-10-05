@@ -4,6 +4,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import {
   ConfirmEmail,
   Home,
+  ClassicHome,
   Login,
   SignUp,
   VerifyEmailPage,
@@ -98,6 +99,10 @@ const router = createBrowserRouter([
           {
             index: true,
             element: <Home />,
+          },
+          {
+            path: "home",
+            element: <ClassicHome />,
           },
           {
             path: "ventures",

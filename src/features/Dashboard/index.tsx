@@ -20,10 +20,8 @@ const Layout = () => {
         /^\/ventures\/[a-zA-Z0-9-]+\/(roadmap|budget|business-plan|implementation-transition)$/.test(
             pathname,
         );
-    const isGuestChat = pathname === "/try";
-    // Keep marketing header on guest chat; hide only footer so the chat can use vertical space.
     const shouldHideHeader = isVentureDetail || isVentureSubpage;
-    const shouldHideFooter = shouldHideHeader || isGuestChat;
+    const shouldHideFooter = shouldHideHeader;
 
     return (
         <main>

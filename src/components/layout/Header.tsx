@@ -11,8 +11,8 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: 'How It Works', to: '/#how-it-works' },
-  { label: "Who It's For", to: '/#who-its-for' },
+  { label: 'How It Works', to: '/home#how-it-works' },
+  { label: "Who It's For", to: '/home#who-its-for' },
   { label: 'Pricing', to: '/services' },
   { label: 'Learn More', to: '/learn-more' },
 ];
@@ -86,25 +86,18 @@ const NavBarContent: React.FC<NavBarContentProps> = ({ toggleMenu, isOpen, isSes
         {!isSessionActive && (
           <>
             <motion.div whileHover={{ scale: 1.04 }} transition={{ duration: 0.2 }}>
-              <Link
-                to="/try"
-                className="rounded-md border border-[var(--landing-navy,#1e3a5f)]/25 px-4 py-2 text-sm font-semibold text-[var(--landing-navy,#1e3a5f)] transition hover:bg-[var(--landing-cream,#f4f1ea)]"
-              >
-                Try Angel
-              </Link>
-            </motion.div>
-            <motion.div whileHover={{ scale: 1.04 }} transition={{ duration: 0.2 }}>
               <Link to="/login" className={navLinkClass}>
                 Log in
               </Link>
             </motion.div>
-            <motion.button
-              whileHover={{ scale: 1.04 }}
-              onClick={handleAction}
-              className="rounded-md bg-[var(--landing-navy,#1e3a5f)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--landing-navy-deep,#152a45)]"
-            >
-              Get Started
-            </motion.button>
+            <motion.div whileHover={{ scale: 1.04 }} transition={{ duration: 0.2 }}>
+              <Link
+                to="/"
+                className="rounded-md bg-[var(--landing-navy,#1e3a5f)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--landing-navy-deep,#152a45)]"
+              >
+                Get Started
+              </Link>
+            </motion.div>
           </>
         )}
       </nav>
@@ -175,22 +168,16 @@ const MobileMenu: React.FC<MobileMenuProps> = ({ isOpen, onClose }) => {
         )}
         {!isSessionActive && (
           <>
-            <Link
-              to="/try"
-              onClick={onClose}
-              className="flex items-center justify-center rounded-md border border-[var(--landing-navy,#1e3a5f)]/25 px-4 py-2.5 font-semibold text-[var(--landing-navy,#1e3a5f)]"
-            >
-              Try Angel
-            </Link>
             <Link to="/login" onClick={onClose} className={navLinkClass}>
               Log in
             </Link>
-            <button
-              onClick={handleAction}
-              className="mt-1 w-full rounded-md bg-[var(--landing-navy,#1e3a5f)] px-4 py-2.5 font-medium text-white shadow-sm"
+            <Link
+              to="/"
+              onClick={onClose}
+              className="flex items-center justify-center rounded-md bg-[var(--landing-navy,#1e3a5f)] px-4 py-2.5 font-semibold text-white shadow-sm"
             >
               Get Started
-            </button>
+            </Link>
           </>
         )}
       </div>

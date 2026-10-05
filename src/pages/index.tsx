@@ -1,4 +1,5 @@
 export { default as Home } from './Home';
+export { default as ClassicHome } from './Home/ClassicHomePage';
 export { default as Login } from './Login';
 export { default as SignUp } from './SignUp';
 export { default as ConfirmEmail } from './SignUp/confirmEmail';
