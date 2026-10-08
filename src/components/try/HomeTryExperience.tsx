@@ -49,6 +49,17 @@ function stripPickerOptionLines(text: string): string {
     .trim();
 }
 
+const GKY_TOTAL = 5;
+
+/** Current GKY step from session tag (GKY.01–GKY.05). Ignores GKY.05_ACK. */
+function gkyQuestionFromTag(askedQ?: string | null): number | null {
+  if (!askedQ?.startsWith('GKY.') || askedQ.includes('ACK')) return null;
+  const match = askedQ.match(/\.(\d+)/);
+  if (!match) return null;
+  const n = parseInt(match[1], 10);
+  return n >= 1 && n <= GKY_TOTAL ? n : null;
+}
+
 const STARTER_PROMPTS = [
   { label: 'Create a business plan', text: 'I want to create a business plan' },
   { label: 'Find market opportunities', text: 'Help me find market opportunities' },
@@ -297,6 +308,10 @@ const HomeTryExperience: React.FC = () => {
   };
 
   const remaining = guest?.messages_remaining ?? Math.max(0, 5 - (guest?.user_message_count || 0));
+  const gkyQuestionNumber = gkyQuestionFromTag(guest?.asked_q);
+  const gkyComplete =
+    Boolean(guest?.awaiting_gky_proceed || guest?.requires_auth_to_continue) ||
+    guest?.asked_q === 'GKY.05_ACK';
   const visibleStarterPills = showAllPrompts ? STARTER_PROMPTS : STARTER_PROMPTS.slice(0, 4);
 
   const chatActive = !showMarketingHero;
@@ -449,7 +464,20 @@ const HomeTryExperience: React.FC = () => {
                     Chat with Angel
                   </p>
                   <p className="text-xs text-slate-500">
-                    {remaining} of 5 guest messages left · sign up to save your progress
+                    {gkyComplete ? (
+                      <>Getting to know you complete · sign up to continue</>
+                    ) : gkyQuestionNumber != null ? (
+                      <>
+                        Question {gkyQuestionNumber} of {GKY_TOTAL}
+                        {' · '}
+                        {remaining} guest {remaining === 1 ? 'message' : 'messages'} left
+                      </>
+                    ) : (
+                      <>
+                        {remaining} guest {remaining === 1 ? 'message' : 'messages'} left · sign up
+                        to save your progress
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
