@@ -20,7 +20,7 @@ const skills = [
 
 const SkillRatingForm: React.FC<SkillRatingFormProps> = ({
   onSubmit,
-  onCancel,
+  onCancel: _onCancel,
   compact = false,
   fillHeight = false,
 }) => {
@@ -105,25 +105,18 @@ const SkillRatingForm: React.FC<SkillRatingFormProps> = ({
               </button>
             ))}
           </div>
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
-            >
-              Cancel
-            </button>
+          <div className="flex justify-end">
             <button
               type="button"
               onClick={handleSubmit}
               disabled={!isComplete}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+              className={`w-full rounded-lg px-4 py-2.5 text-base font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto sm:text-sm ${
                 isComplete
                   ? 'bg-gradient-to-r from-teal-500 to-blue-500 text-white'
                   : 'bg-slate-200 text-slate-400'
               }`}
             >
-              {isComplete ? 'Submit ratings' : 'Rate all skills'}
+              {isComplete ? 'Confirm selection' : 'Rate all skills'}
             </button>
           </div>
         </div>
@@ -163,14 +156,7 @@ const SkillRatingForm: React.FC<SkillRatingFormProps> = ({
         ))}
       </div>
 
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-center sm:gap-3">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="w-full rounded-lg bg-gray-200 px-4 py-3 text-base font-medium text-gray-700 transition-colors hover:bg-gray-300 sm:w-auto sm:py-2"
-        >
-          Cancel
-        </button>
+      <div className="flex justify-center">
         <button
           type="button"
           onClick={handleSubmit}
@@ -184,7 +170,7 @@ const SkillRatingForm: React.FC<SkillRatingFormProps> = ({
             }
           `}
         >
-          {isComplete ? 'Submit ratings' : 'Complete all ratings'}
+          {isComplete ? 'Confirm selection' : 'Rate all skills'}
         </button>
       </div>
 

@@ -14,7 +14,7 @@ interface QuestionDropdownProps {
 const QuestionDropdown: React.FC<QuestionDropdownProps> = ({
   options,
   onSubmit,
-  onCancel,
+  onCancel: _onCancel,
   disabled = false,
   compact = false,
   fillHeight = false,
@@ -31,28 +31,27 @@ const QuestionDropdown: React.FC<QuestionDropdownProps> = ({
   const handleOptionToggle = (value: string) => {
     if (disabled) return;
 
-    if (!isMultiSelect) {
-      onSubmit(value);
+    if (isMultiSelect) {
+      setSelectedValues((prev) =>
+        prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
+      );
       return;
     }
 
-    setSelectedValues((prev) =>
-      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
-    );
+    setSelectedValues((prev) => (prev.includes(value) ? [] : [value]));
   };
 
   const handleSubmit = () => {
     if (selectedValues.length === 0) return;
-    onSubmit(selectedValues.join(', '));
-  };
-
-  const handleCancel = () => {
-    setSelectedValues([]);
-    onCancel?.();
+    onSubmit(isMultiSelect ? selectedValues.join(', ') : selectedValues[0]);
   };
 
   const isSelected = (option: string) => selectedValues.includes(option);
   const hasSelection = selectedValues.length > 0;
+
+  const confirmButtonClass = hasSelection
+    ? 'bg-gradient-to-r from-teal-500 to-blue-500 text-white shadow-md hover:from-teal-600 hover:to-blue-600'
+    : 'cursor-not-allowed bg-gray-200 text-gray-500';
 
   const optionBtnClass = (selected: boolean) =>
     [
@@ -73,9 +72,11 @@ const QuestionDropdown: React.FC<QuestionDropdownProps> = ({
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5 sm:px-4 sm:py-3">
           <div>
             <p className="text-base font-semibold text-slate-900">Choose your answer</p>
-            {isMultiSelect ? (
-              <p className="text-sm text-slate-500">Select one or more, then submit</p>
-            ) : null}
+            <p className="text-sm text-slate-500">
+              {isMultiSelect
+                ? 'Select one or more, then confirm'
+                : 'Select an option, then confirm'}
+            </p>
           </div>
           {isMultiSelect && hasSelection ? (
             <span className="rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-700">
@@ -107,40 +108,30 @@ const QuestionDropdown: React.FC<QuestionDropdownProps> = ({
           </div>
         </div>
 
-        {isMultiSelect ? (
-          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-100 px-3 py-2.5 sm:px-4 sm:py-3">
-            <button
-              type="button"
-              onClick={handleCancel}
-              disabled={disabled}
-              className="rounded-lg border border-slate-200 px-3 py-2.5 text-base font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            {hasSelection ? (
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={disabled}
-                className="rounded-lg bg-gradient-to-r from-teal-500 to-blue-500 px-4 py-2.5 text-base font-semibold text-white shadow-sm hover:from-teal-600 hover:to-blue-600"
-              >
-                Submit answer
-              </button>
-            ) : null}
-          </div>
-        ) : null}
+        <div className="flex shrink-0 justify-center border-t border-slate-100 px-3 py-3 sm:px-4">
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={disabled || !hasSelection}
+            className={`w-full rounded-lg px-4 py-3 text-base font-semibold transition sm:max-w-xs ${confirmButtonClass}`}
+          >
+            Confirm selection
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="w-full rounded-xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4 md:p-5">
-      {isMultiSelect ? (
-        <div className="mb-3 text-center sm:mb-4">
-          <h3 className="text-base font-bold text-gray-900 sm:text-lg">Choose your answer</h3>
-          <p className="mt-1 text-sm text-gray-500">Select one or more options, then submit</p>
-        </div>
-      ) : null}
+      <div className="mb-3 text-center sm:mb-4">
+        <h3 className="text-base font-bold text-gray-900 sm:text-lg">Choose your answer</h3>
+        <p className="mt-1 text-sm text-gray-500">
+          {isMultiSelect
+            ? 'Select one or more options, then confirm'
+            : 'Select an option, then confirm'}
+        </p>
+      </div>
 
       <div className={`grid gap-2 sm:gap-3 ${isYesNoQuestion ? 'grid-cols-2' : 'grid-cols-1'}`}>
         {options.map((option, index) => (
@@ -198,28 +189,16 @@ const QuestionDropdown: React.FC<QuestionDropdownProps> = ({
         </div>
       ) : null}
 
-      {isMultiSelect ? (
-        <div className="mt-3 flex flex-col-reverse gap-2 sm:mt-4 sm:flex-row sm:items-center sm:justify-center sm:gap-3">
-          <button
-            type="button"
-            onClick={handleCancel}
-            disabled={disabled}
-            className="rounded-xl border-2 border-gray-300 bg-white px-4 py-3 text-base font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 sm:py-2.5"
-          >
-            Cancel
-          </button>
-          {hasSelection ? (
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={disabled}
-              className="rounded-xl bg-gradient-to-r from-teal-500 to-blue-500 px-6 py-3 text-base font-medium text-white shadow-md transition hover:from-teal-600 hover:to-blue-600 sm:py-2.5"
-            >
-              Submit answer
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="mt-4 flex justify-center sm:mt-5">
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={disabled || !hasSelection}
+          className={`w-full rounded-xl px-6 py-3 text-base font-semibold transition sm:max-w-sm sm:py-2.5 ${confirmButtonClass}`}
+        >
+          Confirm selection
+        </button>
+      </div>
     </div>
   );
 };
