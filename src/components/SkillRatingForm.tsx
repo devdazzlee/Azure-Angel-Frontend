@@ -132,15 +132,15 @@ const SkillRatingForm: React.FC<SkillRatingFormProps> = ({
   }
 
   return (
-    <div className="rounded-xl border border-white/50 bg-gradient-to-br from-slate-50 to-teal-50 p-6 shadow-lg">
-      <div className="mb-6 text-center">
-        <h3 className="mb-2 text-xl font-bold text-gray-900">Rate Your Business Skills</h3>
-        <p className="text-sm text-gray-600">
+    <div className="box-border w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-br from-slate-50 to-teal-50 p-3 shadow-sm sm:p-4 md:p-5">
+      <div className="mb-4 text-left sm:mb-5 sm:text-center">
+        <h3 className="mb-1.5 text-lg font-bold text-gray-900 sm:text-xl">Rate Your Business Skills</h3>
+        <p className="text-sm leading-relaxed text-gray-600">
           How comfortable are you with these business skills? Rate each from 1 to 5.
         </p>
         <div className="mt-3">
-          <div className="flex items-center justify-center gap-2">
-            <div className="h-2 w-32 rounded-full bg-gray-200">
+          <div className="flex flex-wrap items-center gap-2 sm:justify-center">
+            <div className="h-2 min-w-[7rem] flex-1 rounded-full bg-gray-200 sm:max-w-[8rem] sm:flex-none">
               <div
                 className="h-2 rounded-full bg-gradient-to-r from-teal-500 to-blue-500 transition-all duration-300"
                 style={{ width: `${(completedCount / 7) * 100}%` }}
@@ -151,7 +151,7 @@ const SkillRatingForm: React.FC<SkillRatingFormProps> = ({
         </div>
       </div>
 
-      <div className="mb-6 space-y-3">
+      <div className="mb-4 w-full min-w-0 space-y-2 sm:mb-5 sm:space-y-3">
         {skills.map((skill, index) => (
           <SkillRating
             key={index}
@@ -163,37 +163,40 @@ const SkillRatingForm: React.FC<SkillRatingFormProps> = ({
         ))}
       </div>
 
-      <div className="flex justify-center gap-3">
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-center sm:gap-3">
         <button
+          type="button"
           onClick={onCancel}
-          className="rounded-lg bg-gray-200 px-6 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-300"
+          className="w-full rounded-lg bg-gray-200 px-4 py-3 text-base font-medium text-gray-700 transition-colors hover:bg-gray-300 sm:w-auto sm:py-2"
         >
           Cancel
         </button>
         <button
+          type="button"
           onClick={handleSubmit}
           disabled={!isComplete}
           className={`
-            rounded-lg px-6 py-2 font-medium transition-all duration-200
+            w-full rounded-lg px-4 py-3 text-base font-medium transition-colors duration-200 sm:w-auto sm:py-2
             ${
               isComplete
-                ? 'bg-gradient-to-r from-teal-500 to-blue-500 text-white shadow-md hover:from-teal-600 hover:to-blue-600 hover:shadow-lg hover:scale-105'
+                ? 'bg-gradient-to-r from-teal-500 to-blue-500 text-white shadow-md hover:from-teal-600 hover:to-blue-600'
                 : 'cursor-not-allowed bg-gray-300 text-gray-500'
             }
           `}
         >
-          {isComplete ? 'Submit Ratings' : 'Complete All Ratings'}
+          {isComplete ? 'Submit ratings' : 'Complete all ratings'}
         </button>
       </div>
 
-      <div className="mt-4 border-t border-gray-200 pt-4">
+      <div className="mt-3 border-t border-gray-200 pt-3 sm:mt-4 sm:pt-4">
         <p className="mb-2 text-center text-xs text-gray-500">Quick fill options:</p>
-        <div className="flex justify-center gap-2">
+        <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2">
           {[1, 2, 3, 4, 5].map((rating) => (
             <button
               key={rating}
+              type="button"
               onClick={() => handleQuickFill(rating)}
-              className="rounded-md bg-gray-100 px-3 py-1 text-xs text-gray-600 transition-colors hover:bg-teal-100 hover:text-teal-700"
+              className="rounded-md bg-gray-100 px-2.5 py-1.5 text-xs text-gray-600 transition-colors hover:bg-teal-100 hover:text-teal-700"
             >
               All {rating}s
             </button>

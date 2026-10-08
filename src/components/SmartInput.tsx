@@ -208,8 +208,8 @@ const SmartInput: React.FC<SmartInputProps> = ({
           fillHeight
             ? 'flex h-full min-h-0 flex-1 flex-col'
             : compactChoices
-              ? 'w-full'
-              : 'rounded-xl border border-white/50 bg-white/90 p-3 shadow-lg backdrop-blur-sm'
+              ? 'w-full min-w-0 max-w-full'
+              : 'w-full min-w-0 max-w-full overflow-hidden'
         }
       >
         <SkillRatingForm
@@ -224,7 +224,13 @@ const SmartInput: React.FC<SmartInputProps> = ({
 
   if (showDropdown && dropdownOptions.length > 0) {
     return (
-      <div className={fillHeight ? 'flex h-full min-h-0 flex-1 flex-col' : 'w-full'}>
+      <div
+        className={
+          fillHeight
+            ? 'flex h-full min-h-0 flex-1 flex-col'
+            : 'w-full min-w-0 max-w-full overflow-hidden'
+        }
+      >
         <QuestionDropdown
           key={dropdownKey}
           options={dropdownOptions}
@@ -252,7 +258,7 @@ const SmartInput: React.FC<SmartInputProps> = ({
         <div className="flex-1 min-w-0">
           <textarea
             ref={textareaRef}
-            className="w-full min-w-0 rounded-lg px-3 py-2.5 resize-none text-sm bg-gray-50 text-gray-900 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent focus:bg-white transition-all duration-200 placeholder-gray-500 sm:p-2.5"
+            className="w-full min-w-0 rounded-lg px-3 py-2.5 resize-none text-base bg-gray-50 text-gray-900 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent focus:bg-white transition-all duration-200 placeholder-gray-500 sm:text-sm sm:p-2.5"
             rows={1}
             value={value}
             onChange={handleInputChange}

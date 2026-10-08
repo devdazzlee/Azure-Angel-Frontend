@@ -65,18 +65,20 @@ const SkillRating: React.FC<SkillRatingProps> = ({
   }
 
   return (
-    <div className="mb-3 rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">{emoji}</span>
-          <span className="font-semibold text-gray-800">{skill}</span>
+    <div className="mb-3 w-full min-w-0 max-w-full box-border rounded-lg border border-gray-100 bg-white p-3 shadow-sm sm:p-4">
+      <div className="mb-2 flex flex-col gap-1 sm:mb-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="shrink-0 text-xl leading-none sm:text-2xl">{emoji}</span>
+          <span className="break-words text-base font-semibold leading-snug text-gray-800 sm:text-[15px]">
+            {skill}
+          </span>
         </div>
-        <div className="text-sm text-gray-500">
-          {value > 0 ? `${value}/5` : 'Rate this skill'}
-        </div>
+        {value > 0 ? (
+          <div className="shrink-0 text-sm font-medium text-teal-700">{value}/5</div>
+        ) : null}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex w-full max-w-full items-center justify-between gap-1 sm:justify-start sm:gap-2">
         {[1, 2, 3, 4, 5].map((rating) => {
           const isActive = rating <= (hoveredRating || value);
           const isSelected = rating === value;
@@ -84,18 +86,19 @@ const SkillRating: React.FC<SkillRatingProps> = ({
           return (
             <button
               key={rating}
+              type="button"
               onClick={() => handleRatingClick(rating)}
               onMouseEnter={() => handleMouseEnter(rating)}
               onMouseLeave={handleMouseLeave}
               className={`
-                flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-medium transition-all duration-200
+                flex aspect-square h-9 min-w-0 flex-1 max-w-[3rem] items-center justify-center rounded-full border-2 text-base font-medium transition-colors duration-200
+                sm:h-10 sm:w-10 sm:flex-none sm:text-sm
                 ${
                   isActive
                     ? 'border-teal-500 bg-gradient-to-r from-teal-500 to-blue-500 text-white shadow-md'
-                    : 'border-gray-200 bg-gray-50 text-gray-400 hover:border-teal-300 hover:bg-teal-50'
+                    : 'border-gray-200 bg-gray-50 text-gray-500 hover:border-teal-300 hover:bg-teal-50'
                 }
-                ${isSelected ? 'ring-2 ring-teal-300 ring-offset-2' : ''}
-                transform hover:scale-110
+                ${isSelected ? 'ring-2 ring-teal-300 sm:ring-offset-2' : ''}
               `}
             >
               {rating}

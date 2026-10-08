@@ -212,6 +212,13 @@ const HomeTryExperience: React.FC = () => {
   }, [messages, sending, inputMode, scrollChatToBottom]);
 
   useEffect(() => {
+    const mobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+    const active = !showMarketingHero && mobile;
+    document.body.classList.toggle('try-guest-chat-active', active);
+    return () => document.body.classList.remove('try-guest-chat-active');
+  }, [showMarketingHero]);
+
+  useEffect(() => {
     if (!isLoggedIn || claimAttempted.current) return;
     claimAttempted.current = true;
 
@@ -292,9 +299,21 @@ const HomeTryExperience: React.FC = () => {
   const remaining = guest?.messages_remaining ?? Math.max(0, 5 - (guest?.user_message_count || 0));
   const visibleStarterPills = showAllPrompts ? STARTER_PROMPTS : STARTER_PROMPTS.slice(0, 4);
 
+  const chatActive = !showMarketingHero;
+
   return (
-    <div className="bg-[#f7f8fb] text-slate-900">
-      <div className="mx-auto grid max-w-[1400px] gap-5 px-4 py-6 lg:grid-cols-[220px_minmax(0,1fr)_280px] lg:gap-6 lg:px-6 lg:py-8">
+    <div
+      className={`bg-[#f7f8fb] text-slate-900 ${
+        chatActive
+          ? 'max-lg:fixed max-lg:inset-x-0 max-lg:top-20 max-lg:bottom-0 max-lg:z-30 max-lg:overflow-x-hidden max-lg:overflow-y-hidden'
+          : ''
+      }`}
+    >
+      <div
+        className={`mx-auto grid max-w-[1400px] gap-5 lg:grid-cols-[220px_minmax(0,1fr)_280px] lg:gap-6 lg:px-6 lg:py-8 ${
+          chatActive ? 'h-full max-lg:gap-0 max-lg:px-2 max-lg:py-2' : 'px-4 py-6'
+        }`}
+      >
         {/* Left sidebar */}
         <aside className="hidden flex-col gap-6 lg:flex">
           <nav className="space-y-1">
@@ -361,10 +380,8 @@ const HomeTryExperience: React.FC = () => {
 
         {/* Center — fixed-height chat once conversation starts */}
         <section
-          className={`flex min-h-0 flex-col gap-5 ${
-            showMarketingHero
-              ? ''
-              : 'h-[calc(100dvh-5.5rem)] max-h-[calc(100dvh-5.5rem)]'
+          className={`flex min-h-0 w-full min-w-0 max-w-full flex-col gap-5 max-lg:min-h-0 max-lg:flex-1 ${
+            showMarketingHero ? '' : 'h-full max-h-full lg:h-[calc(100dvh-5.5rem)] lg:max-h-[calc(100dvh-5.5rem)]'
           }`}
         >
           {showMarketingHero ? (
@@ -419,7 +436,7 @@ const HomeTryExperience: React.FC = () => {
           ) : null}
 
           <div
-            className={`flex flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm ${
+            className={`flex w-full min-w-0 max-w-full flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm ${
               showMarketingHero
                 ? 'min-h-[min(480px,62vh)]'
                 : 'min-h-0 h-full max-h-full'
@@ -443,7 +460,7 @@ const HomeTryExperience: React.FC = () => {
               className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain scroll-smooth bg-[#fafbfd] px-3 pb-6 sm:px-4"
               aria-label="Chat with Angel"
             >
-              <div className="mx-auto flex min-h-full max-w-3xl flex-col">
+              <div className="mx-auto flex min-h-full w-full min-w-0 max-w-3xl flex-col">
                 <div className="flex-1 space-y-4 py-4 sm:space-y-5 sm:py-5">
                   {messages.map((msg, idx) => {
                     const displayText =
@@ -478,7 +495,7 @@ const HomeTryExperience: React.FC = () => {
                   ) : null}
                 </div>
 
-                <div className="mt-auto space-y-3 pb-2 pt-1">
+                <div className="mt-auto w-full min-w-0 max-w-full space-y-3 pb-2 pt-1">
                   {loading ? (
                     <p className="text-center text-sm text-slate-500">
                       Starting your chat with Angel…
